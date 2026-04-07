@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bailey & Beau</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            background: #f8fafc;
+            color: #1f2937;
+            padding: 24px;
+        }
+        .card {
+            background: white;
+            padding: 2rem;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            max-width: 820px;
+        }
+        h1 {
+            margin-bottom: 0.5rem;
+        }
+        p, li {
+            line-height: 1.6;
+        }
+        code {
+            background: #eef2ff;
+            padding: 0.15rem 0.4rem;
+            border-radius: 6px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin-top: 1rem;
+        }
+        .panel {
+            background: #f8fafc;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 1rem;
+        }
+        ul {
+            padding-left: 1.2rem;
+        }
+    </style>
+</head>
+<body>
+    <main class="card">
+        <h1>Django project is running for Bailey &amp; Beau ✅</h1>
+        <p>This local MVP backend is ready for testing, admin use, and API exploration.</p>
+
+        <div class="grid">
+            <section class="panel">
+                <h3>Useful URLs</h3>
+                <ul>
+                    <li><code>/admin/</code></li>
+                    <li><code>/api/v1/health/</code></li>
+                    <li><code>/api/v1/books/</code></li>
+                    <li><code>/api/v1/dashboard/</code></li>
+                    <li><code>/super-admin/dashboard/</code></li>
+                </ul>
+            </section>
+            <section class="panel">
+                <h3>Demo credentials</h3>
+                <ul>
+                    <li>Admin: <code>admin</code> / <code>Admin123!</code></li>
+                    <li>Parent: <code>demo-parent</code> / <code>Demo123!</code></li>
+                </ul>
+            </section>
+        </div>
+
+        <p>To seed demo content locally, run <code>manage.py seed_demo_data</code>.</p>
+    </main>
+</body>
+</html>
