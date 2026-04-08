@@ -4,6 +4,7 @@ from io import StringIO
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import permissions, status
 from django.http import HttpResponse
@@ -29,7 +30,7 @@ from .serializers import (
     SessionInviteSerializer,
     SessionParticipantSerializer,
     UserSerializer,
-    
+
 )
 
 
@@ -500,6 +501,47 @@ class AdminSessionExportView(APIView):
         response = HttpResponse(buffer.getvalue(), content_type="text/csv")
         response["Content-Disposition"] = 'attachment; filename="session-report.csv"'
         return response
+
+
+class AdminUserListView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request):
+        users = User.objects.filter(is_staff=False).select_related("entitlement").order_by("-date_joined")
+        q = request.query_params.get("q")
+        plan_code = request.query_params.get("plan_code")
+        status_filter = request.query_params.get("status")
+
+        if q:
+            users = users.filter(
+                Q(username__icontains=q)
+                | Q(email__icontains=q)
+                | Q(first_name__icontains=q)
+                | Q(last_name__icontains=q)
+            )
+        if plan_code:
+            users = users.filter(entitlement__plan_code=plan_code)
+        if status_filter:
+            users = users.filter(entitlement__subscription_status=status_filter)
+
+        data = []
+        for user in users:
+            entitlement = getattr(user, "entitlement", None)
+            data.append(
+                {
+                    "id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                    "name": user.get_full_name() or user.username,
+                    "plan_code": entitlement.plan_code if entitlement else "",
+                    "subscription_status": entitlement.subscription_status if entitlement else "none",
+                    "sessions_remaining": entitlement.sessions_remaining if entitlement else 0,
+                    "pack_sessions_remaining": entitlement.pack_sessions_remaining if entitlement else 0,
+                    "date_joined": user.date_joined.isoformat() if user.date_joined else None,
+                }
+            )
+
+        return Response({"data": data, "meta": {"count": len(data)}, "error": None})
 
 
 class StripeWebhookView(APIView):

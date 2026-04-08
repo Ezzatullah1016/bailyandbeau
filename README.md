@@ -29,6 +29,25 @@ Or use:
 powershell -ExecutionPolicy Bypass -File .\build-tailwind.ps1
 ```
 
+## Admin reference assets placement
+
+If you want to add custom reference assets for the super admin UI, place them here:
+
+- CSS: `core/static/core/css/`
+- JavaScript: `core/static/core/js/`
+- Images / icons: `core/static/core/images/`
+- Source Tailwind layers: `core/static_src/`
+- Shared Django templates: `core/templates/core/`
+
+Then reference them in templates with Django static tags:
+
+```django
+{% load static %}
+<link rel="stylesheet" href="{% static 'core/css/your-file.css' %}">
+<script src="{% static 'core/js/your-file.js' %}"></script>
+<img src="{% static 'core/images/your-image.png' %}" alt="...">
+```
+
 ## Run tests
 
 ```powershell
@@ -65,6 +84,16 @@ Copy `.env.example` values into your deployment environment for:
 
 - `/` — home page
 - `/admin/` — Django admin
+- `/super-admin/dashboard/` — super admin overview UI
+- `/super-admin/sessions/` — session monitor UI
+- `/super-admin/live-sessions/` — live session operations UI
+- `/super-admin/books/` — book library admin UI
+- `/super-admin/activities/` — activity config admin UI
+- `/super-admin/users/` — user management admin UI
+- `/super-admin/subscriptions/` — subscriptions & billing UI
+- `/super-admin/badges/` — badge manager UI
+- `/super-admin/logs/` — logs & errors UI
+- `/super-admin/settings/` — settings UI
 - `/api/v1/health/` — API health check
 - `/api/v1/auth/register/`, `/api/v1/auth/login/`, `/api/v1/auth/refresh/`, `/api/v1/me/`
 - `/api/v1/dashboard/`

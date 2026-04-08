@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>StoryTime Admin | Book Library</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&amp;family=Plus+Jakarta+Sans:wght@200..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-error": "#ffffff",
+                        "primary-container": "#c4847a",
+                        "on-secondary-container": "#486a4e",
+                        "on-primary-fixed": "#350f0a",
+                        "outline": "#847370",
+                        "on-secondary": "#ffffff",
+                        "on-primary-fixed-variant": "#6b3931",
+                        "surface-container-high": "#ebe8e3",
+                        "surface-container-lowest": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "secondary-fixed-dim": "#aad0ad",
+                        "primary": "#865047",
+                        "on-secondary-fixed-variant": "#2d4e33",
+                        "background": "#fcf9f4",
+                        "tertiary-fixed-dim": "#efbd8a",
+                        "outline-variant": "#d7c2bf",
+                        "on-tertiary-fixed-variant": "#614018",
+                        "on-tertiary-container": "#432601",
+                        "on-secondary-fixed": "#00210b",
+                        "on-error-container": "#93000a",
+                        "inverse-on-surface": "#f3f0eb",
+                        "inverse-surface": "#31302d",
+                        "surface-dim": "#dcdad5",
+                        "surface-bright": "#fcf9f4",
+                        "surface-container": "#f0ede9",
+                        "error": "#ba1a1a",
+                        "inverse-primary": "#fcb5aa",
+                        "secondary": "#44664a",
+                        "primary-fixed": "#ffdad4",
+                        "on-background": "#1c1c19",
+                        "surface-container-low": "#f6f3ee",
+                        "tertiary-fixed": "#ffdcbc",
+                        "tertiary": "#7c572d",
+                        "on-tertiary": "#ffffff",
+                        "secondary-fixed": "#c6ecc8",
+                        "on-primary-container": "#4b201a",
+                        "primary-fixed-dim": "#fcb5aa",
+                        "on-surface": "#1c1c19",
+                        "surface": "#fcf9f4",
+                        "surface-variant": "#e5e2dd",
+                        "on-surface-variant": "#524341",
+                        "tertiary-container": "#b88c5d",
+                        "surface-tint": "#865047",
+                        "surface-container-highest": "#e5e2dd",
+                        "secondary-container": "#c3e9c5",
+                        "on-tertiary-fixed": "#2c1700",
+                        "on-primary": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Newsreader", "serif"],
+                        "body": ["Plus Jakarta Sans", "sans-serif"],
+                        "label": ["Plus Jakarta Sans", "sans-serif"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #fcf9f4; color: #1c1c19; }
+        .serif { font-family: 'Newsreader', serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="bg-background text-on-surface antialiased overflow-hidden">
+<!-- Sidebar Shell -->
+<aside class="fixed left-0 top-0 h-full w-64 flex flex-col bg-stone-900 border-r border-stone-800 z-50">
+<div class="p-6">
+<h1 class="text-xl font-bold italic text-rose-200 serif">StoryTime Admin</h1>
+<p class="text-xs text-stone-500 font-label mt-1">Children's Literary Hub</p>
+</div>
+<nav class="flex-1 px-4 space-y-2 mt-4">
+<!-- Dashboard (Inactive) -->
+<a class="flex items-center gap-3 px-4 py-3 text-stone-400 hover:text-rose-300 hover:bg-stone-800/50 transition-all rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-label text-sm">Dashboard</span>
+</a>
+<!-- Book Library (Active) -->
+<a class="flex items-center gap-3 px-4 py-3 bg-stone-800 text-rose-200 font-semibold rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="menu_book">menu_book</span>
+<span class="font-label text-sm">Book Library</span>
+</a>
+<!-- Sessions -->
+<a class="flex items-center gap-3 px-4 py-3 text-stone-400 hover:text-rose-300 hover:bg-stone-800/50 transition-all rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="history_edu">history_edu</span>
+<span class="font-label text-sm">Sessions</span>
+</a>
+<!-- Users -->
+<a class="flex items-center gap-3 px-4 py-3 text-stone-400 hover:text-rose-300 hover:bg-stone-800/50 transition-all rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-label text-sm">Users</span>
+</a>
+</nav>
+<div class="p-4 mt-auto border-t border-stone-800 space-y-1">
+<a class="flex items-center gap-3 px-4 py-2 text-stone-400 hover:text-stone-200 text-xs" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="settings">settings</span>
+<span>Settings</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2 text-stone-400 hover:text-stone-200 text-xs" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="help_outline">help_outline</span>
+<span>Support</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-64 min-h-screen flex flex-col">
+<!-- Top Bar Shell -->
+<header class="sticky top-0 z-40 bg-stone-50/80 backdrop-blur-md border-b border-stone-200/50 px-8 py-4 flex justify-between items-center">
+<div class="flex flex-col">
+<nav class="flex items-center gap-2 text-xs text-on-surface-variant/60 font-label mb-1">
+<span>Admin</span>
+<span class="material-symbols-outlined text-[10px]" data-icon="chevron_right">chevron_right</span>
+<span class="text-on-surface-variant">Book Library</span>
+</nav>
+<h2 class="text-3xl serif font-medium text-on-surface">Book library</h2>
+</div>
+<div class="flex items-center gap-6">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50 text-sm" data-icon="search">search</span>
+<input class="pl-10 pr-4 py-2 bg-surface-container-low border-none rounded-lg text-sm focus:ring-1 focus:ring-primary-container w-64 placeholder:text-stone-400 transition-all" placeholder="Search library..." type="text"/>
+</div>
+<button class="bg-primary text-white px-5 py-2.5 rounded-lg flex items-center gap-2 text-sm font-semibold hover:bg-primary/90 transition-all shadow-sm active:scale-95">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+                    Upload Book
+                </button>
+<div class="flex items-center gap-3 pl-6 border-l border-stone-200">
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<img alt="Administrator Profile" class="w-9 h-9 rounded-full object-cover ring-2 ring-surface-container-high" data-alt="Close-up portrait of a professional woman with a warm, editorial lighting and soft-focus office background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAARkQmxo5SD_VfLQHBI0vhuHU3L9OFRjhj2t_1CEv2btn39XfiA_d7337RhdjArxnOpkS0ibSi9MvOvrlO3-jWqF4NaCgn4VirAwoa4O-dD9LAEhAU6v4XpB9dpm3isaYghMEEhXJs9IiK5Frnb25QAZstXLildp9557IdN8UoWOP96U6KvxPWvyC9R5g5AsLGCzC1Zdro98sK5N5YxNi50zKhm6kFfNxnIrdFYEIOOhK4qHgMG41h200TEg9BtzGQIKTzwIlA6ibp"/>
+</div>
+</div>
+</header>
+<!-- Canvas -->
+<div class="flex-1 p-8 overflow-y-auto space-y-8">
+<!-- Stats Row -->
+<section class="grid grid-cols-4 gap-6">
+<div class="bg-surface-container-low p-6 rounded-xl space-y-1 group hover:bg-white transition-all duration-300">
+<p class="text-xs font-label uppercase tracking-wider text-on-surface-variant/60">Total books</p>
+<div class="flex items-end gap-2">
+<h3 class="text-4xl serif text-on-surface">24</h3>
+<span class="text-xs text-on-surface-variant/40 mb-1.5 italic">Volumes</span>
+</div>
+</div>
+<div class="bg-surface-container-low p-6 rounded-xl space-y-1 group hover:bg-white transition-all duration-300">
+<div class="flex justify-between items-start">
+<p class="text-xs font-label uppercase tracking-wider text-on-surface-variant/60">Published</p>
+<span class="px-2 py-0.5 bg-secondary-container text-on-secondary-container text-[10px] font-bold rounded-full">LIVE</span>
+</div>
+<div class="flex items-end gap-2">
+<h3 class="text-4xl serif text-on-surface">19</h3>
+</div>
+</div>
+<div class="bg-surface-container-low p-6 rounded-xl space-y-1 group hover:bg-white transition-all duration-300">
+<div class="flex justify-between items-start">
+<p class="text-xs font-label uppercase tracking-wider text-on-surface-variant/60">Drafts</p>
+<span class="px-2 py-0.5 bg-tertiary-fixed text-on-tertiary-fixed text-[10px] font-bold rounded-full">AMBER</span>
+</div>
+<div class="flex items-end gap-2">
+<h3 class="text-4xl serif text-on-surface">3</h3>
+</div>
+</div>
+<div class="bg-surface-container-low p-6 rounded-xl space-y-1 group hover:bg-white transition-all duration-300">
+<p class="text-xs font-label uppercase tracking-wider text-on-surface-variant/60">Activity configs</p>
+<div class="flex items-end gap-2">
+<h3 class="text-4xl serif text-on-surface">31</h3>
+<span class="text-xs text-on-surface-variant/40 mb-1.5 italic">Links</span>
+</div>
+</div>
+</section>
+<!-- Filter Bar -->
+<section class="flex items-center gap-4 bg-surface-container-low/50 p-3 rounded-xl">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant/50 text-sm" data-icon="filter_list">filter_list</span>
+<span class="text-xs font-semibold text-on-surface-variant">Filters:</span>
+</div>
+<select class="bg-surface border-none text-xs rounded-lg px-3 py-2 min-w-[140px] focus:ring-1 focus:ring-primary-container cursor-pointer">
+<option>Room Type</option>
+<option>Nursery</option>
+<option>Pre-School</option>
+<option>Infant</option>
+</select>
+<select class="bg-surface border-none text-xs rounded-lg px-3 py-2 min-w-[140px] focus:ring-1 focus:ring-primary-container cursor-pointer">
+<option>Age Range</option>
+<option>0-2 Years</option>
+<option>3-5 Years</option>
+</select>
+<select class="bg-surface border-none text-xs rounded-lg px-3 py-2 min-w-[140px] focus:ring-1 focus:ring-primary-container cursor-pointer">
+<option>Status</option>
+<option>Published</option>
+<option>Draft</option>
+<option>Unpublished</option>
+</select>
+<button class="ml-auto text-xs text-primary font-semibold hover:underline">Reset Filters</button>
+</section>
+<!-- Main Table Card -->
+<section class="bg-surface border border-stone-200/50 rounded-2xl overflow-hidden shadow-sm">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-container-low text-on-surface-variant/70 text-[11px] font-label uppercase tracking-widest">
+<tr>
+<th class="px-6 py-4 font-semibold">Cover</th>
+<th class="px-6 py-4 font-semibold">Title</th>
+<th class="px-6 py-4 font-semibold">Room Type</th>
+<th class="px-6 py-4 font-semibold">Age Range</th>
+<th class="px-6 py-4 font-semibold">Activities</th>
+<th class="px-6 py-4 font-semibold">Status</th>
+<th class="px-6 py-4 font-semibold">Last Updated</th>
+<th class="px-6 py-4 font-semibold text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-stone-100">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="px-6 py-4">
+<div class="w-[32px] h-[42px] bg-primary-container rounded shadow-sm overflow-hidden flex items-center justify-center">
+<img class="w-full h-full object-cover" data-alt="Macro of a beautifully bound hardcover book with floral embossed textures in dusty rose and sage" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBYX-sicJvlRwriIlK0owZfOTm_KsV_pj-FRgtIaLR3vTsx6zR6BDQWZ-zGB54O1Eyk000I-GWST4MV8ZbxKGruvvphe2CbAAs1-DpJMBtkx9UsIU-8cADsF3VlFOauR1k9-2CinGofA5kJM2mVkcKIJzrT6075u2hHeS-In6AD63tYz0ezgD_wdWDpagsDLsJOtVApLw_FCP0DuMi3z2xejuKbnUzgeTH9TXBMBzISnZuuWw77fc5Zv4yA7s1699GRE_uq65C0go02"/>
+</div>
+</td>
+<td class="px-6 py-4 font-semibold text-sm serif">The Brave Little Bear</td>
+<td class="px-6 py-4 text-xs">Nursery</td>
+<td class="px-6 py-4 text-xs">0-2 Years</td>
+<td class="px-6 py-4 text-xs font-medium">8</td>
+<td class="px-6 py-4">
+<span class="px-2.5 py-1 bg-secondary-container text-on-secondary-container text-[10px] font-bold rounded-full">Published</span>
+</td>
+<td class="px-6 py-4 text-xs text-on-surface-variant/60">24 Oct, 2023</td>
+<td class="px-6 py-4 text-right space-x-3">
+<button class="text-xs font-semibold text-primary hover:text-primary-container transition-colors">Edit</button>
+<button class="text-xs font-semibold text-primary hover:text-primary-container transition-colors">Unpublish</button>
+<button class="text-xs font-semibold text-error hover:text-red-400 transition-colors">Delete</button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="px-6 py-4">
+<div class="w-[32px] h-[42px] bg-primary-container rounded shadow-sm overflow-hidden flex items-center justify-center">
+<img class="w-full h-full object-cover" data-alt="Old library book spine with elegant gold leaf lettering on a deep maroon background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBf5nsSueEaV1UJX6_183kG3nFW8celge6Dko6b3fFA2OpitaqyUUdRMkZvT5Mb-tz8IFfm_So5JuXNfGv_KsmEb_FJ9kzyd3ZPmz_cRZALT2H8QjdLtk6U8IjIDGhj6shf_UXrMhqOj49NFx_Ax9PkCwVAKK8zczAYHNNHq3llSu69FMhWc7jq1pmjrRlIA6QeI23TxU-HYqPqTOY4Ty4_T9k6rwb2ZGI8ZiHdOrUPozWblohTabdDr2YCi9qN_O12bdcVEs8fBdIm"/>
+</div>
+</td>
+<td class="px-6 py-4 font-semibold text-sm serif">Lunar Lullabies</td>
+<td class="px-6 py-4 text-xs">Infant</td>
+<td class="px-6 py-4 text-xs">0-1 Year</td>
+<td class="px-6 py-4 text-xs font-medium">4</td>
+<td class="px-6 py-4">
+<span class="px-2.5 py-1 bg-tertiary-fixed text-on-tertiary-fixed text-[10px] font-bold rounded-full">Draft</span>
+</td>
+<td class="px-6 py-4 text-xs text-on-surface-variant/60">12 Nov, 2023</td>
+<td class="px-6 py-4 text-right space-x-3">
+<button class="text-xs font-semibold text-primary hover:text-primary-container transition-colors">Edit</button>
+<button class="text-xs font-semibold text-primary hover:text-primary-container transition-colors">Publish</button>
+<button class="text-xs font-semibold text-error hover:text-red-400 transition-colors">Delete</button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="px-6 py-4">
+<div class="w-[32px] h-[42px] bg-primary-container rounded shadow-sm overflow-hidden flex items-center justify-center">
+<img class="w-full h-full object-cover" data-alt="Artistic children's book illustration showing a soft watercolor scene of a woodland meadow at dusk" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD52LV0DAb7ijX8_T_cR18P27qm444DMPwUYgAZVG7A281pZIH7Az8lz2iegtvKtGrZ3Oh-Van23UPWE5Zf2VWZf_Jvj4eTwaOxq9yoRIf8w9qHCLwHVRvrQBwyNqh-f7Pt4vWpN2jipviW_e29YQ7L64tM9khAn3cbj6jGq0kNg6GaFBgsqMIhkSbeNprHCWsMxfWc-2EvbnuRUCjKHlxmAK30PUL8PB6IKUamr4yol6Y-oZ1lImR9GByIN0pBY74UW9Rw9oCiRYgL"/>
+</div>
+</td>
+<td class="px-6 py-4 font-semibold text-sm serif">The Garden Secret</td>
+<td class="px-6 py-4 text-xs">Pre-School</td>
+<td class="px-6 py-4 text-xs">3-5 Years</td>
+<td class="px-6 py-4 text-xs font-medium">12</td>
+<td class="px-6 py-4">
+<span class="px-2.5 py-1 bg-error-container text-on-error-container text-[10px] font-bold rounded-full">Unpublished</span>
+</td>
+<td class="px-6 py-4 text-xs text-on-surface-variant/60">05 Nov, 2023</td>
+<td class="px-6 py-4 text-right space-x-3">
+<button class="text-xs font-semibold text-primary hover:text-primary-container transition-colors">Edit</button>
+<button class="text-xs font-semibold text-primary hover:text-primary-container transition-colors">Publish</button>
+<button class="text-xs font-semibold text-error hover:text-red-400 transition-colors">Delete</button>
+</td>
+</tr>
+</tbody>
+</table>
+<div class="px-6 py-4 bg-surface-container-low flex items-center justify-between">
+<p class="text-[11px] text-on-surface-variant/60 font-label">Showing 1-10 of 24 volumes</p>
+<div class="flex gap-2">
+<button class="p-1.5 rounded-lg border border-stone-200 text-stone-400 disabled:opacity-50" disabled="">
+<span class="material-symbols-outlined text-sm" data-icon="chevron_left">chevron_left</span>
+</button>
+<button class="p-1.5 rounded-lg border border-stone-200 text-on-surface-variant hover:bg-white">
+<span class="material-symbols-outlined text-sm" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- Slide-over Modal Backdrop (Simulation) -->
+<div class="fixed inset-0 bg-stone-900/40 backdrop-blur-sm z-[60] flex justify-end">
+<!-- Slide-over Panel -->
+<div class="w-[480px] h-full bg-surface shadow-2xl flex flex-col transform transition-transform duration-300">
+<header class="p-8 border-b border-stone-200/50 flex justify-between items-center bg-white">
+<div>
+<h2 class="text-2xl serif text-on-surface font-semibold">Upload new book</h2>
+<p class="text-sm text-on-surface-variant/60 font-label">Add a new volume to the StoryTime library</p>
+</div>
+<button class="p-2 hover:bg-stone-100 rounded-full transition-colors">
+<span class="material-symbols-outlined" data-icon="close">close</span>
+</button>
+</header>
+<div class="flex-1 overflow-y-auto p-8 space-y-6">
+<!-- Form Fields -->
+<div class="space-y-2">
+<label class="text-xs font-bold text-on-surface-variant/80 uppercase tracking-wide">Book Title</label>
+<input class="w-full bg-surface-container-low border-none rounded-xl p-4 text-sm focus:ring-1 focus:ring-primary-container" placeholder="e.g. The Curious Caterpillar" type="text"/>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="space-y-2">
+<label class="text-xs font-bold text-on-surface-variant/80 uppercase tracking-wide">Room Type</label>
+<select class="w-full bg-surface-container-low border-none rounded-xl p-4 text-sm focus:ring-1 focus:ring-primary-container appearance-none">
+<option>Nursery</option>
+<option>Pre-School</option>
+</select>
+</div>
+<div class="space-y-2">
+<label class="text-xs font-bold text-on-surface-variant/80 uppercase tracking-wide">Age Range</label>
+<select class="w-full bg-surface-container-low border-none rounded-xl p-4 text-sm focus:ring-1 focus:ring-primary-container appearance-none">
+<option>0-2 Years</option>
+<option>3-5 Years</option>
+</select>
+</div>
+</div>
+<!-- Drag-and-drop -->
+<div class="space-y-2">
+<label class="text-xs font-bold text-on-surface-variant/80 uppercase tracking-wide">Book Asset (PDF/ePub)</label>
+<div class="border-2 border-dashed border-outline-variant/40 rounded-2xl p-8 flex flex-col items-center justify-center bg-surface-container-low/30 hover:bg-surface-container-low transition-colors cursor-pointer group">
+<span class="material-symbols-outlined text-primary text-3xl mb-2 group-hover:scale-110 transition-transform" data-icon="upload_file">upload_file</span>
+<p class="text-sm font-medium">Click to upload or drag &amp; drop</p>
+<p class="text-xs text-on-surface-variant/60 mt-1">Maximum file size: 50MB</p>
+</div>
+</div>
+<div class="space-y-2">
+<label class="text-xs font-bold text-on-surface-variant/80 uppercase tracking-wide">Cover Image</label>
+<div class="border-2 border-dashed border-outline-variant/40 rounded-2xl p-8 flex flex-col items-center justify-center bg-surface-container-low/30 hover:bg-surface-container-low transition-colors cursor-pointer group">
+<span class="material-symbols-outlined text-primary text-3xl mb-2 group-hover:scale-110 transition-transform" data-icon="image">image</span>
+<p class="text-sm font-medium">Upload cover art</p>
+<p class="text-xs text-on-surface-variant/60 mt-1">Recommended 3:4 aspect ratio</p>
+</div>
+</div>
+<!-- Status Radio -->
+<div class="space-y-4 pt-2">
+<label class="text-xs font-bold text-on-surface-variant/80 uppercase tracking-wide">Initial Status</label>
+<div class="flex gap-4">
+<label class="flex-1 cursor-pointer">
+<input checked="" class="hidden peer" name="status" type="radio" value="draft"/>
+<div class="p-4 rounded-xl bg-surface-container-low text-center text-xs font-semibold peer-checked:bg-primary peer-checked:text-white transition-all">
+                                Draft
+                            </div>
+</label>
+<label class="flex-1 cursor-pointer">
+<input class="hidden peer" name="status" type="radio" value="published"/>
+<div class="p-4 rounded-xl bg-surface-container-low text-center text-xs font-semibold peer-checked:bg-primary peer-checked:text-white transition-all">
+                                Published
+                            </div>
+</label>
+</div>
+</div>
+</div>
+<footer class="p-8 border-t border-stone-200/50 bg-white flex items-center justify-end gap-4">
+<button class="text-sm font-semibold text-on-surface-variant hover:text-on-surface transition-colors">Cancel</button>
+<button class="bg-primary text-white px-8 py-3 rounded-xl text-sm font-bold shadow-lg hover:bg-primary/90 transition-all active:scale-95">
+                    Upload Book
+                </button>
+</footer>
+</div>
+</div>
+</body></html>

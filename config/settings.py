@@ -27,7 +27,32 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-0sr4^1&4f!e-mtv#4q7
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DJANGO_DEBUG', 'true').lower() == 'true'
 
-ALLOWED_HOSTS = [host.strip() for host in os.getenv('DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost,testserver').split(',') if host.strip()]
+DEFAULT_ALLOWED_HOSTS = [
+    '127.0.0.1',
+    'localhost',
+    'testserver',
+    '.ngrok-free.dev',
+    '.ngrok.io',
+    '.ngrok.app',
+]
+if DEBUG:
+    ALLOWED_HOSTS = ['*']
+else:
+    ALLOWED_HOSTS = [
+        host.strip()
+        for host in os.getenv('DJANGO_ALLOWED_HOSTS', ','.join(DEFAULT_ALLOWED_HOSTS)).split(',')
+        if host.strip()
+    ]
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        'DJANGO_CSRF_TRUSTED_ORIGINS',
+        'http://127.0.0.1,http://localhost,https://*.ngrok-free.dev,https://*.ngrok.io,https://*.ngrok.app',
+    ).split(',')
+    if origin.strip()
+]
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
 
 
 # Application definition
@@ -41,6 +66,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'core',
+    
 ]
 
 MIDDLEWARE = [

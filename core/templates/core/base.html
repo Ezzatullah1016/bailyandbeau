@@ -1,0 +1,147 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Bailey & Beau Admin{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'core/css/tailwind.css' %}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,600;6..72,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .font-editorial { font-family: 'Newsreader', serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+            font-size: 20px;
+        }
+        .admin-invalid {
+            border-color: rgb(251 113 133);
+            box-shadow: 0 0 0 3px rgba(251, 113, 133, 0.15);
+        }
+    </style>
+    <script src="{% static 'core/js/admin-validations.js' %}" defer></script>
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="min-h-screen bg-[#F4F2EE] text-slate-900 antialiased">
+    <div class="min-h-screen lg:flex">
+        {# Shared sidebar for every super-admin screen #}
+        <aside class="hidden lg:flex lg:w-64 lg:flex-col lg:bg-[#1C1A18] lg:px-4 lg:py-6 lg:text-white">
+            <div class="mb-8 px-2">
+                <p class="text-xs font-semibold uppercase tracking-[0.35em] text-rose-200/80">Bailey &amp; Beau</p>
+                <h1 class="mt-2 font-editorial text-3xl font-semibold">Admin Portal</h1>
+                <p class="mt-1 text-sm text-stone-400">Dynamic Django operations suite</p>
+            </div>
+
+            <nav class="flex-1 space-y-1 text-sm">
+                <a href="{% url 'super_admin_dashboard' %}" class="flex items-center gap-3 rounded-xl px-4 py-3 {% if active_nav == 'dashboard' %}bg-[#C4847A] text-white{% else %}text-stone-300 hover:bg-white/5{% endif %}">
+                    <span class="material-symbols-outlined">dashboard</span><span>Overview</span>
+                </a>
+                <a href="{% url 'admin_session_monitor' %}" class="flex items-center gap-3 rounded-xl px-4 py-3 {% if active_nav == 'sessions' %}bg-[#C4847A] text-white{% else %}text-stone-300 hover:bg-white/5{% endif %}">
+                    <span class="material-symbols-outlined">history</span><span>Session Monitor</span>
+                </a>
+                <a href="{% url 'admin_live_sessions' %}" class="flex items-center gap-3 rounded-xl px-4 py-3 {% if active_nav == 'live_sessions' %}bg-[#C4847A] text-white{% else %}text-stone-300 hover:bg-white/5{% endif %}">
+                    <span class="material-symbols-outlined">monitoring</span><span>Live Sessions</span>
+                </a>
+                <a href="{% url 'admin_book_library' %}" class="flex items-center gap-3 rounded-xl px-4 py-3 {% if active_nav == 'books' %}bg-[#C4847A] text-white{% else %}text-stone-300 hover:bg-white/5{% endif %}">
+                    <span class="material-symbols-outlined">menu_book</span><span>Book Library</span>
+                </a>
+                <a href="{% url 'admin_activity_config' %}" class="flex items-center gap-3 rounded-xl px-4 py-3 {% if active_nav == 'activities' %}bg-[#C4847A] text-white{% else %}text-stone-300 hover:bg-white/5{% endif %}">
+                    <span class="material-symbols-outlined">tune</span><span>Activity Config</span>
+                </a>
+                <a href="{% url 'admin_users' %}" class="flex items-center gap-3 rounded-xl px-4 py-3 {% if active_nav == 'users' %}bg-[#C4847A] text-white{% else %}text-stone-300 hover:bg-white/5{% endif %}">
+                    <span class="material-symbols-outlined">group</span><span>Users</span>
+                </a>
+                <a href="{% url 'admin_subscriptions' %}" class="flex items-center gap-3 rounded-xl px-4 py-3 {% if active_nav == 'subscriptions' %}bg-[#C4847A] text-white{% else %}text-stone-300 hover:bg-white/5{% endif %}">
+                    <span class="material-symbols-outlined">payments</span><span>Subscriptions</span>
+                </a>
+                <a href="{% url 'admin_badges' %}" class="flex items-center gap-3 rounded-xl px-4 py-3 {% if active_nav == 'badges' %}bg-[#C4847A] text-white{% else %}text-stone-300 hover:bg-white/5{% endif %}">
+                    <span class="material-symbols-outlined">military_tech</span><span>Badge Manager</span>
+                </a>
+                <a href="{% url 'admin_logs' %}" class="flex items-center gap-3 rounded-xl px-4 py-3 {% if active_nav == 'logs' %}bg-[#C4847A] text-white{% else %}text-stone-300 hover:bg-white/5{% endif %}">
+                    <span class="material-symbols-outlined">report</span><span>Logs &amp; Errors</span>
+                </a>
+                <a href="{% url 'admin_settings' %}" class="flex items-center gap-3 rounded-xl px-4 py-3 {% if active_nav == 'settings' %}bg-[#C4847A] text-white{% else %}text-stone-300 hover:bg-white/5{% endif %}">
+                    <span class="material-symbols-outlined">settings</span><span>Settings</span>
+                </a>
+            </nav>
+
+            <div class="mt-8 space-y-4">
+                <div class="rounded-2xl border border-white/10 bg-white/5 p-3 text-sm text-stone-200">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 items-center justify-center rounded-full bg-[#865047] text-white shadow-sm">
+                            <span class="material-symbols-outlined">shield_person</span>
+                        </div>
+                        <div class="min-w-0">
+                            <p class="truncate font-semibold text-white">{{ request.user.get_full_name|default:request.user.username|default:'Admin User' }}</p>
+                            <p class="truncate text-xs text-stone-400">{% if request.user.is_superuser %}Senior Administrator{% elif request.user.is_staff %}Staff Administrator{% else %}Platform Team{% endif %}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-stone-300">
+                    <p class="font-semibold text-white">Live admin APIs</p>
+                    <ul class="mt-3 space-y-2 text-xs">
+                        <li><a class="hover:text-white" href="/api/v1/admin/sessions/">`/api/v1/admin/sessions/`</a></li>
+                        <li><a class="hover:text-white" href="/api/v1/admin/books/">`/api/v1/admin/books/`</a></li>
+                        <li><a class="hover:text-white" href="/api/v1/admin/activities/">`/api/v1/admin/activities/`</a></li>
+                        <li><a class="hover:text-white" href="/api/v1/admin/users/">`/api/v1/admin/users/`</a></li>
+                    </ul>
+                </div>
+            </div>
+        </aside>
+
+        <div class="flex-1 min-w-0">
+            <header class="sticky top-0 z-30 border-b border-stone-200/80 bg-[#FCF9F4]/90 backdrop-blur">
+                {% block top_header %}
+                <div class="px-4 py-4 lg:px-8 lg:py-5">
+                    <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                        <div>
+                            <p class="text-[11px] font-semibold uppercase tracking-[0.35em] text-[#865047]">Bailey &amp; Beau operations</p>
+                            <h2 class="mt-1 font-editorial text-3xl font-semibold text-slate-900">{% block page_title %}Admin{% endblock %}</h2>
+                            <p class="mt-1 max-w-3xl text-sm text-slate-500">{% block page_subtitle %}Operational visibility powered by the live Django backend.{% endblock %}</p>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-3">
+                            {% block page_actions %}
+                            <a href="/api/v1/health/" class="rounded-xl border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-stone-50">Health API</a>
+                            {% endblock %}
+                        </div>
+                    </div>
+
+                    <div class="mt-4 lg:hidden">
+                        <div class="flex gap-2 overflow-x-auto pb-1 text-xs font-semibold">
+                            <a href="{% url 'super_admin_dashboard' %}" class="rounded-full border px-3 py-1.5 {% if active_nav == 'dashboard' %}bg-[#865047] text-white border-[#865047]{% else %}bg-white text-slate-700 border-stone-300{% endif %}">Overview</a>
+                            <a href="{% url 'admin_session_monitor' %}" class="rounded-full border px-3 py-1.5 {% if active_nav == 'sessions' %}bg-[#865047] text-white border-[#865047]{% else %}bg-white text-slate-700 border-stone-300{% endif %}">Sessions</a>
+                            <a href="{% url 'admin_book_library' %}" class="rounded-full border px-3 py-1.5 {% if active_nav == 'books' %}bg-[#865047] text-white border-[#865047]{% else %}bg-white text-slate-700 border-stone-300{% endif %}">Books</a>
+                            <a href="{% url 'admin_users' %}" class="rounded-full border px-3 py-1.5 {% if active_nav == 'users' %}bg-[#865047] text-white border-[#865047]{% else %}bg-white text-slate-700 border-stone-300{% endif %}">Users</a>
+                            <a href="{% url 'admin_settings' %}" class="rounded-full border px-3 py-1.5 {% if active_nav == 'settings' %}bg-[#865047] text-white border-[#865047]{% else %}bg-white text-slate-700 border-stone-300{% endif %}">Settings</a>
+                        </div>
+                    </div>
+                </div>
+                {% endblock %}
+            </header>
+
+            <main class="px-4 py-6 lg:px-8 lg:py-8">
+                {% if messages %}
+                    <div class="mb-6 space-y-3">
+                        {% for message in messages %}
+                            <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{{ message }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                {% block content %}{% endblock %}
+            </main>
+
+            <footer class="border-t border-stone-200/80 bg-[#FCF9F4] px-4 py-4 text-xs text-slate-500 lg:px-8">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p>Super admin UI powered by Django templates, DRF data, and local Tailwind assets.</p>
+                    <a href="/admin/" class="font-semibold text-[#865047] hover:underline">Open Django Admin</a>
+                </div>
+            </footer>
+        </div>
+    </div>
+</body>
+</html>

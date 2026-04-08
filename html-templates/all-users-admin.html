@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Bailey &amp; Beau | User Management</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&amp;family=Plus+Jakarta+Sans:wght@200..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary": "#7c572d",
+                        "secondary-container": "#c3e9c5",
+                        "primary-container": "#c4847a",
+                        "on-secondary": "#ffffff",
+                        "surface-container-high": "#ebe8e3",
+                        "surface-container": "#f0ede9",
+                        "on-tertiary-fixed-variant": "#614018",
+                        "on-tertiary-fixed": "#2c1700",
+                        "surface-container-highest": "#e5e2dd",
+                        "outline": "#847370",
+                        "error-container": "#ffdad6",
+                        "on-error-container": "#93000a",
+                        "surface-tint": "#865047",
+                        "error": "#ba1a1a",
+                        "surface-bright": "#fcf9f4",
+                        "on-tertiary-container": "#432601",
+                        "secondary": "#44664a",
+                        "on-surface": "#1c1c19",
+                        "secondary-fixed-dim": "#aad0ad",
+                        "on-tertiary": "#ffffff",
+                        "primary": "#865047",
+                        "outline-variant": "#d7c2bf",
+                        "on-secondary-container": "#486a4e",
+                        "on-secondary-fixed": "#00210b",
+                        "on-primary-fixed": "#350f0a",
+                        "surface-variant": "#e5e2dd",
+                        "secondary-fixed": "#c6ecc8",
+                        "inverse-on-surface": "#f3f0eb",
+                        "inverse-surface": "#31302d",
+                        "on-surface-variant": "#524341",
+                        "on-primary-container": "#4b201a",
+                        "tertiary-container": "#b88c5d",
+                        "on-background": "#1c1c19",
+                        "on-primary": "#ffffff",
+                        "on-error": "#ffffff",
+                        "surface-container-lowest": "#ffffff",
+                        "background": "#fcf9f4",
+                        "tertiary-fixed-dim": "#efbd8a",
+                        "tertiary-fixed": "#ffdcbc",
+                        "surface": "#fcf9f4",
+                        "on-primary-fixed-variant": "#6b3931",
+                        "surface-dim": "#dcdad5",
+                        "on-secondary-fixed-variant": "#2d4e33",
+                        "inverse-primary": "#fcb5aa",
+                        "primary-fixed-dim": "#fcb5aa",
+                        "surface-container-low": "#f6f3ee",
+                        "primary-fixed": "#ffdad4"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Newsreader"],
+                        "body": ["Plus Jakarta Sans"],
+                        "label": ["Plus Jakarta Sans"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #fcf9f4; color: #1c1c19; }
+        .font-serif { font-family: 'Newsreader', serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e5e2dd; border-radius: 10px; }
+    </style>
+</head>
+<body class="flex min-h-screen overflow-hidden">
+<aside class="h-screen w-64 fixed left-0 top-0 bg-[#1C1A18] flex flex-col py-6 px-4 z-50">
+<div class="mb-10 px-2">
+<span class="text-2xl font-serif italic text-[#F4F2EE]">The Heirloom</span>
+<p class="text-[10px] uppercase tracking-widest text-[#C4847A] mt-1 font-bold">Editorial Admin</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 text-[#F4F2EE] bg-[#C4847A]/20 font-bold border-r-4 border-[#C4847A] transition-colors" href="#"><span class="material-symbols-outlined">dashboard</span><span class="text-sm">Dashboard</span></a>
+<a class="flex items-center gap-3 px-4 py-3 text-gray-400 font-medium hover:bg-[#C4847A]/10 hover:text-[#F4F2EE] transition-colors" href="#"><span class="material-symbols-outlined">auto_stories</span><span class="text-sm">Collections</span></a>
+<a class="flex items-center gap-3 px-4 py-3 text-gray-400 font-medium hover:bg-[#C4847A]/10 hover:text-[#F4F2EE] transition-colors" href="#"><span class="material-symbols-outlined">collections_bookmark</span><span class="text-sm">Library</span></a>
+<a class="flex items-center gap-3 px-4 py-3 text-gray-400 font-medium hover:bg-[#C4847A]/10 hover:text-[#F4F2EE] transition-colors" href="#"><span class="material-symbols-outlined">analytics</span><span class="text-sm">Analytics</span></a>
+<a class="flex items-center gap-3 px-4 py-3 text-gray-400 font-medium hover:bg-[#C4847A]/10 hover:text-[#F4F2EE] transition-colors" href="#"><span class="material-symbols-outlined">settings</span><span class="text-sm">Settings</span></a>
+</nav>
+<div class="mt-auto border-t border-white/10 pt-6 px-2">
+<button class="w-full bg-[#C4847A] text-[#1C1A18] font-bold py-3 rounded-lg text-sm mb-6 active:scale-[0.98] transition-transform">Create New Chapter</button>
+<a class="flex items-center gap-3 px-2 py-2 text-gray-400 font-medium hover:text-[#F4F2EE]" href="#"><span class="material-symbols-outlined">help_outline</span><span class="text-xs">Help Center</span></a>
+</div>
+</aside>
+<main class="ml-64 flex-1 h-screen overflow-y-auto custom-scrollbar bg-[#F4F2EE] relative">
+<header class="fixed top-0 right-0 w-[calc(100%-16rem)] z-40 bg-[#F4F2EE]/80 backdrop-blur-md flex justify-between items-center px-8 h-16 border-b border-surface-container-highest/30">
+<div class="flex items-center gap-6">
+<div class="flex flex-col">
+<nav class="flex items-center gap-2 text-[10px] text-on-surface-variant font-medium tracking-tight"><span>Admin</span><span class="material-symbols-outlined text-[10px]">chevron_right</span><span class="text-primary font-bold">Users</span></nav>
+<h1 class="text-xl font-serif font-bold text-[#865047] leading-none">All users</h1>
+</div>
+<div class="relative ml-4">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
+<input class="bg-surface-container-low border-none rounded-full py-2 pl-10 pr-4 text-sm w-72 focus:ring-1 focus:ring-primary-container outline-none transition-all" placeholder="Search by name or email..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="flex items-center gap-2 px-4 py-2 border border-outline-variant/30 rounded-lg text-xs font-bold text-on-surface-variant hover:bg-surface-container transition-colors"><span class="material-symbols-outlined text-sm">download</span>Export CSV</button>
+<div class="h-6 w-px bg-outline-variant/20 mx-2"></div>
+<button class="text-on-surface-variant hover:text-primary transition-colors"><span class="material-symbols-outlined">notifications</span></button>
+<img alt="Admin profile" class="h-8 w-8 rounded-full border-2 border-primary-container object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDtu44zGEiSkicr8egjZluZlFdx4TjANPZPOJxuDf6BUb18oxO8bDHlhvcz23mM9L20ycB8a1X4ZFaBfuk2q0L614uVMemqbLhXg0reBnj_ZEk0Ks8IKrQQqIQ9U82gqC0S9g2GG2ZPPn4yPUiRJOSb54PQBSgsutu751cwUB-2p3DDJXLMUIyBRH57kmaP-2xW3Db17N8jQzD92H3kr2o-b-FWkpGulIe-dGssjsPnYraY-AowRO4JzEoqnrNS3zdpQRaEBI5XPzuE"/>
+</div>
+</header>
+<div class="pt-24 px-8 pb-12">
+<div class="grid grid-cols-5 gap-4 mb-8">
+<div class="bg-surface-container-lowest p-5 rounded-xl border-l-4 border-primary-container flex flex-col gap-1"><span class="text-[10px] font-bold text-on-surface-variant tracking-wider uppercase">Total users</span><span class="text-2xl font-serif text-on-surface">284</span></div>
+<div class="bg-surface-container-lowest p-5 rounded-xl border-l-4 border-secondary flex flex-col gap-1"><span class="text-[10px] font-bold text-on-surface-variant tracking-wider uppercase">Paid users</span><span class="text-2xl font-serif text-on-surface">226</span></div>
+<div class="bg-surface-container-lowest p-5 rounded-xl border-l-4 border-tertiary flex flex-col gap-1"><span class="text-[10px] font-bold text-on-surface-variant tracking-wider uppercase">Free/trial</span><span class="text-2xl font-serif text-on-surface">58</span></div>
+<div class="bg-surface-container-lowest p-5 rounded-xl border-l-4 border-error flex flex-col gap-1"><span class="text-[10px] font-bold text-on-surface-variant tracking-wider uppercase">Churned</span><span class="text-2xl font-serif text-on-surface">12</span></div>
+<div class="bg-surface-container-lowest p-5 rounded-xl border-l-4 border-outline flex flex-col gap-1"><span class="text-[10px] font-bold text-on-surface-variant tracking-wider uppercase">Avg sessions</span><span class="text-2xl font-serif text-on-surface">4.2</span></div>
+</div>
+<div class="flex items-center justify-between mb-6">
+<div class="flex gap-3">
+<select class="bg-surface-container-lowest border-none rounded-lg text-xs font-bold text-on-surface-variant py-2 px-3 focus:ring-1 focus:ring-primary-container"><option>Plan: All</option><option>Essential</option><option>Heirloom Plus</option></select>
+<select class="bg-surface-container-lowest border-none rounded-lg text-xs font-bold text-on-surface-variant py-2 px-3 focus:ring-1 focus:ring-primary-container"><option>Status: All</option><option>Active</option><option>Trial</option><option>Churned</option></select>
+</div>
+<div class="flex items-center gap-2 text-xs font-bold text-on-surface-variant"><span class="material-symbols-outlined text-sm">sort</span><span>Sort by:</span><select class="bg-transparent border-none py-1 pr-8 text-on-surface focus:ring-0 cursor-pointer"><option>Recently Joined</option><option>Session Usage</option><option>A-Z</option></select></div>
+</div>
+<div class="bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm">
+<table class="w-full text-left border-collapse">
+<thead><tr class="bg-surface-container-low text-on-surface-variant text-[10px] font-bold uppercase tracking-widest"><th class="py-4 px-6"><input class="rounded border-outline-variant text-primary focus:ring-primary h-4 w-4" type="checkbox"/></th><th class="py-4 px-2">User</th><th class="py-4 px-4">Plan</th><th class="py-4 px-4">Used</th><th class="py-4 px-4">Left</th><th class="py-4 px-4">Status</th><th class="py-4 px-4">Joined</th><th class="py-4 px-6 text-right">Actions</th></tr></thead>
+<tbody class="divide-y divide-surface-container text-sm">
+<tr class="hover:bg-surface-container-low/50 transition-colors cursor-pointer group"><td class="py-4 px-6"><input class="rounded border-outline-variant text-primary focus:ring-primary h-4 w-4" type="checkbox"/></td><td class="py-4 px-2"><div class="flex items-center gap-3"><img class="h-9 w-9 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCpwBG8FSrDD1bmfrBRkClVVgL3oRGfvd-546ZNrk-hxiXwypp9hIJojppJU-ecwMVDiCsRWfMdfNfgXW1fRIuNNHJ2UKuaIjC0sbL2XuR3DM72L_mpKXzlgWeEEF94S9H7HdKmQvfQzkWkRP4WjCQ1Bpe3Zow2cvPScq1pYSU9ja66-4cyvu-rBTEj0tLlPzI-ASR4-Tozkig4gUhCMKo0JtaVFEPQk0gQ4nf3tj9hTioJoOzPBYxn2yhmJ4n2zt97tHsWl1blhkI2"/><div class="flex flex-col"><span class="font-bold text-on-surface">Sarah Miller</span><span class="text-xs text-on-surface-variant">sarah.m@example.com</span></div></div></td><td class="py-4 px-4 font-medium">Heirloom Plus</td><td class="py-4 px-4">03</td><td class="py-4 px-4">07</td><td class="py-4 px-4"><span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-secondary-container text-secondary">Active</span></td><td class="py-4 px-4 text-on-surface-variant">Oct 12, 2023</td><td class="py-4 px-6 text-right"><button class="text-primary font-bold text-xs hover:underline">View/Edit</button></td></tr>
+<tr class="hover:bg-surface-container-low/50 transition-colors"><td class="py-4 px-6"><input class="rounded border-outline-variant text-primary focus:ring-primary h-4 w-4" type="checkbox"/></td><td class="py-4 px-2"><div class="flex items-center gap-3"><img class="h-9 w-9 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDk8PypdvUQ6CHJzcDYps-U1jeOw491wTCQ-t-v2EWEFFROPNgyiJ2oPmNmIXf_ziJlTr4ETZqsN5G2yJLGP8phZHj__rYr0b5icZII86jAfb5mHpJzMJsKixnhMeTGk7Aa0DGrKAB76FnJyOAy-TNn_JEaIKIdDgH2Vc5tvA8vaQF89PQmszZSs_6XktCAgAJZ4TUhl7a07YCxKlAjT5uWbTiQdIP-0zOXnKiCWwdYeBDJCxq5mzJ32Ui4ksCu1N2kor_yuKj6wOiu"/><div class="flex flex-col"><span class="font-bold text-on-surface">James Chen</span><span class="text-xs text-on-surface-variant">j.chen@global.io</span></div></div></td><td class="py-4 px-4 font-medium">Essential</td><td class="py-4 px-4">01</td><td class="py-4 px-4">02</td><td class="py-4 px-4"><span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-tertiary-fixed text-tertiary">Trial</span></td><td class="py-4 px-4 text-on-surface-variant">Jan 04, 2024</td><td class="py-4 px-6 text-right"><button class="text-primary font-bold text-xs hover:underline">View/Edit</button></td></tr>
+<tr class="hover:bg-surface-container-low/50 transition-colors"><td class="py-4 px-6"><input class="rounded border-outline-variant text-primary focus:ring-primary h-4 w-4" type="checkbox"/></td><td class="py-4 px-2"><div class="flex items-center gap-3"><img class="h-9 w-9 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuADpgAnZI4ivTnuIzo-Fl4EGXqhG7gUXIKDDbUbfYGjPavpuzjEHA5KNM_yKL3cykPA42vYKDnRUr3XV-0JQVVgMs-4QOEnsIAOeY9Ai8tguiKfNzr9CAPDXLOeksGuha-Uwmy8Mkz7I8elCrOsY1aQ6O383aG-xZn8bpe8yr0z3dx8nUgKzs7aLUnMhkO_gwduCUP_c6PnbEj9ayU2-OgnWDNpY2b80WjUJG9sScVeKoGlBE15v3UGqXfLjYYf-WlSZQWxl2Twf3fK"/><div class="flex flex-col"><span class="font-bold text-on-surface">Elena Rodriguez</span><span class="text-xs text-on-surface-variant">elena.r@lifestyle.com</span></div></div></td><td class="py-4 px-4 font-medium">Heirloom Plus</td><td class="py-4 px-4">08</td><td class="py-4 px-4">00</td><td class="py-4 px-4"><span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-error-container text-error">Billing Issue</span></td><td class="py-4 px-4 text-on-surface-variant">Nov 28, 2023</td><td class="py-4 px-6 text-right"><button class="text-primary font-bold text-xs hover:underline">View/Edit</button></td></tr>
+<tr class="hover:bg-surface-container-low/50 transition-colors"><td class="py-4 px-6"><input class="rounded border-outline-variant text-primary focus:ring-primary h-4 w-4" type="checkbox"/></td><td class="py-4 px-2"><div class="flex items-center gap-3"><div class="h-9 w-9 rounded-full bg-surface-container flex items-center justify-center font-bold text-on-surface-variant">MB</div><div class="flex flex-col"><span class="font-bold text-on-surface">Marcus Bell</span><span class="text-xs text-on-surface-variant">m.bell@edu.co</span></div></div></td><td class="py-4 px-4 font-medium">Essential</td><td class="py-4 px-4">04</td><td class="py-4 px-4">01</td><td class="py-4 px-4"><span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-secondary-container text-secondary">Active</span></td><td class="py-4 px-4 text-on-surface-variant">Dec 15, 2023</td><td class="py-4 px-6 text-right"><button class="text-primary font-bold text-xs hover:underline">View/Edit</button></td></tr>
+<tr class="hover:bg-surface-container-low/50 transition-colors"><td class="py-4 px-6"><input class="rounded border-outline-variant text-primary focus:ring-primary h-4 w-4" type="checkbox"/></td><td class="py-4 px-2"><div class="flex items-center gap-3"><div class="h-9 w-9 rounded-full bg-surface-container flex items-center justify-center font-bold text-on-surface-variant">AL</div><div class="flex flex-col"><span class="font-bold text-on-surface">Anita Lee</span><span class="text-xs text-on-surface-variant">anita@design.com</span></div></div></td><td class="py-4 px-4 font-medium">Heirloom Plus</td><td class="py-4 px-4">02</td><td class="py-4 px-4">08</td><td class="py-4 px-4"><span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-secondary-container text-secondary">Active</span></td><td class="py-4 px-4 text-on-surface-variant">Jan 10, 2024</td><td class="py-4 px-6 text-right"><button class="text-primary font-bold text-xs hover:underline">View/Edit</button></td></tr>
+<tr class="hover:bg-surface-container-low/50 transition-colors"><td class="py-4 px-6"><input class="rounded border-outline-variant text-primary focus:ring-primary h-4 w-4" type="checkbox"/></td><td class="py-4 px-2"><div class="flex items-center gap-3"><div class="h-9 w-9 rounded-full bg-surface-container flex items-center justify-center font-bold text-on-surface-variant">DK</div><div class="flex flex-col"><span class="font-bold text-on-surface">David Kim</span><span class="text-xs text-on-surface-variant">davidk@tech.net</span></div></div></td><td class="py-4 px-4 font-medium">Essential</td><td class="py-4 px-4">05</td><td class="py-4 px-4">00</td><td class="py-4 px-4"><span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-error-container text-error">Churned</span></td><td class="py-4 px-4 text-on-surface-variant">Aug 19, 2023</td><td class="py-4 px-6 text-right"><button class="text-primary font-bold text-xs hover:underline">View/Edit</button></td></tr>
+</tbody>
+</table>
+<div class="p-6 bg-surface-container-low/30 border-t border-surface-container flex justify-between items-center text-xs font-bold text-on-surface-variant"><span>Showing 1-10 of 284 users</span><div class="flex gap-2"><button class="p-1.5 rounded bg-surface-container-lowest border border-outline-variant/30 hover:bg-surface-container transition-colors disabled:opacity-50" disabled><span class="material-symbols-outlined text-sm">chevron_left</span></button><button class="p-1.5 rounded bg-surface-container-lowest border border-outline-variant/30 hover:bg-surface-container transition-colors"><span class="material-symbols-outlined text-sm">chevron_right</span></button></div></div>
+</div>
+</div>
+</main>
+</body></html>

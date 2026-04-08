@@ -22,6 +22,15 @@ from core import views
 urlpatterns = [
     path('', views.home, name='home'),
     path('super-admin/dashboard/', views.super_admin_dashboard, name='super_admin_dashboard'),
+    path('super-admin/sessions/', views.admin_session_monitor, name='admin_session_monitor'),
+    path('super-admin/books/', views.admin_book_library, name='admin_book_library'),
+    path('super-admin/activities/', views.admin_activity_config, name='admin_activity_config'),
+    path('super-admin/users/', views.admin_users, name='admin_users'),
+    path('super-admin/subscriptions/', views.admin_subscriptions, name='admin_subscriptions'),
+    path('super-admin/badges/', views.admin_badges, name='admin_badges'),
+    path('super-admin/live-sessions/', views.admin_live_sessions, name='admin_live_sessions'),
+    path('super-admin/logs/', views.admin_logs, name='admin_logs'),
+    path('super-admin/settings/', views.admin_settings, name='admin_settings'),
     path('admin/', admin.site.urls),
     path('api/v1/', include('core.api_urls')),
 ]

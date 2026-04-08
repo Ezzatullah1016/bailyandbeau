@@ -63,6 +63,150 @@ class SuperAdminDashboardTests(TestCase):
         self.assertContains(response, "font-awesome")
 
 
+class AdminPortalPageTests(TestCase):
+    def setUp(self):
+        self.admin_user = User.objects.create_user(
+            username="portaladmin",
+            email="portaladmin@example.com",
+            password="strong-password-123",
+            is_staff=True,
+            is_superuser=True,
+        )
+        self.parent_user = User.objects.create_user(
+            username="familyuser",
+            email="familyuser@example.com",
+            password="strong-password-123",
+            first_name="Sara",
+            last_name="Miller",
+        )
+        self.child = ChildProfile.objects.create(
+            user=self.parent_user,
+            display_name="Ava",
+            age_band=ChildProfile.AgeBand.AGE_3_5,
+        )
+        self.book = Book.objects.create(
+            title="Portal Story",
+            slug="portal-story",
+            room_type=Book.RoomType.READING,
+            age_band=Book.AgeBand.AGE_3_5,
+            published=True,
+            page_count=12,
+        )
+        self.session = ReadingSession.objects.create(
+            book=self.book,
+            child_profile=self.child,
+            created_by=self.parent_user,
+            status=ReadingSession.Status.ACTIVE,
+        )
+        Entitlement.objects.create(
+            user=self.parent_user,
+            subscription_status=Entitlement.SubscriptionStatus.ACTIVE,
+            plan_code="monthly-plus",
+            sessions_included=20,
+            sessions_remaining=12,
+        )
+
+    def test_staff_admin_pages_render(self):
+        self.client.force_login(self.admin_user)
+
+        pages = [
+            (reverse("admin_session_monitor"), "Session Monitor"),
+            (reverse("admin_book_library"), "Book library"),
+            (reverse("admin_activity_config"), "Activity config"),
+            (reverse("admin_users"), "All users"),
+            (reverse("admin_subscriptions"), "Subscriptions & billing"),
+            (reverse("admin_badges"), "Badge manager"),
+            (reverse("admin_live_sessions"), "Live sessions"),
+            (reverse("admin_logs"), "Logs & errors"),
+            (reverse("admin_settings"), "Settings"),
+        ]
+
+        for url, expected_text in pages:
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, expected_text)
+
+        session_response = self.client.get(reverse("admin_session_monitor"))
+        self.assertContains(session_response, "Platform Insights")
+        self.assertContains(session_response, "Live Ops Active")
+        self.assertContains(session_response, "View Logged Issues")
+        self.assertContains(session_response, "portaladmin")
+
+    def test_admin_book_library_can_create_book_from_form(self):
+        self.client.force_login(self.admin_user)
+
+        response = self.client.post(
+            reverse("admin_book_library"),
+            data={
+                "action": "save",
+                "title": "Ocean Adventure",
+                "slug": "ocean-adventure",
+                "description": "A new story for the library.",
+                "room_type": Book.RoomType.READING,
+                "age_band": Book.AgeBand.AGE_6_8,
+                "cover_image": "https://example.com/cover.jpg",
+                "page_count": 16,
+                "published": "on",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(Book.objects.filter(slug="ocean-adventure").exists())
+
+    def test_admin_activity_config_can_create_config_from_form(self):
+        self.client.force_login(self.admin_user)
+
+        response = self.client.post(
+            reverse("admin_activity_config"),
+            data={
+                "action": "save",
+                "book": str(self.book.id),
+                "title": "Forest Quiz",
+                "activity_type": ActivityConfig.ActivityType.QUIZ,
+                "sort_order": 1,
+                "is_active": "on",
+                "config_json": '{"question": "What color is the door?", "options": ["Red", "Blue"], "correct_index": 0}',
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(ActivityConfig.objects.filter(title="Forest Quiz").exists())
+
+    def test_admin_users_api_lists_users_for_staff(self):
+        self.client.force_login(self.admin_user)
+
+        response = self.client.get("/api/v1/admin/users/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(response.json()["meta"]["count"], 1)
+        self.assertIn("plan_code", response.json()["data"][0])
+
+    def test_admin_crud_forms_include_client_validation_hooks(self):
+        self.client.force_login(self.admin_user)
+
+        book_response = self.client.get(reverse("admin_book_library"))
+        activity_response = self.client.get(reverse("admin_activity_config"))
+
+        self.assertContains(book_response, 'data-validate-form="book-form"')
+        self.assertContains(book_response, 'novalidate')
+        self.assertContains(book_response, 'Upload new book')
+        self.assertContains(book_response, 'Book Asset (PDF/ePub)')
+        self.assertContains(book_response, 'Upload cover art')
+        self.assertContains(book_response, 'Initial Status')
+        self.assertContains(book_response, 'data-file-field="true"')
+        self.assertContains(book_response, 'Upload a PDF or ePub book asset.')
+        self.assertContains(book_response, 'Upload a cover image.')
+        self.assertContains(book_response, 'Choose an initial status.')
+        self.assertContains(book_response, 'data-required-message="Book title is required."')
+        self.assertContains(book_response, 'data-confirm-message="Delete this book from the library?"')
+        self.assertContains(activity_response, 'data-validate-form="activity-form"')
+        self.assertContains(activity_response, 'novalidate')
+        self.assertContains(activity_response, 'data-json-field="true"')
+        self.assertContains(activity_response, 'Config JSON is required.')
+
+
 class AuthApiTests(TestCase):
     def test_register_endpoint_creates_user_and_returns_tokens(self):
         response = self.client.post(

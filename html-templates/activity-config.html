@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Activity Config | Bailey &amp; Beau Admin</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&amp;family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-fixed": "#ffdcbc",
+                        "on-secondary-fixed": "#00210b",
+                        "on-error-container": "#93000a",
+                        "surface-bright": "#fcf9f4",
+                        "surface": "#fcf9f4",
+                        "inverse-primary": "#fcb5aa",
+                        "tertiary": "#7c572d",
+                        "surface-container-highest": "#e5e2dd",
+                        "tertiary-fixed-dim": "#efbd8a",
+                        "secondary-fixed": "#c6ecc8",
+                        "on-secondary-container": "#486a4e",
+                        "on-surface": "#1c1c19",
+                        "inverse-on-surface": "#f3f0eb",
+                        "on-tertiary-fixed-variant": "#614018",
+                        "outline": "#847370",
+                        "surface-dim": "#dcdad5",
+                        "inverse-surface": "#31302d",
+                        "surface-container-high": "#ebe8e3",
+                        "surface-container": "#f0ede9",
+                        "secondary-fixed-dim": "#aad0ad",
+                        "on-primary-container": "#4b201a",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-lowest": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "on-error": "#ffffff",
+                        "secondary-container": "#c3e9c5",
+                        "surface-tint": "#865047",
+                        "primary-fixed": "#ffdad4",
+                        "surface-container-low": "#f6f3ee",
+                        "on-tertiary-container": "#432601",
+                        "on-secondary-fixed-variant": "#2d4e33",
+                        "outline-variant": "#d7c2bf",
+                        "primary-fixed-dim": "#fcb5aa",
+                        "primary-container": "#c4847a",
+                        "on-primary": "#ffffff",
+                        "primary": "#865047",
+                        "error": "#ba1a1a",
+                        "tertiary-container": "#b88c5d",
+                        "background": "#fcf9f4",
+                        "secondary": "#44664a",
+                        "on-primary-fixed-variant": "#6b3931",
+                        "surface-variant": "#e5e2dd",
+                        "on-surface-variant": "#524341",
+                        "on-primary-fixed": "#350f0a",
+                        "error-container": "#ffdad6",
+                        "on-background": "#1c1c19",
+                        "on-tertiary-fixed": "#2c1700"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Newsreader"],
+                        "body": ["Plus Jakarta Sans"],
+                        "label": ["Plus Jakarta Sans"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #fcf9f4; }
+        .editorial-shadow { box-shadow: 0 12px 40px rgba(44, 36, 22, 0.05); }
+        .serif { font-family: 'Newsreader', serif; }
+    </style>
+</head>
+<body class="text-on-surface">
+<!-- SideNavBar Shell -->
+<aside class="flex flex-col h-screen fixed left-0 top-0 overflow-y-auto bg-stone-900 dark:bg-black text-rose-200 dark:text-rose-300 font-['Plus_Jakarta_Sans'] font-medium text-sm docked left-0 h-full w-64 shadow-2xl z-50">
+<div class="p-6">
+<h1 class="font-['Newsreader'] text-xl italic text-stone-50">Bailey &amp; Beau</h1>
+<p class="text-[10px] uppercase tracking-widest text-stone-500 mt-1">Admin Console</p>
+</div>
+<nav class="flex-1 px-2 space-y-1">
+<a class="flex items-center space-x-3 text-stone-400 hover:text-stone-100 mx-2 px-4 py-2 hover:bg-stone-800/50 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>Dashboard</span>
+</a>
+<a class="flex items-center space-x-3 text-stone-400 hover:text-stone-100 mx-2 px-4 py-2 hover:bg-stone-800/50 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="event_note">event_note</span>
+<span>Activities</span>
+</a>
+<a class="flex items-center space-x-3 bg-stone-800 text-white rounded-lg mx-2 px-4 py-2" href="#">
+<span class="material-symbols-outlined" data-icon="book_online">book_online</span>
+<span>Reservations</span>
+</a>
+<a class="flex items-center space-x-3 text-stone-400 hover:text-stone-100 mx-2 px-4 py-2 hover:bg-stone-800/50 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="leaderboard">leaderboard</span>
+<span>Analytics</span>
+</a>
+<a class="flex items-center space-x-3 text-stone-400 hover:text-stone-100 mx-2 px-4 py-2 hover:bg-stone-800/50 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span>Settings</span>
+</a>
+</nav>
+<div class="p-4 bg-stone-800/30 m-4 rounded-xl">
+<button class="w-full py-2 bg-primary-container text-on-primary-container rounded-lg font-semibold transition-all scale-98 active:opacity-80">
+                New Activity
+            </button>
+</div>
+<div class="mt-auto pb-6 px-2 space-y-1">
+<a class="flex items-center space-x-3 text-stone-400 hover:text-stone-100 mx-2 px-4 py-2 hover:bg-stone-800/50 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+<span>Support</span>
+</a>
+<a class="flex items-center space-x-3 text-stone-400 hover:text-stone-100 mx-2 px-4 py-2 hover:bg-stone-800/50 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span>Sign Out</span>
+</a>
+</div>
+</aside>
+<!-- Main Canvas -->
+<main class="ml-64 min-h-screen">
+<!-- TopNavBar Shell -->
+<header class="flex justify-between items-center px-8 h-16 sticky top-0 w-full bg-white/80 dark:bg-stone-950/80 backdrop-blur-md border-b border-stone-200/50 dark:border-stone-800/50 z-40">
+<div class="flex items-center gap-8">
+<div class="relative">
+<span class="absolute inset-y-0 left-3 flex items-center text-stone-400">
+<span class="material-symbols-outlined text-sm" data-icon="search">search</span>
+</span>
+<input class="pl-10 pr-4 py-1.5 bg-surface-container-low border-none rounded-full text-sm focus:ring-1 focus:ring-primary-container w-64" placeholder="Search configs..." type="text"/>
+</div>
+<nav class="flex gap-6">
+<a class="text-stone-500 hover:text-stone-900 transition-all duration-300 font-['Plus_Jakarta_Sans'] text-sm tracking-tight" href="#">Activities</a>
+<a class="text-rose-900 font-semibold border-b-2 border-rose-900 transition-all duration-300 font-['Plus_Jakarta_Sans'] text-sm tracking-tight" href="#">Activity Config</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="px-4 py-1.5 text-sm font-medium text-stone-600 hover:bg-stone-50 rounded-lg">Discard</button>
+<button class="px-4 py-1.5 text-sm font-semibold bg-primary text-white rounded-lg hover:opacity-90">Save Changes</button>
+<div class="h-6 w-px bg-stone-200 mx-2"></div>
+<button class="text-stone-500 hover:text-stone-900 relative">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-error rounded-full border-2 border-white"></span>
+</button>
+<button class="text-stone-500 hover:text-stone-900">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+</button>
+</div>
+</header>
+<!-- Page Content -->
+<div class="p-6 md:p-8 max-w-7xl mx-auto space-y-8">
+<!-- Breadcrumb & Header -->
+<div class="space-y-1">
+<nav class="flex text-[11px] uppercase tracking-widest text-on-surface-variant/60 font-medium">
+<span>Admin</span>
+<span class="mx-2">/</span>
+<span class="text-on-surface-variant">Activity Config</span>
+</nav>
+<div class="flex justify-between items-end">
+<h2 class="serif text-4xl font-semibold text-on-surface">Activity config</h2>
+<button class="bg-primary text-on-primary px-5 py-2.5 rounded-lg flex items-center gap-2 editorial-shadow transition-transform active:scale-95">
+<span class="material-symbols-outlined text-[20px]" data-icon="add">add</span>
+<span class="font-semibold text-sm">New Config</span>
+</button>
+</div>
+</div>
+<!-- Stats Row -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+<div class="bg-surface-container-lowest p-5 rounded-[10px] border border-outline-variant/20 editorial-shadow">
+<p class="text-xs text-on-surface-variant font-medium uppercase tracking-tighter mb-1">Total configs</p>
+<div class="flex justify-between items-baseline">
+<h3 class="text-3xl font-bold text-on-surface">31</h3>
+<span class="text-[10px] px-2 py-0.5 bg-surface-container text-on-surface-variant rounded-full">All time</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-5 rounded-[10px] border border-outline-variant/20 editorial-shadow">
+<p class="text-xs text-on-surface-variant font-medium uppercase tracking-tighter mb-1">Drawing</p>
+<div class="flex justify-between items-baseline">
+<h3 class="text-3xl font-bold text-on-surface">8</h3>
+<span class="text-[10px] px-2 py-0.5 bg-primary-container/20 text-primary rounded-full font-bold">Rose</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-5 rounded-[10px] border border-outline-variant/20 editorial-shadow">
+<p class="text-xs text-on-surface-variant font-medium uppercase tracking-tighter mb-1">Drag &amp; Drop</p>
+<div class="flex justify-between items-baseline">
+<h3 class="text-3xl font-bold text-on-surface">9</h3>
+<span class="text-[10px] px-2 py-0.5 bg-secondary-container text-secondary rounded-full font-bold">Sage</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-5 rounded-[10px] border border-outline-variant/20 editorial-shadow">
+<p class="text-xs text-on-surface-variant font-medium uppercase tracking-tighter mb-1">Quiz</p>
+<div class="flex justify-between items-baseline">
+<h3 class="text-3xl font-bold text-on-surface">7</h3>
+<span class="text-[10px] px-2 py-0.5 bg-tertiary-fixed text-tertiary-container rounded-full font-bold">Amber</span>
+</div>
+</div>
+</div>
+<!-- Two Column Layout -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+<!-- Left Column: Table Card -->
+<div class="lg:col-span-8 bg-surface-container-lowest rounded-[10px] border border-outline-variant/20 editorial-shadow overflow-hidden">
+<div class="p-6 flex justify-between items-center">
+<div class="flex items-center gap-3">
+<h3 class="serif text-xl font-semibold">All activity configs</h3>
+<span class="bg-surface-container text-on-surface-variant px-2.5 py-0.5 rounded-full text-[11px] font-bold">31 configs</span>
+</div>
+<div class="relative">
+<select class="appearance-none bg-surface-container-low border-none rounded-lg text-xs font-medium py-2 pl-3 pr-8 focus:ring-1 focus:ring-primary-container text-on-surface-variant">
+<option>Filter by type</option>
+<option>Drawing</option>
+<option>Quiz</option>
+<option>Hotspot</option>
+</select>
+<span class="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-sm pointer-events-none text-on-surface-variant" data-icon="expand_more">expand_more</span>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-y border-outline-variant/10 bg-surface-container-low/30 text-[11px] uppercase tracking-widest text-on-surface-variant font-semibold">
+<th class="px-6 py-4">Config Name</th>
+<th class="px-6 py-4">Book</th>
+<th class="px-6 py-4">Activity Type</th>
+<th class="px-6 py-4 text-center">Items</th>
+<th class="px-6 py-4">Status</th>
+<th class="px-6 py-4">Last Edited</th>
+<th class="px-6 py-4 text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/10">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-low/20 transition-colors group">
+<td class="px-6 py-4">
+<span class="font-semibold text-sm text-primary block">Forest Quiz Set A</span>
+<span class="text-[10px] text-on-surface-variant/60">ID: CFG-0021</span>
+</td>
+<td class="px-6 py-4 text-xs font-medium">The Big Red Adventure</td>
+<td class="px-6 py-4">
+<span class="px-3 py-1 rounded-full text-[10px] font-bold bg-[#FBF0DE] text-[#7A5010]">Quiz</span>
+</td>
+<td class="px-6 py-4 text-center text-xs">12</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-1.5 text-[10px] font-bold text-secondary">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span> Active
+                                        </div>
+</td>
+<td class="px-6 py-4 text-xs text-on-surface-variant">2h ago</td>
+<td class="px-6 py-4 text-right">
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-xl" data-icon="more_vert">more_vert</span>
+</button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container-low/20 transition-colors bg-primary-container/5 border-l-4 border-primary">
+<td class="px-6 py-4">
+<span class="font-semibold text-sm text-primary block">Page Colouring — Ch.1</span>
+<span class="text-[10px] text-on-surface-variant/60">ID: CFG-0019</span>
+</td>
+<td class="px-6 py-4 text-xs font-medium">The Big Red Adventure</td>
+<td class="px-6 py-4">
+<span class="px-3 py-1 rounded-full text-[10px] font-bold bg-[#F5EAE8] text-[#7A3A35]">Drawing</span>
+</td>
+<td class="px-6 py-4 text-center text-xs">1</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-1.5 text-[10px] font-bold text-secondary">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span> Active
+                                        </div>
+</td>
+<td class="px-6 py-4 text-xs text-on-surface-variant">Yesterday</td>
+<td class="px-6 py-4 text-right">
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-xl" data-icon="more_vert">more_vert</span>
+</button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-low/20 transition-colors">
+<td class="px-6 py-4">
+<span class="font-semibold text-sm text-primary block">Sort the Berries</span>
+<span class="text-[10px] text-on-surface-variant/60">ID: CFG-0015</span>
+</td>
+<td class="px-6 py-4 text-xs font-medium">Summer Tales</td>
+<td class="px-6 py-4">
+<span class="px-3 py-1 rounded-full text-[10px] font-bold bg-[#E6EFE6] text-[#2E6635]">Drag &amp; Drop</span>
+</td>
+<td class="px-6 py-4 text-center text-xs">8</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-1.5 text-[10px] font-bold text-tertiary">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span> Draft
+                                        </div>
+</td>
+<td class="px-6 py-4 text-xs text-on-surface-variant">3 days ago</td>
+<td class="px-6 py-4 text-right">
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-xl" data-icon="more_vert">more_vert</span>
+</button>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-surface-container-low/20 transition-colors">
+<td class="px-6 py-4">
+<span class="font-semibold text-sm text-primary block">Hidden Objects - Attic</span>
+<span class="text-[10px] text-on-surface-variant/60">ID: CFG-0012</span>
+</td>
+<td class="px-6 py-4 text-xs font-medium">Ghostly Friends</td>
+<td class="px-6 py-4">
+<span class="px-3 py-1 rounded-full text-[10px] font-bold bg-[#E6F0FB] text-[#1A4A8A]">Hotspot</span>
+</td>
+<td class="px-6 py-4 text-center text-xs">5</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-1.5 text-[10px] font-bold text-secondary">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span> Active
+                                        </div>
+</td>
+<td class="px-6 py-4 text-xs text-on-surface-variant">Last Week</td>
+<td class="px-6 py-4 text-right">
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-xl" data-icon="more_vert">more_vert</span>
+</button>
+</td>
+</tr>
+<!-- Dummy Rows for Aesthetic -->
+<tr class="opacity-60">
+<td class="px-6 py-4 text-sm">Character Matching</td>
+<td class="px-6 py-4 text-xs">The Big Red Adventure</td>
+<td class="px-6 py-4"><span class="px-2 py-0.5 rounded bg-surface-container text-[9px] uppercase">Matching</span></td>
+<td class="px-6 py-4 text-center text-xs">6</td>
+<td class="px-6 py-4 text-[10px]">Archived</td>
+<td class="px-6 py-4 text-xs">1 mo ago</td>
+<td class="px-6 py-4 text-right"><span class="material-symbols-outlined text-xl" data-icon="more_vert">more_vert</span></td>
+</tr>
+<tr class="opacity-60">
+<td class="px-6 py-4 text-sm">Music Memory</td>
+<td class="px-6 py-4 text-xs">Sing Along Book</td>
+<td class="px-6 py-4"><span class="px-2 py-0.5 rounded bg-surface-container text-[9px] uppercase">Audio</span></td>
+<td class="px-6 py-4 text-center text-xs">4</td>
+<td class="px-6 py-4 text-[10px]">Active</td>
+<td class="px-6 py-4 text-xs">2 mo ago</td>
+<td class="px-6 py-4 text-right"><span class="material-symbols-outlined text-xl" data-icon="more_vert">more_vert</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="p-6 border-t border-outline-variant/10 flex justify-between items-center text-xs text-on-surface-variant font-medium">
+<p>Showing 1–8 of 31 configs</p>
+<div class="flex gap-2">
+<button class="p-1.5 rounded-md hover:bg-surface-container border border-outline-variant/20 disabled:opacity-30" disabled="">
+<span class="material-symbols-outlined text-sm" data-icon="chevron_left">chevron_left</span>
+</button>
+<button class="px-3 py-1.5 rounded-md bg-primary text-white">1</button>
+<button class="px-3 py-1.5 rounded-md hover:bg-surface-container">2</button>
+<button class="px-3 py-1.5 rounded-md hover:bg-surface-container">3</button>
+<button class="p-1.5 rounded-md hover:bg-surface-container border border-outline-variant/20">
+<span class="material-symbols-outlined text-sm" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Right Column: Editor Panel -->
+<div class="lg:col-span-4 bg-surface-container-lowest rounded-[10px] border border-outline-variant/20 editorial-shadow">
+<div class="p-6 border-b border-outline-variant/10 flex justify-between items-center bg-surface-container-low/30">
+<h3 class="serif text-xl font-semibold flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" data-icon="edit">edit</span>
+                            Edit config
+                        </h3>
+<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#FBF0DE] text-[#7A5010]">Multiple Choice Quiz</span>
+</div>
+<div class="p-6 space-y-8">
+<!-- Section 1 -->
+<div class="space-y-4">
+<div class="flex items-center gap-2 mb-2">
+<span class="w-1 h-4 bg-primary rounded-full"></span>
+<h4 class="text-[11px] uppercase tracking-widest font-bold text-on-surface-variant">Config details</h4>
+</div>
+<div class="space-y-3">
+<div class="space-y-1.5">
+<label class="text-[11px] font-bold text-on-surface-variant">Config Name</label>
+<input class="w-full bg-surface-container-low border-none rounded-lg text-sm px-4 py-2.5 focus:ring-1 focus:ring-primary-container" type="text" value="Forest Quiz Set A"/>
+</div>
+<div class="space-y-1.5">
+<label class="text-[11px] font-bold text-on-surface-variant">Linked Book</label>
+<select class="w-full bg-surface-container-low border-none rounded-lg text-sm px-4 py-2.5 focus:ring-1 focus:ring-primary-container">
+<option>The Big Red Adventure</option>
+<option>Summer Tales</option>
+<option>Ghostly Friends</option>
+</select>
+</div>
+<div class="space-y-1.5">
+<label class="text-[11px] font-bold text-on-surface-variant">Activity Type</label>
+<input class="w-full bg-surface-container border-none rounded-lg text-sm px-4 py-2.5 opacity-50 cursor-not-allowed" disabled="" type="text" value="Multiple Choice Quiz"/>
+</div>
+</div>
+</div>
+<!-- Section 2 -->
+<div class="space-y-4">
+<div class="flex items-center gap-2 mb-2">
+<span class="w-1 h-4 bg-primary rounded-full"></span>
+<h4 class="text-[11px] uppercase tracking-widest font-bold text-on-surface-variant">Questions</h4>
+</div>
+<div class="space-y-4">
+<!-- Question Block 1 -->
+<div class="p-4 bg-surface-container-low/50 rounded-xl border border-outline-variant/10 space-y-3">
+<div class="flex justify-between items-start">
+<span class="text-[10px] font-bold text-on-surface-variant/50">Q1</span>
+<button class="text-error/40 hover:text-error transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="delete">delete</span>
+</button>
+</div>
+<p class="text-sm font-medium">What colour was the big door?</p>
+<div class="flex items-center gap-2 text-xs">
+<span class="px-2 py-0.5 rounded bg-secondary-container text-secondary font-bold">Red (Correct)</span>
+<span class="text-on-surface-variant/40">+ 2 more options</span>
+</div>
+</div>
+<!-- Question Block 2 -->
+<div class="p-4 bg-surface-container-low/50 rounded-xl border border-outline-variant/10 space-y-3">
+<div class="flex justify-between items-start">
+<span class="text-[10px] font-bold text-on-surface-variant/50">Q2</span>
+<button class="text-error/40 hover:text-error transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="delete">delete</span>
+</button>
+</div>
+<p class="text-sm font-medium">What did Bailey find inside?</p>
+<div class="flex items-center gap-2 text-xs">
+<span class="px-2 py-0.5 rounded bg-secondary-container text-secondary font-bold">A key (Correct)</span>
+<span class="text-on-surface-variant/40">+ 3 more options</span>
+</div>
+</div>
+<button class="w-full py-4 border-2 border-dashed border-outline-variant/30 rounded-xl text-on-surface-variant/60 hover:border-primary-container/50 hover:text-primary transition-all group">
+<div class="flex flex-col items-center gap-1">
+<span class="material-symbols-outlined text-2xl group-hover:scale-110 transition-transform" data-icon="add_circle">add_circle</span>
+<span class="text-[11px] font-bold uppercase tracking-widest">Add Question</span>
+</div>
+</button>
+</div>
+</div>
+<!-- Section 3 -->
+<div class="pt-6 border-t border-outline-variant/10 flex flex-col gap-3">
+<button class="w-full py-3 text-sm font-bold text-primary hover:bg-primary/5 rounded-lg transition-colors">
+                                Save as Draft
+                            </button>
+<button class="w-full py-3 bg-primary text-on-primary font-bold rounded-lg editorial-shadow hover:bg-primary/90 transition-all">
+                                Save &amp; Activate
+                            </button>
+</div>
+</div>
+</div>
+</div>
+<!-- Asymmetric Decor Detail -->
+<div class="mt-12 opacity-40 select-none">
+<div class="flex justify-center items-center gap-8">
+<span class="serif italic text-sm text-on-surface-variant">"In reading, we find the magic of shared moments."</span>
+<div class="h-px w-24 bg-outline-variant/40"></div>
+<span class="serif text-xs font-semibold uppercase tracking-widest">Bailey &amp; Beau 2024</span>
+</div>
+</div>
+</div>
+</main>
+</body></html>

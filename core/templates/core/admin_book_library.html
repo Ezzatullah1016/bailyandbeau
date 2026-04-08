@@ -1,0 +1,319 @@
+{% extends 'core/admin_base.html' %}
+
+{% block title %}Bailey & Beau | Book Library{% endblock %}
+
+{% block extra_head %}
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Plus+Jakarta+Sans:wght@200..800&display=swap" rel="stylesheet">
+<style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .serif { font-family: 'Newsreader', serif; }
+    .book-library-shell { color: #1c1c19; }
+    .book-library-shell.with-drawer { padding-right: 29rem; }
+    .library-primary { background-color: #865047; }
+    .library-primary:hover { background-color: #73443d; }
+    .book-upload-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 60;
+        display: flex;
+        justify-content: flex-end;
+        background: rgba(28, 26, 24, 0.36);
+        backdrop-filter: blur(3px);
+    }
+    .book-upload-panel {
+        width: min(30rem, calc(100vw - 8px));
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        background: #ffffff;
+        box-shadow: -8px 0 30px rgba(28, 26, 24, 0.18);
+    }
+    .book-upload-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1.5rem 1.75rem;
+    }
+    .book-upload-footer {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 1rem;
+        padding: 1rem 1.75rem;
+        border-top: 1px solid rgba(231, 229, 228, 0.9);
+        background: #ffffff;
+    }
+    @media (max-width: 1279px) {
+        .book-library-shell.with-drawer { padding-right: 0; }
+        .book-upload-panel { width: min(30rem, 100vw); }
+    }
+</style>
+{% endblock %}
+
+{% block top_header %}
+<div class="px-4 py-4 lg:px-8 lg:py-5">
+    <div class="flex flex-col gap-4 2xl:flex-row 2xl:items-center 2xl:justify-between">
+        <div class="flex flex-col">
+            <nav class="mb-1 flex items-center gap-2 text-xs text-slate-500">
+                <span>Admin</span>
+                <span class="material-symbols-outlined text-[10px]">chevron_right</span>
+                <span class="text-slate-700">Book Library</span>
+            </nav>
+            <h2 class="serif text-3xl font-semibold text-slate-900">Book library</h2>
+        </div>
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-center">
+            <form method="get" class="relative">
+                {% if room_type_filter %}<input type="hidden" name="room_type" value="{{ room_type_filter }}">{% endif %}
+                {% if age_band_filter %}<input type="hidden" name="age_band" value="{{ age_band_filter }}">{% endif %}
+                {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
+                <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">search</span>
+                <input type="text" name="q" value="{{ query }}" placeholder="Search library..." class="w-full min-w-[240px] rounded-xl border border-stone-200 bg-[#f6f3ee] py-2.5 pl-10 pr-4 text-sm text-slate-700 focus:border-[#c4847a] focus:outline-none focus:ring-2 focus:ring-[#c4847a]/20 lg:min-w-[280px]">
+            </form>
+            <a href="#book-uploader" class="library-primary inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition active:scale-95">
+                <span class="material-symbols-outlined text-[18px]">add</span>
+                Upload Book
+            </a>
+            <div class="flex items-center gap-3 border-stone-200 lg:border-l lg:pl-5">
+                <a href="{% url 'admin_logs' %}" class="text-slate-500 transition-colors hover:text-[#865047]"><span class="material-symbols-outlined">notifications</span></a>
+                <a href="{% url 'admin_settings' %}" class="flex h-9 w-9 items-center justify-center rounded-full bg-[#f0ede9] text-sm font-bold text-[#865047]">{{ request.user.username|slice:":1"|upper }}</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="book-library-shell with-drawer space-y-8">
+    <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <article class="rounded-2xl bg-[#f6f3ee] p-6 transition-all duration-300 hover:bg-white">
+            <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Total books</p>
+            <div class="mt-2 flex items-end gap-2">
+                <h3 class="serif text-4xl text-slate-900">{{ book_stats.total }}</h3>
+                <span class="mb-1 text-xs italic text-slate-400">Volumes</span>
+            </div>
+        </article>
+        <article class="rounded-2xl bg-[#f6f3ee] p-6 transition-all duration-300 hover:bg-white">
+            <div class="flex items-start justify-between">
+                <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Published</p>
+                <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">LIVE</span>
+            </div>
+            <h3 class="serif mt-2 text-4xl text-slate-900">{{ book_stats.published }}</h3>
+        </article>
+        <article class="rounded-2xl bg-[#f6f3ee] p-6 transition-all duration-300 hover:bg-white">
+            <div class="flex items-start justify-between">
+                <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Drafts</p>
+                <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">AMBER</span>
+            </div>
+            <h3 class="serif mt-2 text-4xl text-slate-900">{{ book_stats.drafts }}</h3>
+        </article>
+        <article class="rounded-2xl bg-[#f6f3ee] p-6 transition-all duration-300 hover:bg-white">
+            <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Activity configs</p>
+            <div class="mt-2 flex items-end gap-2">
+                <h3 class="serif text-4xl text-slate-900">{{ book_stats.activities }}</h3>
+                <span class="mb-1 text-xs italic text-slate-400">Links</span>
+            </div>
+        </article>
+    </section>
+
+    <form method="get" class="flex flex-wrap items-center gap-3 rounded-2xl bg-[#f6f3ee]/80 p-3">
+        {% if query %}<input type="hidden" name="q" value="{{ query }}">{% endif %}
+        <div class="flex items-center gap-2 px-1 text-xs font-semibold text-slate-600">
+            <span class="material-symbols-outlined text-sm">filter_list</span>
+            <span>Filters:</span>
+        </div>
+        <select name="room_type" class="min-w-[140px] rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs focus:border-[#c4847a] focus:outline-none focus:ring-1 focus:ring-[#c4847a]">
+            <option value="">Room Type</option>
+            {% for value, label in room_type_choices %}
+            <option value="{{ value }}" {% if room_type_filter == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <select name="age_band" class="min-w-[140px] rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs focus:border-[#c4847a] focus:outline-none focus:ring-1 focus:ring-[#c4847a]">
+            <option value="">Age Range</option>
+            {% for value, label in age_band_choices %}
+            <option value="{{ value }}" {% if age_band_filter == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <select name="status" class="min-w-[140px] rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs focus:border-[#c4847a] focus:outline-none focus:ring-1 focus:ring-[#c4847a]">
+            <option value="">Status</option>
+            <option value="published" {% if status_filter == 'published' %}selected{% endif %}>Published</option>
+            <option value="draft" {% if status_filter == 'draft' %}selected{% endif %}>Draft</option>
+        </select>
+        <button type="submit" class="rounded-lg border border-stone-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-stone-50">Apply</button>
+        <a href="{% url 'admin_book_library' %}" class="ml-auto text-xs font-semibold text-[#865047] hover:underline">Reset Filters</a>
+    </form>
+
+    <section class="overflow-hidden rounded-[24px] border border-stone-200/80 bg-white shadow-sm">
+        <table class="min-w-full border-collapse text-left">
+            <thead class="bg-[#f6f3ee] text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                <tr>
+                    <th class="px-6 py-4 font-semibold">Cover</th>
+                    <th class="px-6 py-4 font-semibold">Title</th>
+                    <th class="px-6 py-4 font-semibold">Room Type</th>
+                    <th class="px-6 py-4 font-semibold">Age Range</th>
+                    <th class="px-6 py-4 font-semibold">Activities</th>
+                    <th class="px-6 py-4 font-semibold">Status</th>
+                    <th class="px-6 py-4 font-semibold">Last Updated</th>
+                    <th class="px-6 py-4 text-right font-semibold">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-stone-100 text-sm">
+                {% for book in books %}
+                <tr class="transition-colors hover:bg-stone-50/70">
+                    <td class="px-6 py-4">
+                        <div class="h-[42px] w-[32px] overflow-hidden rounded bg-[#c4847a]/40 shadow-sm">
+                            {% if book.cover_image %}
+                            <img src="{{ book.cover_image }}" alt="{{ book.title }} cover" class="h-full w-full object-cover">
+                            {% else %}
+                            <div class="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#c4847a] to-[#865047] text-[10px] font-bold text-white">BB</div>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <p class="serif text-sm font-semibold text-slate-900">{{ book.title }}</p>
+                        <p class="text-xs text-slate-500">{{ book.slug }}</p>
+                    </td>
+                    <td class="px-6 py-4 text-xs text-slate-700">{{ book.get_room_type_display }}</td>
+                    <td class="px-6 py-4 text-xs text-slate-700">{{ book.get_age_band_display }}</td>
+                    <td class="px-6 py-4 text-xs font-medium text-slate-700">{{ book.activity_total }}</td>
+                    <td class="px-6 py-4">
+                        <span class="rounded-full px-2.5 py-1 text-[10px] font-bold {% if book.published %}bg-emerald-100 text-emerald-700{% else %}bg-amber-100 text-amber-700{% endif %}">{% if book.published %}Published{% else %}Draft{% endif %}</span>
+                    </td>
+                    <td class="px-6 py-4 text-xs text-slate-500">{{ book.updated_at|date:"d M, Y" }}</td>
+                    <td class="px-6 py-4 text-right">
+                        <div class="flex flex-wrap justify-end gap-2 text-xs font-semibold">
+                            <a href="?selected={{ book.id }}" class="text-[#865047] transition-colors hover:text-[#c4847a]">Edit</a>
+                            <form method="post" class="inline" data-confirm-message="{% if book.published %}Unpublish this book?{% else %}Publish this book?{% endif %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="toggle_publish">
+                                <input type="hidden" name="book_id" value="{{ book.id }}">
+                                <button type="submit" class="text-[#865047] transition-colors hover:text-[#c4847a]">{% if book.published %}Unpublish{% else %}Publish{% endif %}</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="px-6 py-10 text-center text-sm text-slate-500">No books matched the current filters.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div class="flex items-center justify-between bg-[#f6f3ee] px-6 py-4">
+            <p class="text-[11px] text-slate-500">Showing {{ books|length }} of {{ book_stats.total }} volumes</p>
+            <div class="flex gap-2">
+                <button type="button" class="rounded-lg border border-stone-200 p-1.5 text-stone-400" disabled>
+                    <span class="material-symbols-outlined text-sm">chevron_left</span>
+                </button>
+                <button type="button" class="rounded-lg border border-stone-200 p-1.5 text-slate-600 hover:bg-white">
+                    <span class="material-symbols-outlined text-sm">chevron_right</span>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <div class="book-upload-overlay">
+        <aside id="book-uploader" class="book-upload-panel">
+            <div class="flex items-start justify-between border-b border-stone-200/60 bg-white px-6 py-5 sm:px-7">
+                <div>
+                    <h3 class="serif text-2xl font-semibold text-slate-900">{% if selected_book %}Edit book{% else %}Upload new book{% endif %}</h3>
+                    <p class="text-sm text-slate-500">Add a new volume to the StoryTime library</p>
+                </div>
+                <a href="{% url 'admin_book_library' %}" class="rounded-full p-2 text-slate-500 transition-colors hover:bg-stone-100 hover:text-slate-900">
+                    <span class="material-symbols-outlined">close</span>
+                </a>
+            </div>
+
+            <form method="post" enctype="multipart/form-data" class="book-upload-body space-y-6" data-validate-form="book-form" data-form-type="book" novalidate>
+                {% csrf_token %}
+                <input type="hidden" name="action" value="save">
+                <input type="hidden" name="book_id" value="{{ selected_book.id|default:'' }}">
+                <input type="hidden" name="slug" value="{{ selected_book.slug|default:'' }}">
+                <input type="hidden" name="cover_image" value="{{ selected_book.cover_image|default:'' }}">
+                <input type="hidden" name="description" value="{{ selected_book.description|default:'' }}">
+                <input type="hidden" name="page_count" value="{{ selected_book.page_count|default:1 }}">
+
+                {% if book_errors %}
+                <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{{ book_errors }}</div>
+                {% endif %}
+                <div data-form-errors aria-live="polite" class="hidden rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"></div>
+
+                <div class="space-y-2">
+                    <label class="text-xs font-bold uppercase tracking-wide text-slate-500">Book Title</label>
+                    <input type="text" name="title" value="{{ selected_book.title|default:'' }}" placeholder="e.g. The Curious Caterpillar" required minlength="2" maxlength="255" data-required-message="Book title is required." class="w-full rounded-xl border border-stone-200 bg-[#f6f3ee] px-4 py-3 text-sm focus:border-[#c4847a] focus:outline-none focus:ring-1 focus:ring-[#c4847a]">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-2">
+                        <label class="text-xs font-bold uppercase tracking-wide text-slate-500">Room Type</label>
+                        <select name="room_type" required data-required-message="Select a room type." class="w-full rounded-xl border border-stone-200 bg-[#f6f3ee] px-4 py-3 text-sm focus:border-[#c4847a] focus:outline-none focus:ring-1 focus:ring-[#c4847a]">
+                            {% for value, label in room_type_choices %}
+                            <option value="{{ value }}" {% if selected_book.room_type == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="space-y-2">
+                        <label class="text-xs font-bold uppercase tracking-wide text-slate-500">Age Range</label>
+                        <select name="age_band" required data-required-message="Select an age range." class="w-full rounded-xl border border-stone-200 bg-[#f6f3ee] px-4 py-3 text-sm focus:border-[#c4847a] focus:outline-none focus:ring-1 focus:ring-[#c4847a]">
+                            {% for value, label in age_band_choices %}
+                            <option value="{{ value }}" {% if selected_book.age_band == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="text-xs font-bold uppercase tracking-wide text-slate-500">Book Asset (PDF/ePub)</label>
+                    <input id="book_asset_file" type="file" name="book_asset_file" accept=".pdf,.epub,application/pdf,application/epub+zip" class="sr-only" data-file-field="true" data-upload-zone-id="book-asset-zone" data-file-name-target="book-asset-name" data-required-message="Upload a PDF or ePub book asset." data-file-message="Only PDF or ePub files are allowed." data-max-file-mb="50" {% if not selected_book %}required{% endif %}>
+                    <label for="book_asset_file" id="book-asset-zone" class="block cursor-pointer rounded-2xl border-2 border-dashed border-stone-200 bg-[#fcf9f4] p-7 text-center transition-colors hover:border-[#c4847a] hover:bg-[#fff8f6]">
+                        <span class="material-symbols-outlined mb-2 text-3xl text-[#865047]">upload_file</span>
+                        <p class="text-sm font-medium text-slate-700">Click to upload or drag &amp; drop</p>
+                        <p id="book-asset-name" class="mt-1 text-xs text-slate-400">{% if selected_book %}Current asset already attached{% else %}Maximum file size: 50MB{% endif %}</p>
+                    </label>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="text-xs font-bold uppercase tracking-wide text-slate-500">Cover Image</label>
+                    <input id="cover_art_file" type="file" name="cover_art_file" accept="image/*" class="sr-only" data-file-field="true" data-upload-zone-id="cover-art-zone" data-file-name-target="cover-art-name" data-required-message="Upload a cover image." data-file-message="Only image files are allowed." data-max-file-mb="10" {% if not selected_book and not selected_book.cover_image %}required{% endif %}>
+                    <label for="cover_art_file" id="cover-art-zone" class="block cursor-pointer rounded-2xl border-2 border-dashed border-stone-200 bg-[#fcf9f4] p-7 text-center transition-colors hover:border-[#c4847a] hover:bg-[#fff8f6]">
+                        <span class="material-symbols-outlined mb-2 text-3xl text-[#865047]">image</span>
+                        <p class="text-sm font-medium text-slate-700">Upload cover art</p>
+                        <p id="cover-art-name" class="mt-1 text-xs text-slate-400">{% if selected_book.cover_image %}Current cover already saved{% else %}Recommended 3:4 aspect ratio{% endif %}</p>
+                    </label>
+                </div>
+
+                <div class="space-y-3">
+                    <label class="text-xs font-bold uppercase tracking-wide text-slate-500">Initial Status</label>
+                    <div class="flex gap-3">
+                        <label class="flex-1 cursor-pointer">
+                            <input type="radio" name="publish_state" value="draft" class="peer sr-only" required data-required-message="Choose an initial status." {% if not selected_book or not selected_book.published %}checked{% endif %}>
+                            <span class="block rounded-xl bg-[#f6f3ee] px-4 py-3 text-center text-xs font-semibold text-slate-700 transition-all peer-checked:bg-[#865047] peer-checked:text-white">Draft</span>
+                        </label>
+                        <label class="flex-1 cursor-pointer">
+                            <input type="radio" name="publish_state" value="published" class="peer sr-only" required data-required-message="Choose an initial status." {% if selected_book and selected_book.published %}checked{% endif %}>
+                            <span class="block rounded-xl bg-[#f6f3ee] px-4 py-3 text-center text-xs font-semibold text-slate-700 transition-all peer-checked:bg-[#865047] peer-checked:text-white">Published</span>
+                        </label>
+                    </div>
+                </div>
+
+                {% if selected_book %}
+                <div class="space-y-2">
+                    <label class="text-xs font-bold uppercase tracking-wide text-slate-500">Description</label>
+                    <textarea name="description_visible" rows="3" disabled class="w-full rounded-xl border border-stone-200 bg-[#f6f3ee] px-4 py-3 text-sm text-slate-500">{{ selected_book.description|default:'' }}</textarea>
+                </div>
+                {% endif %}
+
+                <div class="book-upload-footer">
+                    <a href="{% url 'admin_book_library' %}" class="text-sm font-semibold text-slate-500 transition-colors hover:text-slate-900">Cancel</a>
+                    <button type="submit" class="library-primary rounded-xl px-6 py-3 text-sm font-bold text-white shadow-sm transition active:scale-95">{% if selected_book %}Save Changes{% else %}Upload Book{% endif %}</button>
+                </div>
+            </form>
+
+            <form method="post" class="border-t border-stone-200/60 px-6 py-4 sm:px-7" data-confirm-message="Delete this book from the library?">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="book_id" value="{{ selected_book.id|default:'' }}">
+                <button type="submit" {% if not selected_book %}disabled aria-disabled="true"{% endif %} class="w-full rounded-xl border border-rose-200 px-5 py-2.5 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50">Delete</button>
+            </form>
+        </aside>
+    </div>
+</div>
+{% endblock %}
