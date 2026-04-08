@@ -12,10 +12,16 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import ActivityConfig, Badge, Book, ChildProfile, Entitlement, FavoriteBook, NotificationPreference, ReadingReminder, ReadingSession, SessionEvent, SessionInvite, SessionParticipant, SessionSnapshot, UserBadge
+from .models import ActivityConfig, Badge, Book, BookPage, ChildProfile, Entitlement, FavoriteBook, NotificationPreference, ReadingReminder, ReadingSession, SessionEvent, SessionInvite, SessionParticipant, SessionSnapshot, UserBadge
 from .serializers import (
     ActivityConfigSerializer,
+    AdminBadgeAwardSerializer,
+    AdminChildProfileSerializer,
+    AdminEntitlementSerializer,
+    AdminSessionDetailSerializer,
+    AdminSessionEventSerializer,
     BadgeSerializer,
+    BookPageSerializer,
     BookSerializer,
     ChildProfileSerializer,
     EntitlementSerializer,
@@ -30,7 +36,6 @@ from .serializers import (
     SessionInviteSerializer,
     SessionParticipantSerializer,
     UserSerializer,
-
 )
 
 
@@ -1378,3 +1383,212 @@ class SessionReconnectTokenView(APIView):
                 "error": None,
             }
         )
+
+
+# ─── Book Pages ───────────────────────────────────────────────────────────────
+
+class AdminBookPageListCreateView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request, book_id):
+        book = Book.objects.filter(pk=book_id).first()
+        if not book:
+            return Response({"data": None, "meta": {}, "error": {"code": "not_found", "message": "Book not found."}}, status=status.HTTP_404_NOT_FOUND)
+        pages = book.pages.all()
+        return Response({"data": BookPageSerializer(pages, many=True).data, "meta": {"count": pages.count()}, "error": None})
+
+    def post(self, request, book_id):
+        book = Book.objects.filter(pk=book_id).first()
+        if not book:
+            return Response({"data": None, "meta": {}, "error": {"code": "not_found", "message": "Book not found."}}, status=status.HTTP_404_NOT_FOUND)
+        data = {**request.data, "book": str(book_id)}
+        serializer = BookPageSerializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        page = serializer.save()
+        book.page_count = book.pages.count()
+        book.save(update_fields=["page_count", "updated_at"])
+        return Response({"data": BookPageSerializer(page).data, "meta": {}, "error": None}, status=status.HTTP_201_CREATED)
+
+
+class AdminBookPageDetailView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    def _get(self, book_id, pk):
+        return BookPage.objects.filter(pk=pk, book_id=book_id).first()
+
+    def patch(self, request, book_id, pk):
+        page = self._get(book_id, pk)
+        if not page:
+            return Response({"data": None, "meta": {}, "error": {"code": "not_found", "message": "Page not found."}}, status=status.HTTP_404_NOT_FOUND)
+        serializer = BookPageSerializer(page, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        page = serializer.save()
+        return Response({"data": BookPageSerializer(page).data, "meta": {}, "error": None})
+
+    def delete(self, request, book_id, pk):
+        page = self._get(book_id, pk)
+        if not page:
+            return Response({"data": None, "meta": {}, "error": {"code": "not_found", "message": "Page not found."}}, status=status.HTTP_404_NOT_FOUND)
+        book = page.book
+        page.delete()
+        book.page_count = book.pages.count()
+        book.save(update_fields=["page_count", "updated_at"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ─── Session Detail + Status ──────────────────────────────────────────────────
+
+class AdminSessionDetailApiView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request, pk):
+        session = (
+            ReadingSession.objects
+            .select_related("book", "child_profile", "created_by")
+            .prefetch_related("participants", "events__participant", "invite")
+            .filter(pk=pk)
+            .first()
+        )
+        if not session:
+            return Response({"data": None, "meta": {}, "error": {"code": "not_found", "message": "Session not found."}}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"data": AdminSessionDetailSerializer(session).data, "meta": {}, "error": None})
+
+
+class AdminSessionStatusView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    ALLOWED = {ReadingSession.Status.CANCELLED, ReadingSession.Status.COMPLETED}
+
+    def patch(self, request, pk):
+        session = ReadingSession.objects.filter(pk=pk).first()
+        if not session:
+            return Response({"data": None, "meta": {}, "error": {"code": "not_found", "message": "Session not found."}}, status=status.HTTP_404_NOT_FOUND)
+        new_status = request.data.get("status")
+        if new_status not in self.ALLOWED:
+            return Response({"data": None, "meta": {}, "error": {"code": "invalid_transition", "message": "Status must be cancelled or completed."}}, status=status.HTTP_400_BAD_REQUEST)
+        session.status = new_status
+        if new_status == ReadingSession.Status.CANCELLED and not session.ended_at:
+            session.ended_at = timezone.now()
+        session.save(update_fields=["status", "ended_at", "updated_at"])
+        SessionEvent.objects.create(session=session, event_type=new_status, payload={"forced_by_admin": True})
+        return Response({"data": {"id": str(session.id), "status": session.status}, "meta": {}, "error": None})
+
+
+# ─── Entitlement Management ───────────────────────────────────────────────────
+
+class AdminEntitlementListView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request):
+        entitlements = Entitlement.objects.select_related("user").order_by("-updated_at")
+        data = AdminEntitlementSerializer(entitlements, many=True).data
+        return Response({"data": data, "meta": {"count": len(data)}, "error": None})
+
+
+class AdminEntitlementDetailView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    def _get(self, user_id):
+        return Entitlement.objects.select_related("user").filter(user_id=user_id).first()
+
+    def get(self, request, user_id):
+        obj = self._get(user_id)
+        if not obj:
+            return Response({"data": None, "meta": {}, "error": {"code": "not_found", "message": "Entitlement not found."}}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"data": AdminEntitlementSerializer(obj).data, "meta": {}, "error": None})
+
+    def patch(self, request, user_id):
+        obj = self._get(user_id)
+        if not obj:
+            return Response({"data": None, "meta": {}, "error": {"code": "not_found", "message": "Entitlement not found."}}, status=status.HTTP_404_NOT_FOUND)
+        serializer = AdminEntitlementSerializer(obj, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({"data": AdminEntitlementSerializer(obj).data, "meta": {}, "error": None})
+
+
+# ─── Badge Awards ─────────────────────────────────────────────────────────────
+
+class AdminBadgeAwardListView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request):
+        awards = UserBadge.objects.select_related("badge", "child_profile", "session").order_by("-created_at")
+        badge_id = request.query_params.get("badge_id")
+        if badge_id:
+            awards = awards.filter(badge_id=badge_id)
+        data = AdminBadgeAwardSerializer(awards, many=True).data
+        return Response({"data": data, "meta": {"count": len(data)}, "error": None})
+
+
+class AdminBadgeAwardDeleteView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    def delete(self, request, pk):
+        award = UserBadge.objects.filter(pk=pk).first()
+        if not award:
+            return Response({"data": None, "meta": {}, "error": {"code": "not_found", "message": "Award not found."}}, status=status.HTTP_404_NOT_FOUND)
+        award.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ─── Child Profiles (admin read) ──────────────────────────────────────────────
+
+class AdminChildProfileListView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request):
+        from django.db.models import Count as DCount
+        profiles = (
+            ChildProfile.objects
+            .select_related("user")
+            .annotate(session_count=DCount("sessions", distinct=True), badge_count=DCount("user_badges", distinct=True))
+            .order_by("display_name")
+        )
+        age_band = request.query_params.get("age_band")
+        if age_band:
+            profiles = profiles.filter(age_band=age_band)
+        data = AdminChildProfileSerializer(profiles, many=True).data
+        return Response({"data": data, "meta": {"count": len(data)}, "error": None})
+
+
+# ─── Session Events Log ───────────────────────────────────────────────────────
+
+class AdminSessionEventListView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request):
+        events = SessionEvent.objects.select_related("session", "participant").order_by("-created_at")
+        event_type = request.query_params.get("event_type")
+        session_id = request.query_params.get("session_id")
+        if event_type:
+            events = events.filter(event_type=event_type)
+        if session_id:
+            events = events.filter(session_id=session_id)
+        data = AdminSessionEventSerializer(events[:200], many=True).data
+        return Response({"data": data, "meta": {"count": len(data)}, "error": None})
+
+
+class AdminSessionEventExportView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request):
+        events = SessionEvent.objects.select_related("session", "participant").order_by("-created_at")
+        event_type = request.query_params.get("event_type")
+        if event_type:
+            events = events.filter(event_type=event_type)
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(["event_id", "session_id", "event_type", "participant", "payload", "timestamp"])
+        for event in events:
+            writer.writerow([
+                str(event.id),
+                str(event.session_id)[:8].upper(),
+                event.event_type,
+                event.participant.display_name if event.participant else "System",
+                event.payload,
+                event.created_at.isoformat(),
+            ])
+        response = HttpResponse(buffer.getvalue(), content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="session-events.csv"'
+        return response

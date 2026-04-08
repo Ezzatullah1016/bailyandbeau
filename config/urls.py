@@ -23,6 +23,7 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('super-admin/dashboard/', views.super_admin_dashboard, name='super_admin_dashboard'),
     path('super-admin/sessions/', views.admin_session_monitor, name='admin_session_monitor'),
+    path('super-admin/sessions/<uuid:session_id>/', views.admin_session_detail, name='admin_session_detail'),
     path('super-admin/books/', views.admin_book_library, name='admin_book_library'),
     path('super-admin/activities/', views.admin_activity_config, name='admin_activity_config'),
     path('super-admin/users/', views.admin_users, name='admin_users'),

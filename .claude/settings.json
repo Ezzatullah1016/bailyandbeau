@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx --version)",
+      "Bash(python manage.py makemigrations core --name bookpage)",
+      "Bash(python manage.py check)",
+      "Bash(./tools/tailwindcss.exe -i core/static/core/css/tailwind_src.css -o core/static/core/css/tailwind.css --minify)",
+      "Bash(./tools/tailwindcss.exe -c tailwind.config.js -o core/static/core/css/tailwind.css --minify)"
+    ]
+  }
+}

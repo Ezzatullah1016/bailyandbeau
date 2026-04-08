@@ -14,11 +14,13 @@ from .models import (
     ActivityConfig,
     Badge,
     Book,
+    BookPage,
     ChildProfile,
     Entitlement,
     ReadingReminder,
     ReadingSession,
     SessionEvent,
+    SessionInvite,
     SessionParticipant,
     UserBadge,
 )
@@ -186,6 +188,7 @@ def _build_subscription_rows(entitlements):
         user = entitlement.user
         rows.append(
             {
+                "user_id": str(user.id),
                 "user_name": user.get_full_name() or user.username,
                 "user_email": user.email,
                 "plan_code": entitlement.plan_code or "Free",
@@ -397,6 +400,27 @@ def admin_book_library(request):
             book.delete()
             messages.success(request, f"Deleted '{title}' from the library.")
             return redirect(reverse("admin_book_library"))
+        elif action == "add_page":
+            book = get_object_or_404(Book, pk=request.POST.get("book_id"))
+            page_number = request.POST.get("page_number", "").strip()
+            image_url = request.POST.get("image_url", "").strip()
+            if page_number and image_url:
+                BookPage.objects.update_or_create(
+                    book=book, page_number=int(page_number),
+                    defaults={"image_url": image_url},
+                )
+                book.page_count = book.pages.count()
+                book.save(update_fields=["page_count", "updated_at"])
+                messages.success(request, f"Page {page_number} saved for '{book.title}'.")
+            return redirect(f"{reverse('admin_book_library')}?selected={book.pk}")
+        elif action == "delete_page":
+            page = get_object_or_404(BookPage, pk=request.POST.get("page_id"))
+            book = page.book
+            page.delete()
+            book.page_count = book.pages.count()
+            book.save(update_fields=["page_count", "updated_at"])
+            messages.success(request, "Page deleted.")
+            return redirect(f"{reverse('admin_book_library')}?selected={book.pk}")
 
     if not selected_book:
         selected_id = request.GET.get("selected")
@@ -420,10 +444,13 @@ def admin_book_library(request):
     elif status_filter == "draft":
         books = books.filter(published=False)
 
+    selected_pages = selected_book.pages.all() if selected_book else []
+
     context = {
         "active_nav": "books",
         "books": books[:100],
         "selected_book": selected_book,
+        "selected_pages": selected_pages,
         "book_errors": book_errors,
         "query": query,
         "room_type_filter": room_type,
@@ -580,6 +607,22 @@ def admin_users(request):
 @staff_member_required
 def admin_subscriptions(request):
     """Revenue and subscription oversight powered by the existing Entitlement records."""
+    # Handle entitlement edit
+    if request.method == "POST" and request.POST.get("action") == "update_entitlement":
+        ent = get_object_or_404(Entitlement, user_id=request.POST.get("user_id"))
+        try:
+            ent.sessions_remaining = max(0, int(request.POST.get("sessions_remaining", ent.sessions_remaining)))
+            ent.pack_sessions_remaining = max(0, int(request.POST.get("pack_sessions_remaining", ent.pack_sessions_remaining)))
+            ent.plan_code = request.POST.get("plan_code", ent.plan_code).strip()
+            new_status = request.POST.get("subscription_status", "").strip()
+            if new_status in {s[0] for s in Entitlement.SubscriptionStatus.choices}:
+                ent.subscription_status = new_status
+            ent.save(update_fields=["sessions_remaining", "pack_sessions_remaining", "plan_code", "subscription_status", "updated_at"])
+            messages.success(request, f"Entitlement for {ent.user.username} updated.")
+        except (ValueError, TypeError):
+            messages.error(request, "Invalid values — session counts must be whole numbers.")
+        return redirect(f"{reverse('admin_subscriptions')}?selected={ent.user_id}")
+
     entitlements = Entitlement.objects.select_related("user").order_by("-updated_at")
     status_filter = request.GET.get("status", "").strip()
     if status_filter:
@@ -609,6 +652,14 @@ def admin_subscriptions(request):
     ]
     billing_events = sorted(all_rows, key=lambda item: item["updated_at"], reverse=True)[:10]
 
+    selected_ent_user_id = request.GET.get("selected")
+    selected_entitlement = None
+    selected_ent_user = None
+    if selected_ent_user_id:
+        selected_entitlement = Entitlement.objects.select_related("user").filter(user_id=selected_ent_user_id).first()
+        if selected_entitlement:
+            selected_ent_user = selected_entitlement.user
+
     context = {
         "active_nav": "subscriptions",
         "subscription_rows": all_rows[:25],
@@ -616,6 +667,9 @@ def admin_subscriptions(request):
         "failed_rows": failed_rows,
         "plan_breakdown": plan_breakdown,
         "status_filter": status_filter,
+        "selected_entitlement": selected_entitlement,
+        "selected_ent_user": selected_ent_user,
+        "entitlement_status_choices": Entitlement.SubscriptionStatus.choices,
         "subscription_stats": {
             "mrr": monthly_rr,
             "annual_rr": annual_rr,
@@ -630,6 +684,13 @@ def admin_subscriptions(request):
 @staff_member_required
 def admin_badges(request):
     """Badge catalogue and award activity based on Badge and UserBadge data."""
+    if request.method == "POST" and request.POST.get("action") == "revoke_award":
+        award = get_object_or_404(UserBadge, pk=request.POST.get("award_id"))
+        badge_id = award.badge_id
+        award.delete()
+        messages.success(request, "Badge award revoked.")
+        return redirect(f"{reverse('admin_badges')}?selected={badge_id}")
+
     badges = Badge.objects.annotate(award_total=Count("awards"), last_awarded=Max("awards__created_at")).order_by("-award_total", "name")
     selected_id = request.GET.get("selected")
     selected_badge = badges.filter(pk=selected_id).first() if selected_id else badges.first()
@@ -653,11 +714,18 @@ def admin_badges(request):
     ]
 
     most_earned = badge_rows[0] if badge_rows else None
+    selected_badge_award_rows = (
+        UserBadge.objects.filter(badge=selected_badge)
+        .select_related("child_profile", "child_profile__user", "session", "session__book")
+        .order_by("-created_at")[:20]
+        if selected_badge else []
+    )
     context = {
         "active_nav": "badges",
         "badge_rows": badge_rows,
         "selected_badge": selected_badge,
         "recent_awards": recent_awards,
+        "selected_badge_award_rows": selected_badge_award_rows,
         "badge_stats": {
             "total": Badge.objects.count(),
             "awarded": UserBadge.objects.count(),
@@ -729,29 +797,113 @@ def admin_live_sessions(request):
 
 @staff_member_required
 def admin_logs(request):
-    """Synthetic operational log view derived from existing sessions, events, and billing state."""
-    log_rows = _build_log_rows()
-    selected_log_id = request.GET.get("log")
-    selected_log = next((row for row in log_rows if row["id"] == selected_log_id), log_rows[0] if log_rows else None)
-    error_total = len([row for row in log_rows if row["severity"] in {"Critical", "Error"}])
-    warning_total = len([row for row in log_rows if row["severity"] == "Warning"])
-    unresolved_total = len([row for row in log_rows if row["status"] == "Unresolved"])
-    uptime = max(99.0, 100 - (error_total * 0.1))
+    """Operational log view from real SessionEvent records + billing state."""
+    event_type_filter = request.GET.get("event_type", "").strip()
+    events_qs = (
+        SessionEvent.objects
+        .select_related("session", "session__book", "participant")
+        .order_by("-created_at")
+    )
+    if event_type_filter:
+        events_qs = events_qs.filter(event_type=event_type_filter)
+
+    events = list(events_qs[:50])
+
+    reconnect_count = SessionEvent.objects.filter(event_type=SessionEvent.EventType.RECONNECTED).count()
+    cancelled_count = SessionEvent.objects.filter(event_type=SessionEvent.EventType.CANCELLED).count()
+    webhook_failures = Entitlement.objects.filter(subscription_status=Entitlement.SubscriptionStatus.PAST_DUE).count()
+    total_sessions = max(ReadingSession.objects.count(), 1)
+    uptime = round(max(99.0, 100 - (reconnect_count * 0.05) - (cancelled_count * 0.02)), 1)
+
+    selected_event_id = request.GET.get("log")
+    selected_event = None
+    if selected_event_id:
+        selected_event = next((e for e in events if str(e.id) == selected_event_id), None)
+    if not selected_event and events:
+        selected_event = events[0]
 
     context = {
         "active_nav": "logs",
-        "log_rows": log_rows[:25],
-        "selected_log": selected_log,
+        "events": events,
+        "selected_event": selected_event,
+        "event_type_filter": event_type_filter,
+        "event_type_choices": SessionEvent.EventType.choices,
         "log_stats": {
-            "errors": error_total,
-            "warnings": warning_total,
-            "webhook_failures": Entitlement.objects.filter(subscription_status=Entitlement.SubscriptionStatus.PAST_DUE).count(),
-            "uptime": round(uptime, 1),
-            "unresolved": unresolved_total,
+            "errors": reconnect_count + cancelled_count,
+            "warnings": reconnect_count,
+            "webhook_failures": webhook_failures,
+            "uptime": uptime,
+            "total_events": SessionEvent.objects.count(),
         },
-        "log_highlights": log_rows[:3],
     }
     return render(request, "core/admin_logs.html", context)
+
+
+@staff_member_required
+def admin_session_detail(request, session_id):
+    """Full session detail view — participants, timeline, invite, cancel."""
+    session = get_object_or_404(
+        ReadingSession.objects
+        .select_related("book", "child_profile", "created_by")
+        .prefetch_related("participants", "events__participant"),
+        pk=session_id,
+    )
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "cancel" and session.status not in {ReadingSession.Status.COMPLETED, ReadingSession.Status.CANCELLED, ReadingSession.Status.EXPIRED}:
+            session.status = ReadingSession.Status.CANCELLED
+            session.ended_at = timezone.now()
+            session.save(update_fields=["status", "ended_at", "updated_at"])
+            SessionEvent.objects.create(session=session, event_type=SessionEvent.EventType.CANCELLED, payload={"forced_by_admin": True})
+            messages.success(request, f"Session #{str(session.id)[:8].upper()} cancelled.")
+        elif action == "regenerate_invite":
+            invite, _ = SessionInvite.objects.get_or_create(session=session)
+            from datetime import timedelta
+            from django.utils import timezone as tz
+            import secrets as _sec
+            invite.token = _sec.token_urlsafe(24)
+            invite.expires_at = tz.now() + timedelta(hours=24)
+            invite.used_count = 0
+            invite.save(update_fields=["token", "expires_at", "used_count", "updated_at"])
+            messages.success(request, "Invite link regenerated.")
+        return redirect(reverse("admin_session_detail", args=[session_id]))
+
+    invite = getattr(session, "invite", None)
+    timeline = []
+    for event in session.events.select_related("participant").order_by("created_at")[:20]:
+        timeline.append({
+            "label": event.get_event_type_display(),
+            "meta": event.participant.display_name if event.participant else "System",
+            "timestamp": timezone.localtime(event.created_at).strftime("%d %b %H:%M:%S"),
+            "payload": event.payload,
+            "tone": {
+                SessionEvent.EventType.CANCELLED: "rose",
+                SessionEvent.EventType.RECONNECTED: "violet",
+                SessionEvent.EventType.COMPLETED: "emerald",
+                SessionEvent.EventType.STARTED: "sky",
+            }.get(event.event_type, "slate"),
+        })
+
+    hosts = [p for p in session.participants.all() if p.session_role == SessionParticipant.SessionRole.HOST]
+    guests = [p for p in session.participants.all() if p.session_role != SessionParticipant.SessionRole.HOST]
+    snapshot = getattr(session, "snapshot", None)
+    can_cancel = session.status not in {ReadingSession.Status.COMPLETED, ReadingSession.Status.CANCELLED, ReadingSession.Status.EXPIRED}
+
+    context = {
+        "active_nav": "sessions",
+        "session": session,
+        "short_id": str(session.id)[:8].upper(),
+        "status_tone": _status_tone(session.status),
+        "hosts": hosts,
+        "guests": guests,
+        "timeline": timeline,
+        "invite": invite,
+        "snapshot": snapshot,
+        "can_cancel": can_cancel,
+        "duration": _session_duration_label(session),
+    }
+    return render(request, "core/admin_session_detail.html", context)
 
 
 @staff_member_required

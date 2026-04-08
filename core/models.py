@@ -74,6 +74,20 @@ class Book(TimeStampedModel):
         return self.title
 
 
+class BookPage(TimeStampedModel):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name="pages")
+    page_number = models.PositiveIntegerField()
+    image_url = models.URLField()
+
+    class Meta:
+        ordering = ["page_number"]
+        unique_together = ("book", "page_number")
+
+    def __str__(self):
+        return f"{self.book.title} p.{self.page_number}"
+
+
 class FavoriteBook(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="favorite_books")

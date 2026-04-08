@@ -8,6 +8,7 @@ from .models import (
     ActivityConfig,
     Badge,
     Book,
+    BookPage,
     ChildProfile,
     Entitlement,
     FavoriteBook,
@@ -17,6 +18,7 @@ from .models import (
     SessionEvent,
     SessionInvite,
     SessionParticipant,
+    UserBadge,
 )
 
 
@@ -292,6 +294,100 @@ class ReadingSessionSerializer(serializers.ModelSerializer):
             "created_at",
         )
         read_only_fields = fields
+
+
+class BookPageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BookPage
+        fields = ("id", "book", "page_number", "image_url", "created_at")
+        read_only_fields = ("id", "created_at")
+
+
+class AdminSessionDetailSerializer(serializers.ModelSerializer):
+    book_title = serializers.CharField(source="book.title", read_only=True)
+    child_name = serializers.CharField(source="child_profile.display_name", read_only=True)
+    child_age_band = serializers.CharField(source="child_profile.age_band", read_only=True)
+    created_by_name = serializers.SerializerMethodField()
+    participants = SessionParticipantSerializer(many=True, read_only=True)
+    events = SessionEventSerializer(many=True, read_only=True)
+    invite = SessionInviteSerializer(read_only=True)
+
+    class Meta:
+        model = ReadingSession
+        fields = (
+            "id", "status", "room_type", "book", "book_title",
+            "child_profile", "child_name", "child_age_band",
+            "livekit_room_name", "current_page",
+            "timer_total_seconds", "timer_remaining_seconds",
+            "started_at", "ended_at", "created_at",
+            "created_by_name", "participants", "events", "invite",
+        )
+        read_only_fields = fields
+
+    def get_created_by_name(self, obj):
+        return obj.created_by.get_full_name() or obj.created_by.username
+
+
+class AdminEntitlementSerializer(serializers.ModelSerializer):
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+    user_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Entitlement
+        fields = (
+            "id", "user", "user_email", "user_name",
+            "subscription_status", "plan_code",
+            "stripe_customer_id", "stripe_subscription_id",
+            "sessions_included", "sessions_remaining", "pack_sessions_remaining",
+            "renewal_date", "last_webhook_event", "created_at", "updated_at",
+        )
+        read_only_fields = (
+            "id", "user", "user_email", "user_name",
+            "stripe_customer_id", "stripe_subscription_id",
+            "last_webhook_event", "created_at", "updated_at",
+        )
+
+    def get_user_name(self, obj):
+        return obj.user.get_full_name() or obj.user.username
+
+
+class AdminBadgeAwardSerializer(serializers.ModelSerializer):
+    badge_name = serializers.CharField(source="badge.name", read_only=True)
+    badge_code = serializers.CharField(source="badge.code", read_only=True)
+    child_name = serializers.CharField(source="child_profile.display_name", read_only=True)
+    session_short_id = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserBadge
+        fields = ("id", "badge_name", "badge_code", "child_name", "session_short_id", "created_at")
+        read_only_fields = fields
+
+    def get_session_short_id(self, obj):
+        return str(obj.session_id)[:8].upper()
+
+
+class AdminChildProfileSerializer(serializers.ModelSerializer):
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+    session_count = serializers.IntegerField(read_only=True)
+    badge_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = ChildProfile
+        fields = ("id", "display_name", "age_band", "user_email", "is_active", "session_count", "badge_count", "created_at")
+        read_only_fields = fields
+
+
+class AdminSessionEventSerializer(serializers.ModelSerializer):
+    participant_name = serializers.CharField(source="participant.display_name", read_only=True, default=None)
+    session_short_id = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SessionEvent
+        fields = ("id", "session", "session_short_id", "event_type", "payload", "participant_name", "created_at")
+        read_only_fields = fields
+
+    def get_session_short_id(self, obj):
+        return str(obj.session_id)[:8].upper()
 
 
 class SessionCreateSerializer(serializers.Serializer):
