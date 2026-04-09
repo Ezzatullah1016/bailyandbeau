@@ -127,6 +127,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        if (field.type === 'email' && value) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(value)) {
+                setInvalidState(field);
+                return field.dataset.emailMessage || 'Enter a valid email address.';
+            }
+        }
+
         if (field.dataset.jsonField === 'true' && value) {
             try {
                 JSON.parse(value);
@@ -134,6 +142,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 setInvalidState(field);
                 return field.dataset.jsonMessage || 'Enter valid JSON.';
             }
+        }
+
+        if (field.dataset.matchField && value) {
+            const matchField = document.getElementById(field.dataset.matchField);
+            const matchValue = matchField && typeof matchField.value === 'string' ? matchField.value.trim() : '';
+            if (matchField && value !== matchValue) {
+                setInvalidState(field);
+                return field.dataset.matchMessage || 'Values do not match.';
+            }
+        }
+
+        const minLength = Number(field.getAttribute('minlength') || 0);
+        if (minLength && value && value.length < minLength) {
+            setInvalidState(field);
+            return field.dataset.minlengthMessage || `Use at least ${minLength} characters.`;
         }
 
         if (field.type === 'number' && value) {

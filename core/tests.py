@@ -3,7 +3,7 @@ from io import StringIO
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .models import ActivityConfig, Badge, Book, ChildProfile, Entitlement, FavoriteBook, NotificationPreference, ReadingReminder, ReadingSession, SessionEvent, SessionParticipant, SessionSnapshot, UserBadge
@@ -28,12 +28,12 @@ class SuperAdminDashboardTests(TestCase):
             is_staff=True,
             is_superuser=True,
         )
-        owner = User.objects.create_user(
+        self.parent_user = User.objects.create_user(
             username="dashboardparent",
             email="dashboardparent@example.com",
             password="strong-password-123",
         )
-        child = ChildProfile.objects.create(user=owner, display_name="Noah", age_band=ChildProfile.AgeBand.AGE_3_5)
+        child = ChildProfile.objects.create(user=self.parent_user, display_name="Noah", age_band=ChildProfile.AgeBand.AGE_3_5)
         book = Book.objects.create(
             title="Dashboard Story",
             slug="dashboard-story",
@@ -42,13 +42,81 @@ class SuperAdminDashboardTests(TestCase):
             published=True,
             page_count=10,
         )
-        ReadingSession.objects.create(book=book, child_profile=child, created_by=owner)
+        ReadingSession.objects.create(book=book, child_profile=child, created_by=self.parent_user)
 
     def test_super_admin_dashboard_requires_staff_login(self):
         response = self.client.get(reverse("super_admin_dashboard"))
 
         self.assertEqual(response.status_code, 302)
         self.assertIn("/admin/login/", response.url)
+
+    def test_admin_login_page_uses_dashboard_theme_and_validation(self):
+        response = self.client.get(reverse("admin:login"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Sign In")
+        self.assertContains(response, "Use your admin username and password.")
+        self.assertContains(response, "core/css/tailwind.css")
+        self.assertContains(response, 'data-validate-form="admin-login-form"')
+
+    def test_public_login_page_renders_login_and_signup_form(self):
+        response = self.client.get("/login/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Login or create your account")
+        self.assertContains(response, "Create account")
+        self.assertContains(response, 'data-validate-form="login-form"')
+        self.assertContains(response, 'data-validate-form="signup-form"')
+        self.assertContains(response, 'data-match-field="id_signup_password"')
+
+    def test_user_can_sign_up_through_public_auth_form(self):
+        response = self.client.post(
+            "/login/",
+            data={
+                "action": "signup",
+                "first_name": "Ava",
+                "last_name": "Stone",
+                "username": "avastone",
+                "email": "ava@example.com",
+                "password": "StrongPass123!",
+                "confirm_password": "StrongPass123!",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(User.objects.filter(username="avastone", email="ava@example.com").exists())
+        self.assertTrue(response.wsgi_request.user.is_authenticated)
+
+    def test_user_can_log_in_through_public_auth_form(self):
+        response = self.client.post(
+            "/login/",
+            data={
+                "action": "login",
+                "username": "dashboardparent",
+                "password": "strong-password-123",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.wsgi_request.user.is_authenticated)
+        self.assertEqual(response.wsgi_request.user.username, "dashboardparent")
+
+    def test_staff_user_can_log_in_through_admin_login_form(self):
+        response = self.client.post(
+            reverse("admin:login"),
+            data={
+                "username": "superadmin",
+                "password": "strong-password-123",
+                "next": reverse("super_admin_dashboard"),
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.wsgi_request.user.is_authenticated)
+        self.assertContains(response, "Super Admin Dashboard")
 
     def test_super_admin_dashboard_renders_metrics_for_staff(self):
         self.client.force_login(self.admin_user)
@@ -132,6 +200,20 @@ class AdminPortalPageTests(TestCase):
         self.assertContains(session_response, "View Logged Issues")
         self.assertContains(session_response, "portaladmin")
 
+    def test_admin_sign_out_posts_to_logout(self):
+        self.client.force_login(self.admin_user)
+
+        response = self.client.get(reverse("super_admin_dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f'action="{reverse("admin:logout")}"')
+        self.assertContains(response, 'Sign out')
+
+        logout_response = self.client.post(reverse("admin:logout"), follow=True)
+
+        self.assertEqual(logout_response.status_code, 200)
+        self.assertFalse(logout_response.wsgi_request.user.is_authenticated)
+
     def test_admin_book_library_can_create_book_from_form(self):
         self.client.force_login(self.admin_user)
 
@@ -153,7 +235,6 @@ class AdminPortalPageTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(Book.objects.filter(slug="ocean-adventure").exists())
-
     def test_admin_activity_config_can_create_config_from_form(self):
         self.client.force_login(self.admin_user)
 
@@ -642,6 +723,11 @@ class ApiTests(TestCase):
         self.assertEqual(payload["participant"]["display_name"], "Grandma Noor")
         self.assertTrue(payload["realtime_token"])
 
+    @override_settings(
+        LIVEKIT_API_KEY="unit-test-livekit-key",
+        LIVEKIT_API_SECRET="unit-test-livekit-secret-with-sufficient-length-123456",
+        LIVEKIT_URL="wss://example.livekit.cloud",
+    )
     def test_reconnect_token_endpoint_returns_fresh_token_for_participant(self):
         book = Book.objects.create(
             title="Reconnect Story",
@@ -673,7 +759,10 @@ class ApiTests(TestCase):
         )
 
         self.assertEqual(reconnect_response.status_code, 200)
-        self.assertTrue(reconnect_response.json()["data"]["realtime_token"])
+        realtime_token = reconnect_response.json()["data"]["realtime_token"]
+        self.assertTrue(realtime_token)
+        self.assertEqual(realtime_token.count("."), 2)
+        self.assertEqual(reconnect_response.json()["data"]["room_name"], SessionParticipant.objects.get(id=participant.id).session.livekit_room_name)
 
     def test_ready_endpoint_marks_participant_ready_and_updates_session_lobby(self):
         book = Book.objects.create(

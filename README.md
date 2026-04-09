@@ -1,10 +1,12 @@
-# Bailey & Beau Django Project
+# Bailey & Beau Foundation Project
 
-A Django + DRF MVP backend scaffold for the Bailey & Beau platform.
+A Django + DRF backend plus a minimal Next.js frontend scaffold for the Bailey & Beau platform M1 milestone.
 
 ## Setup
 
 The project uses a local virtual environment in `.venv`.
+
+The frontend lives in `frontend/` and expects Node.js 20+.
 
 ## Run the server
 
@@ -14,6 +16,32 @@ The project uses a local virtual environment in `.venv`.
 ```
 
 Then open `http://127.0.0.1:8000/`.
+
+## M1 foundation coverage
+
+This repo now covers the M1 scope only:
+
+- Django backend and database schema
+- Auth endpoints and web auth screens
+- LiveKit backend room and token wiring
+- S3-ready storage configuration
+- Next.js app-router frontend scaffold
+- GitHub Actions CI baseline
+
+## Run the Next.js frontend
+
+Node.js is required locally for the frontend. It is not bundled with this repo.
+
+```powershell
+cd .\frontend
+copy .env.local.example .env.local
+npm install
+npm run dev
+```
+
+Then open `http://127.0.0.1:3000/`.
+
+The frontend expects the Django backend to already be running at `http://127.0.0.1:8000/`.
 
 ## Build Tailwind locally
 
@@ -78,12 +106,20 @@ Copy `.env.example` values into your deployment environment for:
 - Django secret/debug/hosts
 - PostgreSQL connection settings
 - email backend settings
-- Stripe and LiveKit credentials
+- Stripe, LiveKit, S3, and frontend CORS settings
+
+Relevant M1 frontend values:
+
+- `NEXTJS_DEV_ORIGIN`
+- `DJANGO_CORS_ALLOWED_ORIGINS`
+- `DJANGO_CSRF_TRUSTED_ORIGINS`
 
 ## Prepared project paths
 
 - `/` — home page
+- `/login/` — public login and signup portal
 - `/admin/` — Django admin
+- `/admin/login/` — themed admin login
 - `/super-admin/dashboard/` — super admin overview UI
 - `/super-admin/sessions/` — session monitor UI
 - `/super-admin/live-sessions/` — live session operations UI
@@ -115,6 +151,20 @@ Copy `.env.example` values into your deployment environment for:
 - `/api/v1/admin/books/`, `/api/v1/admin/badges/`, `/api/v1/admin/activities/`
 - `/api/v1/admin/sessions/`, `/api/v1/admin/sessions/export/`
 
+Frontend scaffold paths:
+
+- `/` in `frontend/` — landing page for the new web app
+- `/login` in `frontend/` — API login handshake page
+- `/dashboard` in `frontend/` — dashboard placeholder
+
+## CI
+
+GitHub Actions CI is defined in `.github/workflows/ci.yml` and runs:
+
+- Django tests
+- Next.js lint
+- Next.js production build
+
 ## Notes
 
-This run completes the local MVP backend scaffold. Real production-only integrations such as LiveKit token signing, Stripe signature verification, email delivery workers, PostgreSQL deployment, and a frontend UI would require additional setup beyond this single local run.
+The backend remains the system of record for M1. The Next.js app is intentionally thin and exists to establish the frontend runtime, route structure, and backend integration path without expanding into later milestone product work.

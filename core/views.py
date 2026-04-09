@@ -3,11 +3,12 @@ import json
 from django.conf import settings as django_settings
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
-from django.contrib.auth import get_user_model
+from django.contrib.auth import get_user_model, login as auth_login
 from django.db.models import Count, Max, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.text import slugify
 
 from .models import (
@@ -24,13 +25,116 @@ from .models import (
     SessionParticipant,
     UserBadge,
 )
-from .serializers import ActivityConfigSerializer, BookSerializer
+from .serializers import ActivityConfigSerializer, BookSerializer, LoginSerializer, RegisterSerializer
 
 User = get_user_model()
 
 
 def home(request):
     return render(request, "core/home.html")
+
+
+def _auth_redirect_target(request, user=None):
+    default_target = reverse("super_admin_dashboard") if user and user.is_staff else reverse("home")
+    candidate = request.POST.get("next") or request.GET.get("next") or default_target
+
+    if candidate in {"/login", "/login/", reverse("login")}:
+        candidate = default_target
+
+    if candidate and url_has_allowed_host_and_scheme(
+        candidate,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        if user and not user.is_staff and candidate.startswith("/super-admin"):
+            return reverse("home")
+        return candidate
+
+    return default_target
+
+
+def auth_portal(request):
+    if request.user.is_authenticated:
+        return redirect(_auth_redirect_target(request, request.user))
+
+    active_tab = "signup" if request.GET.get("tab") == "signup" else "login"
+    next_url = _auth_redirect_target(request)
+    login_error = None
+    signup_errors = {}
+    login_values = {"username": ""}
+    signup_values = {
+        "first_name": "",
+        "last_name": "",
+        "username": "",
+        "email": "",
+    }
+
+    if request.method == "POST":
+        action = request.POST.get("action", "login")
+        next_url = _auth_redirect_target(request)
+
+        if action == "login":
+            active_tab = "login"
+            identifier = request.POST.get("username", "").strip()
+            password = request.POST.get("password", "")
+            login_values["username"] = identifier
+
+            lookup_username = identifier
+            if "@" in identifier:
+                matched_user = User.objects.filter(email__iexact=identifier).first()
+                if matched_user:
+                    lookup_username = matched_user.username
+
+            serializer = LoginSerializer(data={"username": lookup_username, "password": password})
+            if serializer.is_valid():
+                user = serializer.validated_data["user"]
+                auth_login(request, user)
+                return redirect(_auth_redirect_target(request, user))
+
+            login_error = serializer.errors.get("non_field_errors", ["Invalid username, email, or password."])[0]
+
+        elif action == "signup":
+            active_tab = "signup"
+            signup_values = {
+                "first_name": request.POST.get("first_name", "").strip(),
+                "last_name": request.POST.get("last_name", "").strip(),
+                "username": request.POST.get("username", "").strip(),
+                "email": request.POST.get("email", "").strip(),
+            }
+            password = request.POST.get("password", "")
+            confirm_password = request.POST.get("confirm_password", "")
+
+            payload = {**signup_values, "password": password}
+            serializer = RegisterSerializer(data=payload)
+            serializer.is_valid()
+            signup_errors = {
+                key: value[0] if isinstance(value, list) else value
+                for key, value in serializer.errors.items()
+            }
+
+            if not signup_values["first_name"]:
+                signup_errors["first_name"] = "First name is required."
+            if not signup_values["last_name"]:
+                signup_errors["last_name"] = "Last name is required."
+            if password != confirm_password:
+                signup_errors["confirm_password"] = "Passwords do not match."
+
+            if not signup_errors:
+                user = serializer.save()
+                Entitlement.objects.get_or_create(user=user)
+                auth_login(request, user)
+                messages.success(request, "Your Bailey & Beau account is ready.")
+                return redirect(_auth_redirect_target(request, user))
+
+    context = {
+        "active_tab": active_tab,
+        "next_url": next_url,
+        "login_error": login_error,
+        "signup_errors": signup_errors,
+        "login_values": login_values,
+        "signup_values": signup_values,
+    }
+    return render(request, "core/auth_portal.html", context)
 
 
 def _status_tone(status_value):

@@ -21,6 +21,7 @@ from core import views
 
 urlpatterns = [
     path('', views.home, name='home'),
+    path('login/', views.auth_portal, name='login'),
     path('super-admin/dashboard/', views.super_admin_dashboard, name='super_admin_dashboard'),
     path('super-admin/sessions/', views.admin_session_monitor, name='admin_session_monitor'),
     path('super-admin/sessions/<uuid:session_id>/', views.admin_session_detail, name='admin_session_detail'),

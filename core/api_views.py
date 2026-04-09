@@ -1,7 +1,12 @@
 import csv
+import json
+import logging
 import secrets
+from datetime import timedelta
 from io import StringIO
 
+from asgiref.sync import async_to_sync
+from django.conf import settings as django_settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Q
@@ -11,6 +16,11 @@ from django.http import HttpResponse
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+
+try:
+    from livekit import api as livekit_api
+except ImportError:  # pragma: no cover - dependency is optional during early setup
+    livekit_api = None
 
 from .models import ActivityConfig, Badge, Book, BookPage, ChildProfile, Entitlement, FavoriteBook, NotificationPreference, ReadingReminder, ReadingSession, SessionEvent, SessionInvite, SessionParticipant, SessionSnapshot, UserBadge
 from .serializers import (
@@ -40,6 +50,7 @@ from .serializers import (
 
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 BILLING_PLANS = [
@@ -169,7 +180,128 @@ def sync_entitlement_from_stripe_event(event_payload):
     return True, entitlement
 
 
+def _livekit_server_url():
+    url = (getattr(django_settings, "LIVEKIT_URL", "") or "").strip()
+    if url.startswith("wss://"):
+        return "https://" + url[len("wss://"):]
+    if url.startswith("ws://"):
+        return "http://" + url[len("ws://"):]
+    return url
+
+
+def _livekit_is_configured():
+    return bool(
+        livekit_api
+        and getattr(django_settings, "LIVEKIT_API_KEY", "")
+        and getattr(django_settings, "LIVEKIT_API_SECRET", "")
+        and getattr(django_settings, "LIVEKIT_URL", "")
+    )
+
+
+async def _ensure_livekit_room_async(room_name):
+    if not _livekit_is_configured() or not room_name:
+        return False
+
+    client = livekit_api.LiveKitAPI(
+        _livekit_server_url(),
+        getattr(django_settings, "LIVEKIT_API_KEY", ""),
+        getattr(django_settings, "LIVEKIT_API_SECRET", ""),
+    )
+    try:
+        await client.room.create_room(
+            livekit_api.CreateRoomRequest(name=room_name, empty_timeout=10 * 60, max_participants=6)
+        )
+        return True
+    except Exception as exc:  # noqa: BLE001
+        message = str(exc).lower()
+        if "already exists" in message or "alreadyexists" in message:
+            return True
+        logger.warning("LiveKit room creation failed for %s: %s", room_name, exc)
+        return False
+    finally:
+        await client.aclose()
+
+
+def ensure_livekit_room(session):
+    if not getattr(session, "livekit_room_name", ""):
+        return False
+    if not _livekit_is_configured():
+        return False
+    try:
+        return async_to_sync(_ensure_livekit_room_async)(session.livekit_room_name)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("LiveKit room ensure failed for %s: %s", session.livekit_room_name, exc)
+        return False
+
+
+async def _delete_livekit_room_async(room_name):
+    if not _livekit_is_configured() or not room_name:
+        return False
+
+    client = livekit_api.LiveKitAPI(
+        _livekit_server_url(),
+        getattr(django_settings, "LIVEKIT_API_KEY", ""),
+        getattr(django_settings, "LIVEKIT_API_SECRET", ""),
+    )
+    try:
+        await client.room.delete_room(livekit_api.DeleteRoomRequest(room=room_name))
+        return True
+    except Exception as exc:  # noqa: BLE001
+        message = str(exc).lower()
+        if "not found" in message or "does not exist" in message:
+            return True
+        logger.warning("LiveKit room delete failed for %s: %s", room_name, exc)
+        return False
+    finally:
+        await client.aclose()
+
+
+def delete_livekit_room(session):
+    if not getattr(session, "livekit_room_name", "") or not _livekit_is_configured():
+        return False
+    try:
+        return async_to_sync(_delete_livekit_room_async)(session.livekit_room_name)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("LiveKit room cleanup failed for %s: %s", session.livekit_room_name, exc)
+        return False
+
+
 def build_realtime_token(session, participant):
+    ensure_livekit_room(session)
+
+    if _livekit_is_configured():
+        try:
+            ttl = timedelta(minutes=getattr(django_settings, "LIVEKIT_TOKEN_TTL_MINUTES", 120))
+            grants = livekit_api.VideoGrants(
+                room_join=True,
+                room=session.livekit_room_name,
+                can_publish=True,
+                can_subscribe=True,
+                can_publish_data=True,
+            )
+            metadata = json.dumps(
+                {
+                    "session_id": str(session.id),
+                    "participant_id": str(participant.id),
+                    "role": participant.session_role,
+                    "participant_type": participant.participant_type,
+                }
+            )
+            token = (
+                livekit_api.AccessToken(
+                    getattr(django_settings, "LIVEKIT_API_KEY", ""),
+                    getattr(django_settings, "LIVEKIT_API_SECRET", ""),
+                )
+                .with_identity(str(participant.id))
+                .with_name(participant.display_name or str(participant.id))
+                .with_metadata(metadata)
+                .with_ttl(ttl)
+                .with_grants(grants)
+            )
+            return token.to_jwt()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("LiveKit token generation failed for session %s / participant %s: %s", session.id, participant.id, exc)
+
     token_fragment = secrets.token_urlsafe(18)
     return f"livekit-{session.id}-{participant.id}-{token_fragment}"
 
@@ -924,6 +1056,8 @@ class SessionListCreateView(APIView):
             session = serializer.save()
             consume_session_credit(entitlement)
 
+        ensure_livekit_room(session)
+
         return Response(
             {"data": ReadingSessionSerializer(session).data, "meta": {}, "error": None},
             status=status.HTTP_201_CREATED,
@@ -997,6 +1131,7 @@ class SessionCancelView(APIView):
             event_type=SessionEvent.EventType.CANCELLED,
             payload={"source": "api"},
         )
+        delete_livekit_room(session)
         return Response(
             {
                 "data": {
@@ -1090,6 +1225,8 @@ class InviteJoinView(APIView):
         )
         invite.used_count += 1
         invite.save(update_fields=["used_count", "updated_at"])
+
+        ensure_livekit_room(session)
 
         return Response(
             {
@@ -1230,6 +1367,7 @@ class SessionCompleteView(APIView):
             event_type=SessionEvent.EventType.COMPLETED,
             payload={"source": "api"},
         )
+        delete_livekit_room(session)
         badges = award_session_badges(session)
 
         return Response(

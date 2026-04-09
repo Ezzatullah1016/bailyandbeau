@@ -1,3 +1,7 @@
+from urllib.parse import urlparse
+
+import boto3
+from django.conf import settings as django_settings
 from django.contrib.auth import authenticate, get_user_model
 from django.utils.text import slugify
 from rest_framework import serializers
@@ -301,6 +305,41 @@ class BookPageSerializer(serializers.ModelSerializer):
         model = BookPage
         fields = ("id", "book", "page_number", "image_url", "created_at")
         read_only_fields = ("id", "created_at")
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        image_url = data.get("image_url")
+        bucket_name = getattr(django_settings, "AWS_STORAGE_BUCKET_NAME", "")
+
+        if not image_url or not bucket_name:
+            return data
+
+        try:
+            parsed = urlparse(image_url)
+            if parsed.scheme and parsed.netloc:
+                if bucket_name not in parsed.netloc and "amazonaws.com" not in parsed.netloc:
+                    return data
+                object_key = parsed.path.lstrip("/")
+                if object_key.startswith(f"{bucket_name}/"):
+                    object_key = object_key.split("/", 1)[1]
+            else:
+                object_key = image_url.lstrip("/")
+
+            signed_url = boto3.client(
+                "s3",
+                aws_access_key_id=getattr(django_settings, "AWS_ACCESS_KEY_ID", ""),
+                aws_secret_access_key=getattr(django_settings, "AWS_SECRET_ACCESS_KEY", ""),
+                region_name=getattr(django_settings, "AWS_S3_REGION_NAME", "") or None,
+            ).generate_presigned_url(
+                "get_object",
+                Params={"Bucket": bucket_name, "Key": object_key},
+                ExpiresIn=getattr(django_settings, "AWS_QUERYSTRING_EXPIRE", 3600),
+            )
+            data["image_url"] = signed_url
+        except Exception:
+            data["image_url"] = image_url
+
+        return data
 
 
 class AdminSessionDetailSerializer(serializers.ModelSerializer):
