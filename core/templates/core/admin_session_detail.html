@@ -9,10 +9,10 @@
     <span class="material-symbols-outlined" style="font-size:18px">arrow_back</span> All Sessions
 </a>
 {% if can_cancel %}
-<form method="post" onsubmit="return confirm('Cancel this session?')">
+<form method="post">
     {% csrf_token %}
     <input type="hidden" name="action" value="cancel">
-    <button type="submit" class="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700">Cancel Session</button>
+    <button type="submit" data-confirm="Cancel this session? This cannot be undone." class="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700">Cancel Session</button>
 </form>
 {% endif %}
 {% endblock %}

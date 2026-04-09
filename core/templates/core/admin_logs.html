@@ -54,7 +54,7 @@
             <span class="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{{ events|length }} shown</span>
         </div>
         <div class="overflow-x-auto">
-            <table class="min-w-full text-left text-sm">
+            <table class="table-hover min-w-full text-left text-sm">
                 <thead class="bg-stone-50 text-slate-500">
                     <tr>
                         <th class="px-5 py-3 font-semibold">Event type</th>
@@ -90,7 +90,7 @@
                         </td>
                     </tr>
                     {% empty %}
-                    <tr><td colspan="5" class="px-5 py-10 text-center text-slate-500">No events matched the selected filters.</td></tr>
+                    <tr><td colspan="5" class="px-5 py-16 text-center"><div class="flex flex-col items-center gap-3"><span class="material-symbols-outlined text-4xl text-slate-300">event_busy</span><p class="text-sm font-medium text-slate-500">No events matched the selected filters.</p><a href="?" class="text-xs font-semibold text-brand-dark hover:underline">Clear filters</a></div></td></tr>
                     {% endfor %}
                 </tbody>
             </table>

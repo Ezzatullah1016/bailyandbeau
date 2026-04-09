@@ -117,7 +117,7 @@
             </h4>
             {% if selected_pages %}
             <div class="mb-4 overflow-hidden rounded-xl border border-slate-200">
-                <table class="min-w-full text-left text-sm">
+                <table class="table-hover min-w-full text-left text-sm">
                     <thead class="bg-slate-50 text-xs text-slate-500">
                         <tr>
                             <th class="px-4 py-3 font-semibold">Page</th>
@@ -131,7 +131,7 @@
                             <td class="px-4 py-3 font-semibold text-slate-900">{{ page.page_number }}</td>
                             <td class="px-4 py-3 max-w-sm truncate text-slate-600">{{ page.image_url }}</td>
                             <td class="px-4 py-3 text-right">
-                                <form method="post" onsubmit="return confirm('Remove page {{ page.page_number }}?')" class="inline">
+                                <form method="post" class="inline">
                                     {% csrf_token %}
                                     <input type="hidden" name="action" value="delete_page">
                                     <input type="hidden" name="page_id" value="{{ page.id }}">
@@ -195,7 +195,7 @@
     {# Books table #}
     <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div class="overflow-x-auto">
-            <table class="min-w-full text-left text-sm">
+            <table class="table-hover min-w-full text-left text-sm">
                 <thead class="bg-slate-50 text-xs text-slate-500">
                     <tr>
                         <th class="px-5 py-3 font-semibold">Cover</th>

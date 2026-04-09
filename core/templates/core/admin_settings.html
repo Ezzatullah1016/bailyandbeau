@@ -8,7 +8,7 @@
 <div class="grid gap-8 xl:grid-cols-[0.24fr_0.76fr]">
     <nav class="rounded-2xl border border-stone-200 bg-white p-3 shadow-sm">
         <ul class="space-y-1 text-sm font-medium">
-            <li><a class="block rounded-xl bg-[#F5EAE8] px-4 py-3 text-[#865047]" href="#platform">General</a></li>
+            <li><a class="block rounded-xl bg-brand/10 px-4 py-3 text-brand-dark" href="#platform">General</a></li>
             <li><a class="block rounded-xl px-4 py-3 text-slate-600 hover:bg-stone-50" href="#session-defaults">Session defaults</a></li>
             <li><a class="block rounded-xl px-4 py-3 text-slate-600 hover:bg-stone-50" href="#stripe">Stripe</a></li>
             <li><a class="block rounded-xl px-4 py-3 text-slate-600 hover:bg-stone-50" href="#livekit">LiveKit</a></li>
@@ -58,14 +58,14 @@
             <h3 class="text-lg font-semibold text-slate-900">Storage snapshot</h3>
             <div class="mt-4 rounded-xl bg-stone-50 p-4">
                 <div class="mb-2 flex items-center justify-between text-sm font-semibold"><span>{{ storage_usage.used }} GB used</span><span class="text-slate-500">{{ storage_usage.total }} GB total</span></div>
-                <div class="h-2 rounded-full bg-stone-200"><div class="h-2 rounded-full bg-[#865047]" style="width: {{ storage_usage.percent }}%"></div></div>
+                <div class="h-2 rounded-full bg-stone-200"><div class="h-2 rounded-full bg-brand-dark" style="width: {{ storage_usage.percent }}%"></div></div>
             </div>
         </section>
 
         <section id="admins" class="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-            <div class="mb-5 flex items-center justify-between"><h3 class="text-lg font-semibold text-slate-900">Admin accounts</h3><button class="rounded-xl bg-[#865047] px-4 py-2 text-sm font-semibold text-white">Invite admin</button></div>
+            <div class="mb-5 flex items-center justify-between"><h3 class="text-lg font-semibold text-slate-900">Admin accounts</h3><button class="rounded-xl bg-brand-dark px-4 py-2 text-sm font-semibold text-white">Invite admin</button></div>
             <div class="overflow-x-auto">
-                <table class="min-w-full text-left text-sm">
+                <table class="table-hover min-w-full text-left text-sm">
                     <thead class="bg-stone-50 text-slate-500"><tr><th class="px-4 py-3 font-semibold">Name</th><th class="px-4 py-3 font-semibold">Email</th><th class="px-4 py-3 font-semibold">Role</th><th class="px-4 py-3 font-semibold text-right">Status</th></tr></thead>
                     <tbody class="divide-y divide-stone-100">
                         {% for account in admin_accounts %}
