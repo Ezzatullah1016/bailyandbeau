@@ -13,6 +13,7 @@ from django.db.models import Q
 from django.utils import timezone
 from rest_framework import permissions, status
 from django.http import HttpResponse
+from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -1233,6 +1234,7 @@ class InviteJoinView(APIView):
                 "data": {
                     "session_id": str(session.id),
                     "room_name": session.livekit_room_name,
+                    "livekit_url": getattr(django_settings, "LIVEKIT_URL", ""),
                     "participant": SessionParticipantSerializer(participant).data,
                     "realtime_token": build_realtime_token(session, participant),
                 },
@@ -1326,6 +1328,9 @@ class SessionStartView(APIView):
                     "session_id": str(session.id),
                     "status": session.status,
                     "started_at": session.started_at.isoformat() if session.started_at else None,
+                    "room_name": session.livekit_room_name,
+                    "livekit_url": getattr(django_settings, "LIVEKIT_URL", ""),
+                    "realtime_token": build_realtime_token(session, participant),
                 },
                 "meta": {},
                 "error": None,
@@ -1513,6 +1518,7 @@ class SessionReconnectTokenView(APIView):
                 "data": {
                     "session_id": str(session.id),
                     "room_name": session.livekit_room_name,
+                    "livekit_url": getattr(django_settings, "LIVEKIT_URL", ""),
                     "participant": SessionParticipantSerializer(participant).data,
                     "realtime_token": build_realtime_token(session, participant),
                     "snapshot": snapshot_payload,
@@ -1730,3 +1736,37 @@ class AdminSessionEventExportView(APIView):
         response = HttpResponse(buffer.getvalue(), content_type="text/csv")
         response["Content-Disposition"] = 'attachment; filename="session-events.csv"'
         return response
+
+
+# ─── Media Upload (staging / no-S3 fallback) ──────────────────────────────────
+
+class MediaUploadView(APIView):
+    """
+    Staff-only endpoint to upload book assets when S3 is not configured.
+    Returns the hosted URL so admins can paste it into BookPage.image_url fields.
+    """
+    permission_classes = [permissions.IsAdminUser]
+    parser_classes = [MultiPartParser]
+
+    def post(self, request):
+        from pathlib import Path
+
+        file_obj = request.FILES.get("file")
+        if not file_obj:
+            return Response(
+                {"data": None, "error": {"code": "no_file", "message": "No file provided."}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        upload_dir = Path(django_settings.MEDIA_ROOT) / "uploads"
+        upload_dir.mkdir(parents=True, exist_ok=True)
+
+        import uuid as _uuid
+        safe_name = f"{_uuid.uuid4().hex}_{file_obj.name}"
+        dest = upload_dir / safe_name
+        with open(dest, "wb+") as fh:
+            for chunk in file_obj.chunks():
+                fh.write(chunk)
+
+        url = request.build_absolute_uri(f"{django_settings.MEDIA_URL}uploads/{safe_name}")
+        return Response({"data": {"url": url}, "error": None}, status=status.HTTP_201_CREATED)

@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .api_views import (
+    MediaUploadView,
     AdminActivityDetailView,
     AdminActivityListCreateView,
     AdminBadgeAwardDeleteView,
@@ -107,6 +108,9 @@ urlpatterns = [
     # Admin — Events Log
     path("admin/events/", AdminSessionEventListView.as_view(), name="admin-event-list"),
     path("admin/events/export/", AdminSessionEventExportView.as_view(), name="admin-event-export"),
+
+    # Admin — Media Upload (staging filesystem fallback, no S3 required)
+    path("admin/upload/", MediaUploadView.as_view(), name="admin-media-upload"),
 
     # Billing
     path("billing/plans/", BillingPlansView.as_view(), name="billing-plans"),
