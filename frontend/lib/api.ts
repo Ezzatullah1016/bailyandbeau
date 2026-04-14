@@ -84,7 +84,7 @@ export async function apiRequest<T extends JsonValue | Record<string, unknown>>(
 
   let response = await fetchWithFallback(`${path}`, {
     ...init,
-    credentials: 'include',
+    credentials: 'omit',
     headers: buildHeaders(token, init),
   });
 
@@ -95,7 +95,7 @@ export async function apiRequest<T extends JsonValue | Record<string, unknown>>(
       token = newToken;
       response = await fetchWithFallback(`${path}`, {
         ...init,
-        credentials: 'include',
+        credentials: 'omit',
         headers: buildHeaders(token, init),
       });
     } else {

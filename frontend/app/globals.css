@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&display=swap');
 
 /* ─── Material Symbols base ──────────────────────────────────────────────── */
 .material-symbols-outlined {
@@ -24,7 +25,7 @@ body.reading-room {
 }
 
 @theme {
-  --font-headline: var(--font-newsreader), serif;
+  --font-headline: "Newsreader", serif;
   --font-serif:    var(--font-cormorant), serif;
   --font-body:     var(--font-jakarta), sans-serif;
   --font-jost:     var(--font-jost), sans-serif;

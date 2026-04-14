@@ -1,0 +1,96 @@
+{
+  "info": {
+    "name": "Bailey & Beau - Admin Upload Verification",
+    "description": "Collection to verify /api/v1/admin/upload/ flow. First request logs in and stores JWT access token; second request uploads a file using multipart/form-data.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8000" },
+    { "key": "username", "value": "admin" },
+    { "key": "password", "value": "Admin123!" },
+    { "key": "accessToken", "value": "" },
+    { "key": "uploadFilePath", "value": "C:/Users/haroon traders/Desktop/sample.jpg" }
+  ],
+  "item": [
+    {
+      "name": "1) Login - Get Access Token",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/auth/login/",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "auth", "login", ""]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const json = pm.response.json();",
+              "const token = json?.data?.tokens?.access;",
+              "pm.test('Access token exists', function () {",
+              "  pm.expect(token).to.be.a('string').and.not.empty;",
+              "});",
+              "pm.collectionVariables.set('accessToken', token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2) Admin Upload - /api/v1/admin/upload/",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": "{{uploadFilePath}}"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/admin/upload/",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "admin", "upload", ""]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 201', function () {",
+              "  pm.response.to.have.status(201);",
+              "});",
+              "",
+              "const json = pm.response.json();",
+              "pm.test('Upload URL is returned', function () {",
+              "  pm.expect(json?.data?.url).to.be.a('string').and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

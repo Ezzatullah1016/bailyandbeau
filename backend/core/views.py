@@ -1,4 +1,5 @@
 import json
+from urllib.parse import parse_qs, unquote, urlparse
 
 from django.conf import settings as django_settings
 from django.contrib import messages
@@ -28,6 +29,25 @@ from .models import (
 from .serializers import ActivityConfigSerializer, BookSerializer, LoginSerializer, RegisterSerializer
 
 User = get_user_model()
+
+
+def _normalize_cover_image_url(raw_url):
+    """Convert common pasted search URLs into a direct image URL."""
+    url = (raw_url or "").strip()
+    if not url:
+        return ""
+
+    if url.startswith("//"):
+        return f"https:{url}"
+
+    parsed = urlparse(url)
+    if parsed.scheme and parsed.netloc and "google." in parsed.netloc and parsed.path.startswith("/imgres"):
+        params = parse_qs(parsed.query)
+        image_candidate = (params.get("imgurl") or [""])[0].strip()
+        if image_candidate:
+            return unquote(image_candidate)
+
+    return url
 
 
 def home(request):
@@ -482,7 +502,7 @@ def admin_book_library(request):
                 "description": request.POST.get("description", "").strip(),
                 "room_type": request.POST.get("room_type", Book.RoomType.READING),
                 "age_band": request.POST.get("age_band", Book.AgeBand.AGE_3_5),
-                "cover_image": request.POST.get("cover_image", "").strip(),
+                "cover_image": _normalize_cover_image_url(request.POST.get("cover_image", "")),
                 "published": publish_state == "published" if publish_state in {"draft", "published"} else request.POST.get("published") == "on",
                 "page_count": request.POST.get("page_count") or 1,
             }

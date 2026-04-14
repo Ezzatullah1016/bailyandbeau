@@ -79,16 +79,37 @@
                         {% for book in books %}
                         <tr class="hover:bg-slate-50">
                             <td class="px-5 py-4">
-                                <div class="h-10 w-8 overflow-hidden rounded bg-brand/20">
-                                    {% if book.cover_image %}
-                                    <img src="{{ book.cover_image }}" alt="" class="h-full w-full object-cover">
+                                {% if book.cover_image %}
+                                    {% if ".pdf" in book.cover_image|lower %}
+                                        <a href="{{ book.cover_image }}" target="_blank" rel="noopener noreferrer" class="flex h-10 w-8 items-center justify-center rounded bg-red-100 hover:bg-red-200">
+                                            <span class="material-symbols-outlined" style="font-size:28px;color:#b91c1c">picture_as_pdf</span>
+                                        </a>
                                     {% else %}
-                                    <div class="flex h-full w-full items-center justify-center text-[9px] font-bold text-brand-dark">BB</div>
+                                        <a href="{{ book.cover_image }}" target="_blank" rel="noopener noreferrer" class="block h-10 w-8 overflow-hidden rounded bg-brand/20">
+                                            <img src="{{ book.cover_image }}" alt="{{ book.title }} cover" class="h-full w-full object-cover" loading="lazy" referrerpolicy="no-referrer"
+                                                 onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden');">
+                                            <div class="hidden h-full w-full items-center justify-center text-[9px] font-bold text-brand-dark">BB</div>
+                                        </a>
                                     {% endif %}
-                                </div>
+                                {% else %}
+                                    <div class="h-10 w-8 overflow-hidden rounded bg-brand/20">
+                                        <div class="flex h-full w-full items-center justify-center text-[9px] font-bold text-brand-dark">BB</div>
+                                    </div>
+                                {% endif %}
                             </td>
                             <td class="px-5 py-4">
-                                <p class="font-semibold text-slate-900">{{ book.title }}</p>
+                                {% if book.cover_image %}
+                                    {% if ".pdf" in book.cover_image|lower %}
+                                        <a href="{{ book.cover_image }}" target="_blank" rel="noopener noreferrer" class="font-semibold text-red-700 hover:text-red-900 hover:underline flex items-center gap-1">
+                                            <span class="material-symbols-outlined" style="font-size:18px;vertical-align:middle">picture_as_pdf</span>
+                                            Open PDF
+                                        </a>
+                                    {% else %}
+                                        <a href="{{ book.cover_image }}" target="_blank" rel="noopener noreferrer" class="font-semibold text-slate-900 hover:text-brand-dark hover:underline">{{ book.title }}</a>
+                                    {% endif %}
+                                {% else %}
+                                    <p class="font-semibold text-slate-900">{{ book.title }}</p>
+                                {% endif %}
                                 <p class="text-xs text-slate-400">{{ book.slug }}</p>
                             </td>
                             <td class="px-5 py-4 text-slate-600">{{ book.get_room_type_display }}</td>
@@ -103,6 +124,16 @@
                             <td class="px-5 py-4 text-xs text-slate-400">{{ book.updated_at|date:"d M Y" }}</td>
                             <td class="px-5 py-4 text-right">
                                 <div class="flex justify-end gap-3 text-xs font-semibold">
+                                    {% if book.cover_image %}
+                                        {% if ".pdf" in book.cover_image|lower %}
+                                            <a href="{{ book.cover_image }}" target="_blank" rel="noopener noreferrer" class="text-red-700 hover:text-red-900 flex items-center gap-1">
+                                                <span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle">picture_as_pdf</span>
+                                                Open PDF
+                                            </a>
+                                        {% else %}
+                                            <a href="{{ book.cover_image }}" target="_blank" rel="noopener noreferrer" class="text-slate-500 hover:text-slate-900">Open</a>
+                                        {% endif %}
+                                    {% endif %}
                                     <a href="?selected={{ book.id }}" class="text-brand-dark hover:underline">Edit</a>
                                     <form method="post" class="inline" onsubmit="return confirm('{% if book.published %}Unpublish{% else %}Publish{% endif %} {{ book.title }}?')">
                                         {% csrf_token %}
