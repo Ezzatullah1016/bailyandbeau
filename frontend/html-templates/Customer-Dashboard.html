@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Bailey &amp; Beau | Customer Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&amp;family=Plus+Jakarta+Sans:wght@200..800&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary-fixed-variant": "#852300",
+                        "on-secondary-fixed": "#291800",
+                        "on-surface-variant": "#43493d",
+                        "tertiary": "#5f1700",
+                        "primary": "#173901",
+                        "primary-container": "#2d5016",
+                        "on-tertiary-container": "#ff9c7e",
+                        "surface-dim": "#dfd9d0",
+                        "surface": "#fff9ee",
+                        "tertiary-fixed-dim": "#ffb59f",
+                        "secondary-fixed": "#ffddb4",
+                        "primary-fixed": "#c4efa3",
+                        "on-primary-container": "#98c27b",
+                        "outline": "#73796c",
+                        "on-secondary-container": "#6b4500",
+                        "tertiary-fixed": "#ffdbd0",
+                        "surface-container": "#f3ede3",
+                        "on-secondary": "#ffffff",
+                        "secondary": "#835500",
+                        "surface-container-high": "#ede7dd",
+                        "outline-variant": "#c3c9b9",
+                        "secondary-container": "#feae2c",
+                        "surface-tint": "#43682b",
+                        "on-secondary-fixed-variant": "#633f00",
+                        "primary-fixed-dim": "#a8d38a",
+                        "on-primary-fixed-variant": "#2c4f15",
+                        "secondary-fixed-dim": "#ffb955",
+                        "error-container": "#ffdad6",
+                        "surface-variant": "#e8e2d8",
+                        "on-background": "#1d1b16",
+                        "surface-container-low": "#f9f3e9",
+                        "on-tertiary": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "on-error": "#ffffff",
+                        "inverse-surface": "#33302a",
+                        "surface-container-highest": "#e8e2d8",
+                        "on-tertiary-fixed": "#3a0a00",
+                        "surface-container-lowest": "#ffffff",
+                        "error": "#ba1a1a",
+                        "surface-bright": "#fff9ee",
+                        "on-surface": "#1d1b16",
+                        "background": "#fff9ee",
+                        "on-primary-fixed": "#0a2100",
+                        "on-error-container": "#93000a",
+                        "inverse-on-surface": "#f6f0e6",
+                        "tertiary-container": "#862400",
+                        "inverse-primary": "#a8d38a"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Newsreader", "serif"],
+                        "body": ["Plus Jakarta Sans", "sans-serif"],
+                        "label": ["Plus Jakarta Sans", "sans-serif"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #fff9ee; }
+        .font-newsreader { font-family: 'Newsreader', serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface antialiased">
+<!-- Sidebar Shell -->
+<aside class="h-screen w-64 fixed left-0 top-0 overflow-y-auto bg-primary-container dark:bg-black flex flex-col py-8 z-50">
+<div class="px-6 mb-10">
+<h1 class="font-newsreader text-2xl italic text-secondary-container">Bailey &amp; Beau</h1>
+<p class="text-[10px] uppercase tracking-widest text-on-primary-container/60 font-bold mt-1">The Living Storybook</p>
+</div>
+<nav class="flex-1 space-y-1">
+<!-- Dashboard Active -->
+<a class="bg-emerald-900/50 dark:bg-emerald-800/30 text-secondary-container font-bold rounded-lg mx-2 flex items-center px-4 py-3 gap-3 transition-transform duration-300 ease-out scale-102" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="text-sm">Dashboard</span>
+</a>
+<a class="text-emerald-200/70 hover:text-white transition-colors duration-200 px-4 py-3 flex items-center gap-3 mx-2 hover:bg-emerald-900/40" href="#">
+<span class="material-symbols-outlined">auto_stories</span>
+<span class="text-sm">Library</span>
+</a>
+<a class="text-emerald-200/70 hover:text-white transition-colors duration-200 px-4 py-3 flex items-center gap-3 mx-2 hover:bg-emerald-900/40" href="#">
+<span class="material-symbols-outlined">history_edu</span>
+<span class="text-sm">Sessions</span>
+</a>
+<a class="text-emerald-200/70 hover:text-white transition-colors duration-200 px-4 py-3 flex items-center gap-3 mx-2 hover:bg-emerald-900/40" href="#">
+<span class="material-symbols-outlined">military_tech</span>
+<span class="text-sm">Badges</span>
+</a>
+<a class="text-emerald-200/70 hover:text-white transition-colors duration-200 px-4 py-3 flex items-center gap-3 mx-2 hover:bg-emerald-900/40" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="text-sm">Billing</span>
+</a>
+<a class="text-emerald-200/70 hover:text-white transition-colors duration-200 px-4 py-3 flex items-center gap-3 mx-2 hover:bg-emerald-900/40" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-sm">Settings</span>
+</a>
+</nav>
+<div class="px-4 mt-auto pt-8 border-t border-white/5">
+<div class="flex items-center gap-3 p-2 rounded-xl bg-white/5">
+<div class="h-10 w-10 rounded-full bg-secondary-container flex items-center justify-center text-primary font-bold">SM</div>
+<div class="flex-1 min-w-0">
+<p class="text-white text-sm font-medium truncate">Sarah M.</p>
+<a class="text-xs text-emerald-200/50 hover:text-emerald-200 transition-colors" href="#">Sign Out</a>
+</div>
+</div>
+</div>
+</aside>
+<!-- Top AppBar (Mobile/Content Header) -->
+<header class="flex justify-between items-center w-full px-8 h-16 ml-64 max-w-[calc(100%-16rem)] sticky top-0 z-40 bg-stone-50/80 backdrop-blur-xl shadow-sm">
+<div class="hidden md:block font-newsreader text-xl font-bold text-primary">Dashboard</div>
+<div class="flex items-center gap-4">
+<div class="relative group">
+<span class="material-symbols-outlined text-stone-500 group-hover:text-primary cursor-pointer">notifications</span>
+<span class="absolute top-0 right-0 h-2 w-2 bg-error rounded-full border-2 border-white"></span>
+</div>
+<span class="material-symbols-outlined text-stone-500 cursor-pointer">account_circle</span>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-64 p-8 min-h-screen bg-surface-container-low">
+<!-- Row 1: Welcome -->
+<section class="mb-10">
+<h2 class="font-newsreader text-4xl text-primary font-bold mb-2">Welcome back, Sarah 👋</h2>
+<p class="text-stone-500 font-medium">Ready for today's reading session with Grandma Rose?</p>
+</section>
+<!-- Row 2: Stats Grid -->
+<section class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+<div class="bg-surface-container-lowest p-6 rounded-xl shadow-sm flex flex-col border border-outline-variant/10">
+<span class="text-xs font-bold uppercase tracking-wider text-stone-400 mb-4">Sessions Remaining</span>
+<div class="flex items-end justify-between">
+<span class="text-5xl font-newsreader font-bold text-primary">7</span>
+<span class="material-symbols-outlined text-primary-fixed-dim text-4xl">calendar_today</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-xl shadow-sm flex flex-col border border-outline-variant/10">
+<span class="text-xs font-bold uppercase tracking-wider text-stone-400 mb-4">Sessions Completed</span>
+<div class="flex items-end justify-between">
+<span class="text-5xl font-newsreader font-bold text-secondary">12</span>
+<span class="material-symbols-outlined text-secondary-container text-4xl">task_alt</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-xl shadow-sm flex flex-col border border-outline-variant/10">
+<span class="text-xs font-bold uppercase tracking-wider text-stone-400 mb-4">Badges Earned</span>
+<div class="flex items-end justify-between">
+<span class="text-5xl font-newsreader font-bold text-on-tertiary-fixed-variant">5</span>
+<span class="material-symbols-outlined text-tertiary-fixed-dim text-4xl">military_tech</span>
+</div>
+</div>
+</section>
+<!-- Row 3: Feature Hero Card -->
+<section class="bg-primary-container rounded-3xl p-8 mb-10 overflow-hidden relative flex flex-col md:flex-row items-center gap-8 shadow-xl shadow-primary/10">
+<div class="flex-1 z-10">
+<span class="inline-block px-4 py-1.5 bg-secondary-container text-on-secondary-fixed text-xs font-bold rounded-full mb-6">Continue Reading</span>
+<h3 class="font-newsreader text-4xl text-white mb-4">The Big Red Adventure</h3>
+<p class="text-emerald-100/80 text-lg mb-6">You're on page 12 of 24 — keep going!</p>
+<div class="flex items-center gap-4 text-emerald-200/60 text-sm mb-8">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">meeting_room</span> Reading Room</span>
+<span class="h-1 w-1 rounded-full bg-emerald-700"></span>
+<span>Ages 6-8</span>
+</div>
+<div class="flex flex-wrap gap-4">
+<button class="px-8 py-3 bg-secondary-container hover:bg-amber-400 text-on-secondary-fixed font-bold rounded-lg transition-all flex items-center gap-2 group">
+<span class="material-symbols-outlined text-lg transition-transform group-hover:scale-125">play_arrow</span>
+                        Start Session
+                    </button>
+<button class="px-8 py-3 border border-white/20 hover:bg-white/10 text-white font-bold rounded-lg transition-all">
+                        Change Book
+                    </button>
+</div>
+</div>
+<div class="w-48 h-64 flex-shrink-0 bg-surface-container-lowest rounded-xl shadow-2xl relative overflow-hidden transform rotate-3 hover:rotate-0 transition-transform duration-500">
+<img alt="The Big Red Adventure Book Cover" class="w-full h-full object-cover" data-alt="Illustration of a whimsical red hot air balloon floating over a lush green forest at sunset with soft magical sparkles" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDMMYfbMqJ-Hm_chPePgZFexe33rFVbH5_kFUE_wG0RHzETevhVJiHYLASP1u6uzsamVHnTG5Zq8PmUJ4mSmOq2pd2S1EpWAZJxGJJwH37JGKjAdI-n77HDLEr5juI4O-FyIysaI2uCE0RZxbGxMYcPhHs1Opqfs4i3crfTBr7w_r6SxjBwwqqCk1zsf_HU4Y4UalhXMG67H3PbyDmqB_pbGT1JGHqcwjQUNRMWikL4wJqRWvjhP9MJxy7LFx1fcSV53yp8Mjdq7bD0"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
+</div>
+<!-- Decorative Background Element -->
+<div class="absolute -bottom-20 -right-20 w-80 h-80 bg-emerald-400/10 rounded-full blur-3xl"></div>
+</section>
+<!-- Row 4: Two Columns -->
+<div class="grid grid-cols-1 lg:grid-cols-10 gap-8">
+<!-- Left: Recent Sessions Table -->
+<div class="lg:col-span-6 bg-surface-container-lowest rounded-2xl p-6 shadow-sm border border-outline-variant/10">
+<div class="flex justify-between items-center mb-6">
+<h4 class="font-newsreader text-2xl text-primary font-bold">Recent Sessions</h4>
+<button class="text-sm font-bold text-secondary hover:underline">View All</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full">
+<thead>
+<tr class="text-left border-b border-surface-container">
+<th class="pb-4 text-xs font-bold text-stone-400 uppercase tracking-widest">Book Title</th>
+<th class="pb-4 text-xs font-bold text-stone-400 uppercase tracking-widest">Date</th>
+<th class="pb-4 text-xs font-bold text-stone-400 uppercase tracking-widest">Duration</th>
+<th class="pb-4 text-xs font-bold text-stone-400 uppercase tracking-widest text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-surface-container">
+<tr class="group hover:bg-surface-container-low transition-colors">
+<td class="py-4">
+<div class="flex items-center gap-3">
+<div class="h-8 w-6 bg-primary-container/10 rounded overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Small thumbnail of a storybook cover with bright red colors" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD6aoJopDEeZWc1DFtbA99yYQ1CAV-RfOKsB132TS8j6xo2N8OWk9Xplx7_PsLz_toJJxRvTOK0Z2Djvsi13Rkc2PVnTMDjRONLRZHLmzNL0uWNP51WAlQXun29zgGnZvJxeaw5aH5cxSQlSMIa93VdelLQcFT5eOy8EljyxVox7hl2DhP6nBw0JEz9TRuXE7Um-Xby1vGVkavpfgiuO0TjYxoHCBUn5GBsTj-PdEHhmjvoiRnInBGVH2l5x0sLSD14iYejE9tzT9fy"/>
+</div>
+<span class="font-semibold text-stone-800">The Big Red Adventure</span>
+</div>
+</td>
+<td class="py-4 text-stone-500 text-sm">Oct 24, 2023</td>
+<td class="py-4 text-stone-500 text-sm">24 mins</td>
+<td class="py-4 text-right">
+<button class="material-symbols-outlined text-stone-400 hover:text-primary transition-colors">more_horiz</button>
+</td>
+</tr>
+<tr class="group hover:bg-surface-container-low transition-colors">
+<td class="py-4">
+<div class="flex items-center gap-3">
+<div class="h-8 w-6 bg-primary-container/10 rounded overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Small thumbnail of a book showing woodland creatures in a soft painting style" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBS7cSwYzmJ8jLFhLLWSAETOrKvqN5BINFWZRScr-szy7_NffEks62zJcd1o2czmXhnKOUJ92Y7i1IMpglBpSl1EqTnjtoo3ZChm7XjJ67oUd0IlHV-_MvSU4Mxp-GgWgIYd1psv2emZb5kzbzUSg9WsygUlDnJtnlHdRsfd_luBWXxsjiuXnUyzGclXDyr-YhvR7T-kGJ0pCdzhc7aIR3R86yafDtxWE3iNtYxBE8SPMFIJeUpGZp2Ho0706bDQF15RlEitME37OZR"/>
+</div>
+<span class="font-semibold text-stone-800">Forest Friends</span>
+</div>
+</td>
+<td class="py-4 text-stone-500 text-sm">Oct 22, 2023</td>
+<td class="py-4 text-stone-500 text-sm">18 mins</td>
+<td class="py-4 text-right">
+<button class="material-symbols-outlined text-stone-400 hover:text-primary transition-colors">more_horiz</button>
+</td>
+</tr>
+<tr class="group hover:bg-surface-container-low transition-colors">
+<td class="py-4">
+<div class="flex items-center gap-3">
+<div class="h-8 w-6 bg-primary-container/10 rounded overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Small thumbnail of a book showing fluffy white clouds in a blue sky" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCEOzL8wCx5fzMpDXed8ZC6P4-fat7ZDracAOrSpxOl2sxb0jYDzahdx7Q_12vD29KblkKex6q3HxBkPtZgYQbS4kHkZteLsh9tUUmVc-gOzh_38CQphmc_3GCXuiuO7h8DcDeHraIWcEFsykaQGCNwA_SSqdpCSLiUZ-2l59LYFI53w8LF-pfI86SOqRJxnX8jdUoL0GqIROoaiJM2mM4RFZnCtlbYY6G02kFoOG034SjcJqpVdZLZIcBZMeCfWME71CWTpXL_eaUc"/>
+</div>
+<span class="font-semibold text-stone-800">Cloud Nine</span>
+</div>
+</td>
+<td class="py-4 text-stone-500 text-sm">Oct 20, 2023</td>
+<td class="py-4 text-stone-500 text-sm">32 mins</td>
+<td class="py-4 text-right">
+<button class="material-symbols-outlined text-stone-400 hover:text-primary transition-colors">more_horiz</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Right: Badge Collection Grid -->
+<div class="lg:col-span-4 bg-surface-container-lowest rounded-2xl p-6 shadow-sm border border-outline-variant/10">
+<div class="flex justify-between items-center mb-8">
+<h4 class="font-newsreader text-2xl text-primary font-bold">Badge Collection</h4>
+</div>
+<div class="grid grid-cols-3 gap-y-8 gap-x-4 mb-10">
+<div class="flex flex-col items-center gap-2">
+<div class="h-16 w-16 rounded-full bg-secondary-fixed flex items-center justify-center text-3xl shadow-lg shadow-secondary-fixed/30 border-2 border-white ring-2 ring-secondary-container/20">⭐</div>
+<span class="text-[10px] font-bold text-stone-500 uppercase tracking-tighter">Star Reader</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="h-16 w-16 rounded-full bg-tertiary-fixed flex items-center justify-center text-3xl shadow-lg shadow-tertiary-fixed/30 border-2 border-white ring-2 ring-tertiary-container/20">🦁</div>
+<span class="text-[10px] font-bold text-stone-500 uppercase tracking-tighter">Brave Heart</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="h-16 w-16 rounded-full bg-primary-fixed flex items-center justify-center text-3xl shadow-lg shadow-primary-fixed/30 border-2 border-white ring-2 ring-primary-container/20">📖</div>
+<span class="text-[10px] font-bold text-stone-500 uppercase tracking-tighter">Book Worm</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="h-16 w-16 rounded-full bg-secondary-fixed-dim flex items-center justify-center text-3xl shadow-lg shadow-secondary-fixed-dim/30 border-2 border-white ring-2 ring-secondary-container/20">🌈</div>
+<span class="text-[10px] font-bold text-stone-500 uppercase tracking-tighter">Sky Seeker</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="h-16 w-16 rounded-full bg-amber-100 flex items-center justify-center text-3xl shadow-lg shadow-amber-200/30 border-2 border-white ring-2 ring-secondary-container/20">🏆</div>
+<span class="text-[10px] font-bold text-stone-500 uppercase tracking-tighter">Grand Champ</span>
+</div>
+<div class="flex flex-col items-center gap-2 opacity-40">
+<div class="h-16 w-16 rounded-full bg-stone-200 flex items-center justify-center text-stone-400 grayscale border-2 border-dashed border-stone-300">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">lock</span>
+</div>
+<span class="text-[10px] font-bold text-stone-400 uppercase tracking-tighter">Next Milestone</span>
+</div>
+</div>
+<a class="flex items-center justify-center gap-2 w-full py-4 bg-surface-container text-primary font-bold rounded-xl hover:bg-surface-container-high transition-all text-sm group" href="#">
+                    View All Badges
+                    <span class="material-symbols-outlined text-lg transition-transform group-hover:translate-x-1">arrow_forward</span>
+</a>
+</div>
+</div>
+</main>
+<!-- Reading Mode Subtle Overlay (Hidden by default, used for interaction concept) -->
+<div class="fixed inset-0 pointer-events-none bg-surface-dim/0 transition-all duration-700 backdrop-saturate-50"></div>
+</body></html>

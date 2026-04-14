@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Child Setup — Bailey &amp; Beau</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;1,600&amp;family=Jost:wght@300;400;500;600&amp;family=Newsreader:ital,opsz,wght@0,6-72,400;0,6-72,600;1,6-72,400&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Icons -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary-fixed": "#00210b",
+                    "error-container": "#ffdad6",
+                    "on-secondary-container": "#486a4e",
+                    "secondary-fixed-dim": "#aad0ad",
+                    "on-tertiary-container": "#432601",
+                    "surface-container-lowest": "#ffffff",
+                    "surface-tint": "#865047",
+                    "on-secondary": "#ffffff",
+                    "on-tertiary": "#ffffff",
+                    "on-primary-fixed": "#350f0a",
+                    "on-tertiary-fixed": "#2c1700",
+                    "on-tertiary-fixed-variant": "#614018",
+                    "surface-container": "#f0ede9",
+                    "on-primary-fixed-variant": "#6b3931",
+                    "tertiary-container": "#b88c5d",
+                    "inverse-primary": "#fcb5aa",
+                    "surface-container-low": "#f6f3ee",
+                    "on-primary-container": "#4b201a",
+                    "primary-fixed-dim": "#fcb5aa",
+                    "secondary-container": "#c3e9c5",
+                    "primary-fixed": "#ffdad4",
+                    "surface-variant": "#e5e2dd",
+                    "surface": "#fcf9f4",
+                    "inverse-on-surface": "#f3f0eb",
+                    "tertiary-fixed-dim": "#efbd8a",
+                    "on-primary": "#ffffff",
+                    "surface-container-highest": "#e5e2dd",
+                    "surface-dim": "#dcdad5",
+                    "surface-container-high": "#ebe8e3",
+                    "on-surface-variant": "#524341",
+                    "secondary-fixed": "#c6ecc8",
+                    "on-surface": "#1c1c19",
+                    "background": "#fcf9f4",
+                    "tertiary": "#7c572d",
+                    "surface-bright": "#fcf9f4",
+                    "secondary": "#44664a",
+                    "on-error-container": "#93000a",
+                    "primary": "#865047",
+                    "inverse-surface": "#31302d",
+                    "outline": "#847370"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.8rem",
+                    "xl": "0.75rem",
+                    "2xl": "1rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Newsreader", "serif"],
+                    "body": ["Jost", "sans-serif"],
+                    "label": ["Plus Jakarta Sans", "sans-serif"],
+                    "serif": ["Cormorant Garamond", "serif"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            font-family: 'Jost', sans-serif;
+            background-color: #FAF7F2;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-primary-container/30">
+<main class="flex-grow flex flex-col items-center justify-center p-6 md:p-12">
+<!-- Setup Card -->
+<div class="w-full max-w-[480px] bg-surface-container-lowest rounded-2xl p-10 shadow-[0_20px_50px_rgba(28,28,25,0.04)] relative overflow-hidden">
+<!-- Tonal Accent (Subtle decorative layer) -->
+<div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/20 via-primary to-primary/20 opacity-30"></div>
+<!-- Logo Section -->
+<div class="flex flex-col items-center mb-8">
+<span class="text-2xl font-serif italic text-[#C4847A] tracking-tight">Bailey &amp; Beau</span>
+</div>
+<!-- Header Section -->
+<div class="text-center mb-10">
+<h2 class="text-3xl md:text-4xl font-headline italic text-on-surface mb-3 leading-tight">Tell Us About Your Child</h2>
+<p class="text-on-surface-variant font-body text-sm tracking-wide">We'll personalise their reading experience.</p>
+</div>
+<!-- Form Content -->
+<form class="space-y-8" onsubmit="return false;">
+<!-- Inputs Group -->
+<div class="space-y-6">
+<!-- First Name -->
+<div class="space-y-2">
+<label class="block text-[13px] font-semibold text-on-surface-variant uppercase tracking-wider pl-1" for="child-name">Child's First Name</label>
+<input class="w-full h-14 bg-surface-container-low border-none rounded-xl px-5 text-on-surface placeholder:text-on-surface-variant/40 focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all duration-300" id="child-name" placeholder="Enter their name" type="text"/>
+</div>
+<!-- Age Range -->
+<div class="space-y-2">
+<label class="block text-[13px] font-semibold text-on-surface-variant uppercase tracking-wider pl-1" for="age-range">Age Range</label>
+<div class="relative">
+<select class="appearance-none w-full h-14 bg-surface-container-low border-none rounded-xl px-5 text-on-surface focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all duration-300 cursor-pointer" id="age-range">
+<option value="3-5">3–5 years</option>
+<option value="6-8">6–8 years</option>
+<option value="9-12">9–12 years</option>
+</select>
+<div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant/60">
+<span class="material-symbols-outlined">expand_more</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Avatar Selection -->
+<div class="space-y-4">
+<label class="block text-[13px] font-semibold text-on-surface-variant uppercase tracking-wider pl-1 text-center">Pick an Avatar</label>
+<div class="grid grid-cols-4 gap-4 justify-items-center max-w-[360px] mx-auto">
+<!-- Avatar Option 1 -->
+<button class="group relative outline-none" type="button">
+<div class="w-16 h-16 md:w-20 md:h-20 rounded-full bg-[#E8F0E9] flex items-center justify-center text-3xl shadow-sm transition-all duration-300 group-hover:scale-105 border-4 border-transparent focus:border-secondary ring-2 ring-transparent group-focus:ring-secondary/20">
+                                🐻
+                            </div>
+</button>
+<!-- Avatar Option 2 (Active/Selected) -->
+<button class="group relative outline-none" type="button">
+<div class="w-16 h-16 md:w-20 md:h-20 rounded-full bg-[#FCECEB] flex items-center justify-center text-3xl shadow-sm transition-all duration-300 group-hover:scale-105 border-4 border-secondary ring-2 ring-secondary/20 scale-105">
+                                🦊
+                            </div>
+<div class="absolute -top-1 -right-1 bg-secondary text-white rounded-full p-0.5 shadow-md">
+<span class="material-symbols-outlined text-[14px] font-bold">check</span>
+</div>
+</button>
+<!-- Avatar Option 3 -->
+<button class="group relative outline-none" type="button">
+<div class="w-16 h-16 md:w-20 md:h-20 rounded-full bg-[#F5EFE6] flex items-center justify-center text-3xl shadow-sm transition-all duration-300 group-hover:scale-105 border-4 border-transparent focus:border-secondary ring-2 ring-transparent">
+                                🐧
+                            </div>
+</button>
+<!-- Avatar Option 4 -->
+<button class="group relative outline-none" type="button">
+<div class="w-16 h-16 md:w-20 md:h-20 rounded-full bg-[#FEF9ED] flex items-center justify-center text-3xl shadow-sm transition-all duration-300 group-hover:scale-105 border-4 border-transparent focus:border-secondary ring-2 ring-transparent">
+                                🦋
+                            </div>
+</button>
+</div>
+</div>
+<!-- Action Button -->
+<button class="w-full h-14 bg-[#C4847A] text-white rounded-lg font-medium text-lg shadow-lg shadow-primary/10 hover:bg-primary transition-all duration-300 active:scale-[0.98]" type="submit">
+                    Continue
+                </button>
+<!-- Step Indicator -->
+<div class="flex justify-center items-center gap-3 pt-4">
+<div class="w-2.5 h-2.5 rounded-full bg-primary/20"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-primary ring-4 ring-primary/10"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-primary/20"></div>
+</div>
+</form>
+</div>
+<!-- Footer Background Elements -->
+<div class="mt-12 flex flex-col items-center gap-2 opacity-40">
+<p class="font-body text-xs uppercase tracking-[0.2em] text-on-surface-variant">© 2024 Bailey &amp; Beau. Crafted for digital stories.</p>
+</div>
+</main>
+<!-- Background Decorative Textures -->
+<div class="fixed top-0 left-0 w-full h-full -z-10 pointer-events-none opacity-50 select-none overflow-hidden">
+<div class="absolute -top-24 -left-24 w-[500px] h-[500px] rounded-full bg-primary/5 blur-[120px]"></div>
+<div class="absolute bottom-0 right-0 w-[400px] h-[400px] rounded-full bg-secondary/5 blur-[100px]"></div>
+</div>
+</body></html>

@@ -1,17 +1,27 @@
+# ─── Python / Django ──────────────────────────────────────────────────────────
 .venv/
 __pycache__/
 *.py[cod]
 *.sqlite3
-db.sqlite3
-.env
-.env.staging
-frontend/.env.local
+backend/db.sqlite3
+backend/.env
+backend/.env.staging
+backend/media/
+
+# ─── Node / Next.js ───────────────────────────────────────────────────────────
 frontend/node_modules/
 frontend/.next/
 frontend/out/
+frontend/.env.local
+frontend/.env.production.local
+
+# ─── IDE & OS ─────────────────────────────────────────────────────────────────
 .vscode/
+.DS_Store
+Thumbs.db
 *.log
 *.tmp
 *.bak
-.DS_Store
-Thumbs.db
+
+# ─── Secrets ──────────────────────────────────────────────────────────────────
+*.pem

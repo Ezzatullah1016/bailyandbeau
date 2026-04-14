@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Session Completed - The Living Storybook</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,700;1,400;1,700&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-background": "#1d1b16",
+                    "on-tertiary-container": "#ff9c7e",
+                    "surface-container-highest": "#e8e2d8",
+                    "tertiary-container": "#862400",
+                    "outline": "#73796c",
+                    "error-container": "#ffdad6",
+                    "surface-container-high": "#ede7dd",
+                    "surface-container-low": "#f9f3e9",
+                    "inverse-surface": "#33302a",
+                    "inverse-on-surface": "#f6f0e6",
+                    "on-secondary": "#ffffff",
+                    "on-primary-fixed-variant": "#2c4f15",
+                    "on-primary-fixed": "#0a2100",
+                    "tertiary-fixed": "#ffdbd0",
+                    "on-primary-container": "#98c27b",
+                    "secondary": "#835500",
+                    "primary-container": "#2d5016",
+                    "on-secondary-fixed": "#291800",
+                    "surface-container-lowest": "#ffffff",
+                    "on-secondary-fixed-variant": "#633f00",
+                    "surface-variant": "#e8e2d8",
+                    "secondary-container": "#feae2c",
+                    "on-secondary-container": "#6b4500",
+                    "on-primary": "#ffffff",
+                    "surface-dim": "#dfd9d0",
+                    "tertiary": "#5f1700",
+                    "on-tertiary": "#ffffff",
+                    "on-tertiary-fixed": "#3a0a00",
+                    "on-error-container": "#93000a",
+                    "surface": "#fff9ee",
+                    "on-error": "#ffffff",
+                    "background": "#fff9ee",
+                    "secondary-fixed": "#ffddb4",
+                    "outline-variant": "#c3c9b9",
+                    "surface-container": "#f3ede3",
+                    "primary-fixed": "#c4efa3",
+                    "on-surface-variant": "#43493d",
+                    "tertiary-fixed-dim": "#ffb59f",
+                    "inverse-primary": "#a8d38a",
+                    "primary": "#173901",
+                    "on-tertiary-fixed-variant": "#852300",
+                    "surface-tint": "#43682b",
+                    "primary-fixed-dim": "#a8d38a",
+                    "secondary-fixed-dim": "#ffb955",
+                    "error": "#ba1a1a",
+                    "on-surface": "#1d1b16",
+                    "surface-bright": "#fff9ee"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Newsreader", "serif"],
+                    "body": ["Plus Jakarta Sans", "sans-serif"],
+                    "label": ["Plus Jakarta Sans", "sans-serif"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .star-pattern {
+            background-image: radial-gradient(rgba(255, 255, 255, 0.15) 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .newsreader-italic { font-family: 'Newsreader'; font-style: italic; }
+    </style>
+</head>
+<body class="bg-primary-container min-h-screen flex items-center justify-center font-body text-on-surface p-6 overflow-x-hidden">
+<!-- Background Decoration -->
+<div class="fixed inset-0 star-pattern pointer-events-none"></div>
+<div class="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary opacity-20 blur-[120px] rounded-full pointer-events-none"></div>
+<div class="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-secondary opacity-20 blur-[120px] rounded-full pointer-events-none"></div>
+<!-- Main Content Container -->
+<main class="relative z-10 w-full max-w-[560px] flex flex-col items-center text-center">
+<!-- Celebration Header -->
+<div class="mb-8 flex flex-col items-center">
+<span aria-label="Party Popper" class="text-[72px] leading-none mb-4" role="img">🎉</span>
+<h1 class="font-headline text-5xl md:text-[48px] text-white newsreader-italic tracking-tight mb-3">
+                Amazing Session!
+            </h1>
+<p class="text-white/90 text-lg font-light max-w-[400px]">
+                You read together for 20 minutes and completed all the activities.
+            </p>
+</div>
+<!-- Badge Reveal Card -->
+<div class="w-full bg-surface-container-lowest rounded-[2rem] p-10 shadow-[0_32px_64px_-12px_rgba(23,57,1,0.3)] mb-8 transform transition-all">
+<div class="flex flex-col items-center">
+<!-- Label -->
+<span class="font-label text-xs font-extrabold uppercase tracking-[0.2em] text-secondary mb-10">
+                    NEW BADGE EARNED
+                </span>
+<!-- Animated Badge Icon -->
+<div class="relative flex items-center justify-center mb-8">
+<!-- Outer Ring 10% -->
+<div class="absolute w-[200px] h-[200px] border border-secondary/10 rounded-full"></div>
+<!-- Middle Ring 30% -->
+<div class="absolute w-[160px] h-[160px] border border-secondary/30 rounded-full"></div>
+<!-- Inner Solid Circle -->
+<div class="relative w-[120px] h-[120px] bg-secondary-container rounded-full flex items-center justify-center shadow-lg">
+<span class="material-symbols-outlined text-white text-5xl" style="font-variation-settings: 'FILL' 1;">star</span>
+</div>
+</div>
+<!-- Badge Identity -->
+<h2 class="font-headline text-[32px] text-primary newsreader-italic mb-2">Star Reader</h2>
+<p class="text-on-surface-variant text-base mb-8">Awarded for completing your first full reading session.</p>
+<!-- Divider -->
+<div class="w-full h-px bg-outline-variant/20 mb-8"></div>
+<!-- Session Summary Grid -->
+<div class="grid grid-cols-2 gap-y-6 gap-x-4 w-full text-left">
+<div class="flex items-start gap-3">
+<span class="material-symbols-outlined text-primary text-xl">auto_stories</span>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Book</span>
+<span class="text-sm font-semibold text-primary">The Big Red Adventure</span>
+</div>
+</div>
+<div class="flex items-start gap-3">
+<span class="material-symbols-outlined text-primary text-xl">schedule</span>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Duration</span>
+<span class="text-sm font-semibold text-primary">20 minutes</span>
+</div>
+</div>
+<div class="flex items-start gap-3">
+<span class="material-symbols-outlined text-primary text-xl">description</span>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Pages Read</span>
+<span class="text-sm font-semibold text-primary">24 of 24</span>
+</div>
+</div>
+<div class="flex items-start gap-3">
+<span class="material-symbols-outlined text-primary text-xl">track_changes</span>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Activities</span>
+<span class="text-sm font-semibold text-primary">3 completed</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Action Buttons -->
+<div class="flex flex-col sm:flex-row items-center gap-4 w-full mb-10">
+<button class="w-full sm:flex-1 bg-gradient-to-br from-secondary-container to-secondary text-on-secondary-container font-bold py-4 px-8 rounded-xl shadow-lg hover:brightness-105 active:scale-95 transition-all text-sm uppercase tracking-widest">
+                Read Another Book
+            </button>
+<button class="w-full sm:flex-1 border-2 border-white/30 text-white font-bold py-4 px-8 rounded-xl hover:bg-white/10 active:scale-95 transition-all text-sm uppercase tracking-widest">
+                Go to Dashboard
+            </button>
+</div>
+<!-- Share Row -->
+<div class="flex flex-col items-center gap-4">
+<span class="text-white/60 text-xs font-medium uppercase tracking-[0.1em]">Share this achievement:</span>
+<div class="flex gap-4">
+<button class="w-12 h-12 flex items-center justify-center rounded-full border border-white/20 text-white hover:bg-white/10 transition-colors">
+<svg class="w-5 h-5 fill-current" viewbox="0 0 24 24"><path d="M12.012 2c-5.508 0-9.987 4.479-9.987 9.987 0 1.763.462 3.426 1.262 4.876l-1.341 4.89 5.004-1.314c1.406.766 3.013 1.204 4.719 1.204 5.507 0 9.988-4.479 9.988-9.987 0-5.508-4.481-9.987-9.988-9.987zm6.37 14.5c-.267.753-1.332 1.378-1.854 1.458-.466.071-1.072.128-1.725-.084-2.614-.85-4.298-3.491-4.428-3.664-.131-.173-1.066-1.421-1.066-2.709s.672-1.921.91-2.184c.241-.262.525-.328.7-.328.175 0 .35 0 .504.009.16.008.374-.061.583.447.214.521.733 1.789.797 1.921.064.13.107.284.02.457-.086.173-.131.282-.261.433-.129.151-.274.337-.392.454-.131.13-.267.271-.115.534.151.262.673 1.112 1.445 1.801.996.888 1.838 1.163 2.099 1.294.262.131.415.11.568-.066.154-.176.657-.766.833-1.028.175-.262.35-.219.591-.131s1.531.722 1.794.853c.262.131.437.197.502.307.066.11.066.634-.201 1.387z"></path></svg>
+</button>
+<button class="w-12 h-12 flex items-center justify-center rounded-full border border-white/20 text-white hover:bg-white/10 transition-colors">
+<span class="material-symbols-outlined text-xl">mail</span>
+</button>
+<button class="w-12 h-12 flex items-center justify-center rounded-full border border-white/20 text-white hover:bg-white/10 transition-colors">
+<span class="material-symbols-outlined text-xl">link</span>
+</button>
+</div>
+</div>
+</main>
+<!-- Top App Bar Content -->
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-6 py-6 pointer-events-none">
+<div class="text-2xl font-bold text-white newsreader-italic pointer-events-auto">
+            The Living Storybook
+        </div>
+<button class="w-10 h-10 flex items-center justify-center text-white/80 hover:text-white pointer-events-auto transition-colors">
+<span class="material-symbols-outlined text-3xl">close</span>
+</button>
+</header>
+</body></html>

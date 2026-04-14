@@ -1,0 +1,76 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Bailey & Beau | Live sessions{% endblock %}
+{% block page_title %}Live sessions{% endblock %}
+{% block page_subtitle %}Real-time monitoring for active story rooms, reconnections, and recent reading activity.{% endblock %}
+{% block page_actions %}
+<a href="{% url 'admin_session_monitor' %}" class="rounded-xl border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-stone-50">Open full session log</a>
+{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex items-center gap-3 rounded-2xl border border-stone-200 bg-white px-4 py-3 shadow-sm">
+    <span class="inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+    <p class="text-sm font-semibold text-slate-900">{{ active_count }} live sessions active right now</p>
+</div>
+
+<div class="grid gap-6 md:grid-cols-3">
+    {% for row in live_rows %}
+    <article class="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+        <div class="flex items-start justify-between gap-3"><span class="text-xs font-bold tracking-[0.2em] text-slate-500">#{{ row.short_id }}</span><span class="font-editorial text-3xl font-semibold text-brand-dark">{{ row.duration_clock }}</span></div>
+        <h3 class="mt-3 text-lg font-semibold text-slate-900">{{ row.book_title }}</h3>
+        <p class="text-xs text-slate-500">{{ row.room_type }}</p>
+        <div class="mt-4 rounded-xl bg-stone-50 px-3 py-3 text-sm text-slate-700"><p><strong>Host:</strong> {{ row.host_name }}</p><p><strong>Guest:</strong> {{ row.guest_name }}</p></div>
+        <div class="mt-4"><div class="mb-1 flex items-center justify-between text-xs font-semibold"><span>Progress</span><span>{{ row.progress_label }}</span></div><div class="h-2 rounded-full bg-stone-100"><div class="h-2 rounded-full bg-brand-dark" style="width: {{ row.progress_percent }}%"></div></div></div>
+        <p class="mt-4 text-xs italic text-slate-500">{{ row.note }}</p>
+        <div class="mt-4 flex items-center justify-between"><span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ row.status_tone }}">{{ row.status }}</span><a href="?session={{ row.id }}" class="text-sm font-semibold text-brand-dark hover:underline">View details</a></div>
+    </article>
+    {% empty %}
+    <article class="rounded-2xl border border-stone-200 bg-white p-8 shadow-sm md:col-span-3"><div class="flex flex-col items-center gap-3 text-center"><span class="material-symbols-outlined text-4xl text-slate-300">wifi_off</span><p class="text-sm font-semibold text-slate-600">No live sessions right now</p><p class="text-xs text-slate-400">Active rooms will appear here automatically when reading sessions start.</p></div></article>
+    {% endfor %}
+</div>
+
+{% if selected_session %}
+<section class="mt-6 overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
+    <div class="flex items-center justify-between border-b border-stone-200 px-5 py-4"><h3 class="text-lg font-semibold text-slate-900">Session detail — #{{ selected_session.id|stringformat:'s'|slice:':8'|upper }}</h3><span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ selected_session.get_status_display|lower }}">{{ selected_session.get_status_display }}</span></div>
+    <div class="grid gap-6 lg:grid-cols-[0.8fr_1.2fr] p-5">
+        <div>
+            <h4 class="text-sm font-semibold text-slate-900">Event timeline</h4>
+            <div class="mt-4 space-y-3">
+                {% for item in selected_timeline %}
+                <div class="rounded-xl bg-stone-50 px-3 py-3"><p class="font-semibold text-slate-900">{{ item.label }}</p><p class="text-xs text-slate-500">{{ item.meta }} · {{ item.timestamp }}</p></div>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2">
+            <div class="rounded-xl bg-stone-50 p-4"><p class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Book</p><p class="mt-2 font-semibold text-slate-900">{{ selected_session.book.title }}</p></div>
+            <div class="rounded-xl bg-stone-50 p-4"><p class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Child</p><p class="mt-2 font-semibold text-slate-900">{{ selected_session.child_profile.display_name }}</p></div>
+            <div class="rounded-xl bg-stone-50 p-4"><p class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Started</p><p class="mt-2 font-semibold text-slate-900">{% if selected_session.started_at %}{{ selected_session.started_at|date:'d M Y, h:i A' }}{% else %}Not started{% endif %}</p></div>
+            <div class="rounded-xl bg-stone-50 p-4"><p class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Reconnects</p><p class="mt-2 font-semibold text-slate-900">{{ selected_session.events.count }}</p></div>
+        </div>
+    </div>
+</section>
+{% endif %}
+
+<section class="mt-6 overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
+    <div class="border-b border-stone-200 px-5 py-4"><h3 class="text-lg font-semibold text-slate-900">Recent sessions</h3></div>
+    <div class="overflow-x-auto">
+        <table class="table-hover min-w-full text-left text-sm">
+            <thead class="bg-stone-50 text-slate-500"><tr><th class="px-5 py-3 font-semibold">ID</th><th class="px-5 py-3 font-semibold">Book</th><th class="px-5 py-3 font-semibold">Host</th><th class="px-5 py-3 font-semibold">Guest</th><th class="px-5 py-3 font-semibold">Start</th><th class="px-5 py-3 font-semibold">Status</th></tr></thead>
+            <tbody class="divide-y divide-stone-100">
+                {% for row in recent_session_rows %}
+                <tr>
+                    <td class="px-5 py-4 font-semibold text-brand-dark">#{{ row.short_id }}</td>
+                    <td class="px-5 py-4">{{ row.book_title }}</td>
+                    <td class="px-5 py-4">{{ row.host_name }}</td>
+                    <td class="px-5 py-4">{{ row.guest_name }}</td>
+                    <td class="px-5 py-4 text-slate-600">{{ row.started_display }}</td>
+                    <td class="px-5 py-4"><span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ row.status_tone }}">{{ row.status }}</span></td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="px-5 py-10 text-center text-slate-500">No recent sessions to display.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

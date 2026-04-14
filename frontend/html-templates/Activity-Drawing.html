@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>The Midnight Library - Drawing Room</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&amp;family=Plus+Jakarta+Sans:wght@200..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "error-container": "#93000a",
+                    "secondary-fixed": "#d6e9c4",
+                    "on-secondary-container": "#a9bb99",
+                    "surface-container-lowest": "#0e0e0e",
+                    "on-primary-container": "#98c27b",
+                    "inverse-primary": "#43682b",
+                    "surface-bright": "#393939",
+                    "on-secondary": "#26341c",
+                    "inverse-on-surface": "#313030",
+                    "outline-variant": "#43493d",
+                    "on-background": "#e5e2e1",
+                    "surface-dim": "#131313",
+                    "surface-container-low": "#1c1b1b",
+                    "primary-container": "#2d5016",
+                    "on-surface": "#e5e2e1",
+                    "on-error": "#690005",
+                    "surface-variant": "#353535",
+                    "primary": "#a8d38a",
+                    "tertiary-fixed": "#ffddb4",
+                    "on-primary-fixed": "#0a2100",
+                    "tertiary-container": "#644000",
+                    "surface-container-high": "#2a2a2a",
+                    "secondary-container": "#3c4b30",
+                    "on-primary-fixed-variant": "#2c4f15",
+                    "secondary-fixed-dim": "#bacca9",
+                    "on-error-container": "#ffdad6",
+                    "outline": "#8d9385",
+                    "primary-fixed": "#c4efa3",
+                    "on-primary": "#163801",
+                    "on-tertiary-fixed": "#291800",
+                    "on-tertiary-container": "#f5a623",
+                    "background": "#131313",
+                    "on-secondary-fixed-variant": "#3c4b30",
+                    "tertiary": "#ffb955",
+                    "on-secondary-fixed": "#111f09",
+                    "on-tertiary": "#452b00",
+                    "on-tertiary-fixed-variant": "#633f00",
+                    "on-surface-variant": "#c3c9b9",
+                    "secondary": "#bacca9",
+                    "error": "#ffb4ab",
+                    "surface": "#131313",
+                    "inverse-surface": "#e5e2e1",
+                    "surface-container": "#20201f",
+                    "surface-tint": "#a8d38a",
+                    "surface-container-highest": "#353535",
+                    "tertiary-fixed-dim": "#ffb955",
+                    "primary-fixed-dim": "#a8d38a"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Newsreader"],
+                    "body": ["Plus Jakarta Sans"],
+                    "label": ["Plus Jakarta Sans"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .font-serif { font-family: 'Newsreader', serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .canvas-container {
+            height: calc(100vh - 180px);
+            width: calc(100% - 256px);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background overflow-hidden">
+<!-- TopNavBar -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-6 py-4 bg-[#131313] dark:bg-[#131313] backdrop-blur-xl bg-opacity-60">
+<div class="flex items-center gap-4">
+<h1 class="font-serif italic text-2xl text-[#a8d38a]">Drawing Time</h1>
+</div>
+<div class="flex items-center gap-6">
+<div class="font-serif text-[#ffb955] text-xl tracking-widest">00:00</div>
+<button class="bg-[#2d5016] text-[#a8d38a] px-6 py-2 rounded-full font-medium hover:bg-[#2A2A2A] transition-all duration-300 active:scale-95">
+                End Session
+            </button>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="pt-24 flex">
+<!-- Interactive Drawing Canvas Section -->
+<div class="canvas-container flex flex-col items-center justify-center px-8 relative">
+<div class="w-[85%] h-[80%] bg-white rounded-2xl shadow-2xl overflow-hidden relative border-[12px] border-surface-container-high">
+<!-- Storybook Illustration Placeholder -->
+<div class="absolute inset-0 flex items-center justify-center p-12">
+<img alt="Illustration" class="max-w-full max-h-full object-contain opacity-80" data-alt="Minimalist black ink line art illustration of a friendly woodland owl wearing a tiny scholarly cap, centered on a clean white background for coloring." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAP_mjQcKLLGBu1enzHgOv6VbJ6t4onERRZtXiJX6kEh8cfqtNjtpDNBC1PzpJOS_IDlwezhYEz9aUPbJYpiz1h_6NaBt2Lm7hvm58D_GtFlnk6U04ek39QQgsXBez_950MbNf3B5gkSf2E3xRTFtgGwiDLV9t5evqoGDzuybZRvsCUXO7kXUzsr-soiVBwv5bkXLY_WNc-sX7nrsmfsnyetW3-CHI17U_n6ZaaICeikyWTh-_YRREuBTAHXtzq4SoCcfyoppnVlqvm"/>
+</div>
+</div>
+<!-- Toolbar -->
+<div class="mt-8 flex items-center gap-8 px-8 py-4 bg-surface-container-high rounded-2xl shadow-2xl border-outline-variant/10 border-[1px]">
+<!-- Palette -->
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-[#ef4444] cursor-pointer hover:scale-110 transition-transform shadow-inner ring-2 ring-white/10"></div>
+<div class="w-8 h-8 rounded-full bg-[#f97316] cursor-pointer hover:scale-110 transition-transform shadow-inner ring-2 ring-white/10"></div>
+<div class="w-8 h-8 rounded-full bg-[#eab308] cursor-pointer hover:scale-110 transition-transform shadow-inner ring-2 ring-white/10"></div>
+<div class="w-8 h-8 rounded-full bg-[#22c55e] cursor-pointer hover:scale-110 transition-transform shadow-inner ring-2 ring-white/10 ring-offset-2 ring-offset-surface-container-high"></div>
+<div class="w-8 h-8 rounded-full bg-[#3b82f6] cursor-pointer hover:scale-110 transition-transform shadow-inner ring-2 ring-white/10"></div>
+<div class="w-8 h-8 rounded-full bg-[#a855f7] cursor-pointer hover:scale-110 transition-transform shadow-inner ring-2 ring-white/10"></div>
+<div class="w-8 h-8 rounded-full bg-[#78350f] cursor-pointer hover:scale-110 transition-transform shadow-inner ring-2 ring-white/10"></div>
+<div class="w-8 h-8 rounded-full bg-[#000000] cursor-pointer hover:scale-110 transition-transform shadow-inner ring-2 ring-white/10"></div>
+</div>
+<div class="w-[1px] h-8 bg-outline-variant/20"></div>
+<!-- Brush Sizes -->
+<div class="flex items-center gap-4">
+<div class="w-2 h-2 bg-on-surface-variant rounded-full cursor-pointer hover:bg-primary transition-colors"></div>
+<div class="w-4 h-4 bg-primary rounded-full cursor-pointer hover:scale-110 transition-transform ring-2 ring-primary/20"></div>
+<div class="w-6 h-6 bg-on-surface-variant rounded-full cursor-pointer hover:bg-primary transition-colors"></div>
+</div>
+<div class="w-[1px] h-8 bg-outline-variant/20"></div>
+<!-- Tools -->
+<div class="flex items-center gap-6">
+<button class="flex items-center justify-center p-2 rounded-lg hover:bg-surface-variant transition-all text-on-surface-variant hover:text-primary">
+<span class="material-symbols-outlined" data-icon="ink_eraser">ink_eraser</span>
+</button>
+<button class="text-tertiary font-medium px-4 py-2 rounded-lg hover:bg-tertiary/10 transition-all text-sm uppercase tracking-wider">
+                        Clear
+                    </button>
+</div>
+</div>
+</div>
+<!-- SideNavBar / Video Panels -->
+<aside class="fixed right-0 top-0 h-full flex flex-col pt-20 pb-8 px-4 gap-4 bg-[#131313] dark:bg-[#131313] w-64 shadow-2xl shadow-black/40">
+<div class="flex flex-col gap-1 mb-2 px-2">
+<h3 class="font-sans tracking-wide text-[11px] uppercase text-[#a8d38a]">Family Room</h3>
+<p class="text-[10px] text-on-surface-variant opacity-60">Video Feed</p>
+</div>
+<!-- Video Slots -->
+<div class="flex flex-col gap-4 flex-grow">
+<div class="relative aspect-video bg-[#0E0E0E] rounded-xl overflow-hidden group">
+<img alt="Primary reader view" class="w-full h-full object-cover opacity-80" data-alt="Close up video call screen showing an elderly man with glasses smiling warmly in a cozy living room with soft bookshelf lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAr54zxHZ79P8g-oJTFC4Ce3M8ZoWX2C26izfW9VjZQ7wKhhM_FiMKGsC8myc29TmHrVIuCWOKxeRPwJ8BMKWEb5Q7gAud5NxJUxgz184B9WQN7WesoouxMYqrlkllD_0rXaYHtTPEDzQB80FErpGmtugQuOY_JnutfpPYIrKFselU5gKt5cAbBbzvSldsX4gC038oXz2R1RcvdzFzjRZX8B2PVLh3Wn5-R7yMZfvYxHDOsOdXc9IINKZybFLCI5sAV5-Wzk4CIltEq"/>
+<div class="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded text-[10px] text-white">Grandpa</div>
+</div>
+<div class="relative aspect-video bg-[#0E0E0E] rounded-xl overflow-hidden group border-2 border-primary/30">
+<img alt="User view" class="w-full h-full object-cover opacity-90" data-alt="Selfie-view video panel of a young child focused intently on drawing, illuminated by the soft white glow of a tablet screen." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAed33wc_5mEDS4PbQ7bN6gUm5WY2A6hm_A_-EhAVG2JWnbtm4eROGqTRXnU27D1dByooA-cRsjJKNK1y8-N5ozkd_SkqUAWkU_6Y2fKRD2ZNrG6NtYWaTgtUQUvrA6Pj35S3cyt-gY0eY7U7km1sc1suXoaw5RDsGLdWJdzxU0wDoqdH0UALWQvJYH7zdb4_v6dnnqjdEiqZ5Jktyth88nSBT54JbP8xGBBnwKRd5Wxk1TDOtfSl-yleDp3ILc25v2372Xw1v-Gs9l"/>
+<div class="absolute bottom-2 left-2 bg-primary-container text-primary px-2 py-0.5 rounded text-[10px]">Me</div>
+</div>
+</div>
+<!-- Side Nav Tabs -->
+<nav class="flex flex-col gap-2 mt-auto border-t border-outline-variant/10 pt-4">
+<button class="flex items-center gap-3 bg-[#2d5016] text-[#a8d38a] rounded-lg mx-2 px-4 py-3 transition-all duration-300">
+<span class="material-symbols-outlined" data-icon="arrow_forward">arrow_forward</span>
+<span class="font-sans tracking-wide text-[11px] uppercase">Next Activity</span>
+</button>
+<button class="flex items-center gap-3 text-[#e5e2e1] opacity-60 px-4 py-3 hover:bg-[#2A2A2A] rounded-xl transition-all duration-300">
+<span class="material-symbols-outlined" data-icon="restart_alt">restart_alt</span>
+<span class="font-sans tracking-wide text-[11px] uppercase">Reset</span>
+</button>
+<div class="mt-4 flex flex-col gap-1">
+<button class="flex items-center gap-3 text-[#e5e2e1] opacity-60 px-4 py-3 hover:bg-[#2A2A2A] rounded-xl transition-all duration-300">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-sans tracking-wide text-[11px] uppercase">Settings</span>
+</button>
+</div>
+</nav>
+</aside>
+</main>
+<!-- Background Atmospheric Touches -->
+<div class="fixed top-0 left-0 w-full h-full pointer-events-none -z-10 bg-gradient-to-tr from-surface-dim via-background to-surface-container-low opacity-50"></div>
+</body></html>

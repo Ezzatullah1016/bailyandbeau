@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>The Midnight Library - Story Quiz</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,600;1,400;1,600&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "error-container": "#93000a",
+                    "secondary-fixed": "#d6e9c4",
+                    "on-secondary-container": "#a9bb99",
+                    "surface-container-lowest": "#0e0e0e",
+                    "on-primary-container": "#98c27b",
+                    "inverse-primary": "#43682b",
+                    "surface-bright": "#393939",
+                    "on-secondary": "#26341c",
+                    "inverse-on-surface": "#313030",
+                    "outline-variant": "#43493d",
+                    "on-background": "#e5e2e1",
+                    "surface-dim": "#131313",
+                    "surface-container-low": "#1c1b1b",
+                    "primary-container": "#2d5016",
+                    "on-surface": "#e5e2e1",
+                    "on-error": "#690005",
+                    "surface-variant": "#353535",
+                    "primary": "#a8d38a",
+                    "tertiary-fixed": "#ffddb4",
+                    "on-primary-fixed": "#0a2100",
+                    "tertiary-container": "#644000",
+                    "surface-container-high": "#2a2a2a",
+                    "secondary-container": "#3c4b30",
+                    "on-primary-fixed-variant": "#2c4f15",
+                    "secondary-fixed-dim": "#bacca9",
+                    "on-error-container": "#ffdad6",
+                    "outline": "#8d9385",
+                    "primary-fixed": "#c4efa3",
+                    "on-primary": "#163801",
+                    "on-tertiary-fixed": "#291800",
+                    "on-tertiary-container": "#f5a623",
+                    "background": "#131313",
+                    "on-secondary-fixed-variant": "#3c4b30",
+                    "tertiary": "#ffb955",
+                    "on-secondary-fixed": "#111f09",
+                    "on-tertiary": "#452b00",
+                    "on-tertiary-fixed-variant": "#633f00",
+                    "on-surface-variant": "#c3c9b9",
+                    "secondary": "#bacca9",
+                    "error": "#ffb4ab",
+                    "surface": "#131313",
+                    "inverse-surface": "#e5e2e1",
+                    "surface-container": "#20201f",
+                    "surface-tint": "#a8d38a",
+                    "surface-container-highest": "#353535",
+                    "tertiary-fixed-dim": "#ffb955",
+                    "primary-fixed-dim": "#a8d38a"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Newsreader", "serif"],
+                    "body": ["Plus Jakarta Sans", "sans-serif"],
+                    "label": ["Plus Jakarta Sans", "sans-serif"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .serif-italic { font-family: 'Newsreader', serif; font-style: italic; }
+        .sans-jakarta { font-family: 'Plus Jakarta Sans', sans-serif; }
+    </style>
+</head>
+<body class="bg-background text-on-surface sans-jakarta selection:bg-primary-container selection:text-on-primary-container min-h-screen overflow-x-hidden">
+<!-- TopAppBar -->
+<nav class="fixed top-0 w-full z-50 flex justify-between items-center px-6 py-4 bg-[#131313] dark:bg-[#131313] backdrop-blur-xl bg-opacity-60">
+<div class="flex items-center gap-4">
+<span class="font-serif text-xl italic text-[#a8d38a] dark:text-[#a8d38a]">The Midnight Library</span>
+<span class="text-on-surface opacity-40">|</span>
+<span class="text-on-surface-variant font-medium">Story Quiz</span>
+</div>
+<div class="flex items-center gap-6">
+<span class="font-serif text-[#ffb955] text-lg">00:00</span>
+<button class="bg-primary-container text-on-primary-container px-6 py-2 rounded-full font-bold hover:bg-[#2A2A2A] transition-all duration-300 active:scale-95 duration-200 active:opacity-80">
+                End Session
+            </button>
+</div>
+</nav>
+<!-- SideNavBar (Right) -->
+<aside class="fixed right-0 top-0 h-full w-64 bg-[#131313] dark:bg-[#131313] flex flex-col pt-20 pb-8 px-4 gap-4 shadow-2xl shadow-black/40 z-40">
+<div class="mb-4">
+<h4 class="font-sans tracking-wide text-[11px] uppercase text-[#a8d38a] px-4">Family Room</h4>
+<p class="text-[10px] text-on-surface opacity-40 px-4 uppercase tracking-widest">Video Feed</p>
+</div>
+<div class="space-y-4 flex-1">
+<!-- Video Slot 1 -->
+<div class="aspect-video bg-[#0E0E0E] rounded-xl overflow-hidden relative group cursor-pointer hover:bg-[#2A2A2A] transition-all">
+<img alt="Reader interface view" class="w-full h-full object-cover opacity-60" data-alt="close-up view of an open leather-bound book on a dark wood table with a candle flame flickering nearby" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCQzfO73wIHW3Mr2Y4fWm9e5I_fsRvoOJDDjyHTNdTVRlsiRWKtIipKIVxLzmwK9wvA44SDMdm2o8U_V7g6GDHd3GroDxMYpBJA_a10a0Xphn5J55o28HPD4jtjy_DGOFdsioz9tlraG1o-fzt875eZdxrxN0cHYVCAXSqKTQc3GiVk2-FU4iOLmKz5S0nCbAg45SeV5x2Eh6t7P1XyDfW6SyAUZnOV_S_LNEdJryxFQJOQ0A6GyxLV6OdCBAsb0ityEnqMbUL9V2Eu"/>
+<div class="absolute bottom-2 left-2 flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+<span class="text-[10px] uppercase font-bold text-on-surface">Primary View</span>
+</div>
+</div>
+<!-- Video Slot 2 -->
+<div class="aspect-video bg-[#0E0E0E] rounded-xl overflow-hidden relative group cursor-pointer hover:bg-[#2A2A2A] transition-all">
+<img alt="Secondary reader view" class="w-full h-full object-cover opacity-40" data-alt="a cozy corner of a dimly lit library with tall bookshelves and a velvet armchair in the shadows" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB7d9CwucnFHovi0N2Wi-iG82DgmUnH-rDG12UEsqzPcGOFFOIaxldThMXgJ8N6261wW19FibPr5KGRbQvO8XNdJony1JaqUmo5zMgFmBnxmYYCgUOT-VKlmA20lDUwihbVzSdwarlCgUDHz6JPqq0hJdLSUsCKmE-W352N6ZH7mLTQ10hkE_zyMaWG-6whAwar8I9SB1DxWQ323t4wPM6DShQQQ27FEl_iufnsx9bzQu22diqrTL69Yr7cSKV8umZx8n7CFv3XE6sj"/>
+<div class="absolute bottom-2 left-2">
+<span class="text-[10px] uppercase font-bold text-on-surface opacity-60">Study Corner</span>
+</div>
+</div>
+</div>
+<!-- Navigation Tabs -->
+<nav class="flex flex-col gap-1">
+<button class="flex items-center gap-3 bg-[#2d5016] text-[#a8d38a] rounded-lg mx-2 px-4 py-3 transition-all duration-200">
+<span class="material-symbols-outlined">arrow_forward</span>
+<span class="font-sans tracking-wide text-[11px] uppercase font-bold">Next Activity</span>
+</button>
+<button class="flex items-center gap-3 text-[#e5e2e1] opacity-60 px-4 py-3 hover:bg-[#2A2A2A] rounded-xl transition-all duration-200">
+<span class="material-symbols-outlined">restart_alt</span>
+<span class="font-sans tracking-wide text-[11px] uppercase">Reset</span>
+</button>
+</nav>
+<div class="mt-auto border-t border-outline-variant/15 pt-4">
+<button class="flex items-center gap-3 text-[#e5e2e1] opacity-60 px-4 py-3 hover:bg-[#2A2A2A] rounded-xl w-full transition-all">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-sans tracking-wide text-[11px] uppercase">Settings</span>
+</button>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="pt-24 pb-12 pr-64 pl-0 flex flex-col items-center justify-center min-h-screen bg-[#1A1A1A]">
+<!-- Quiz Panel -->
+<div class="w-full max-w-[600px] bg-on-surface rounded-2xl shadow-2xl p-10 flex flex-col gap-8 relative overflow-hidden">
+<!-- Atmospheric Accent -->
+<div class="absolute top-0 right-0 w-32 h-32 bg-primary/10 blur-[64px] pointer-events-none"></div>
+<!-- Header Section -->
+<div class="flex flex-col gap-6">
+<div>
+<span class="inline-flex items-center px-4 py-1.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed text-xs font-bold uppercase tracking-widest shadow-sm">
+                        Question 2 of 5
+                    </span>
+</div>
+<h3 class="font-headline text-4xl text-surface font-semibold leading-tight italic">
+                    What did Bailey find behind the red door?
+                </h3>
+</div>
+<!-- Answer Buttons Grid -->
+<div class="grid grid-cols-1 gap-4">
+<!-- Option A -->
+<button class="group flex items-center p-5 rounded-xl bg-surface-container-low text-on-surface text-left transition-all duration-300 hover:bg-surface-container-high active:scale-[0.98]">
+<span class="w-10 h-10 flex items-center justify-center rounded-lg bg-surface-container-highest text-primary font-bold mr-4 group-hover:bg-primary-container group-hover:text-on-primary-container transition-colors">A</span>
+<span class="text-lg font-medium text-surface-dim">A treasure chest</span>
+</button>
+<!-- Option B (Correct State) -->
+<button class="group flex items-center p-5 rounded-xl bg-primary-container text-on-primary-container text-left shadow-lg shadow-primary-container/20 ring-2 ring-primary border-transparent transition-all duration-300 scale-[1.02]">
+<span class="w-10 h-10 flex items-center justify-center rounded-lg bg-primary text-on-primary font-bold mr-4">B</span>
+<span class="text-lg font-bold">A friendly dragon</span>
+<span class="material-symbols-outlined ml-auto" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</button>
+<!-- Option C -->
+<button class="group flex items-center p-5 rounded-xl bg-surface-container-low text-on-surface text-left transition-all duration-300 hover:bg-surface-container-high active:scale-[0.98]">
+<span class="w-10 h-10 flex items-center justify-center rounded-lg bg-surface-container-highest text-primary font-bold mr-4 group-hover:bg-primary-container group-hover:text-on-primary-container transition-colors">C</span>
+<span class="text-lg font-medium text-surface-dim">A hidden garden</span>
+</button>
+<!-- Option D -->
+<button class="group flex items-center p-5 rounded-xl bg-surface-container-low text-on-surface text-left transition-all duration-300 hover:bg-surface-container-high active:scale-[0.98]">
+<span class="w-10 h-10 flex items-center justify-center rounded-lg bg-surface-container-highest text-primary font-bold mr-4 group-hover:bg-primary-container group-hover:text-on-primary-container transition-colors">D</span>
+<span class="text-lg font-medium text-surface-dim">An old key</span>
+</button>
+</div>
+<!-- Action Section -->
+<div class="pt-6 flex justify-center">
+<button class="relative group px-12 py-4 rounded-full overflow-hidden transition-all duration-500 hover:shadow-xl hover:shadow-primary/20">
+<!-- Gradient Background -->
+<div class="absolute inset-0 bg-gradient-to-br from-primary to-primary-container transition-transform group-hover:scale-105"></div>
+<span class="relative flex items-center gap-2 text-on-primary font-bold text-lg uppercase tracking-widest">
+                        Reveal Answer
+                        <span class="material-symbols-outlined text-xl">auto_awesome</span>
+</span>
+</button>
+</div>
+<!-- Footer Meta -->
+<div class="flex items-center justify-between pt-4 border-t border-surface-container-low/50">
+<p class="text-sm text-surface-dim opacity-50 italic font-headline">From the chapter: "The Crimson Threshold"</p>
+<div class="flex gap-2">
+<span class="w-2 h-2 rounded-full bg-surface-container-high"></span>
+<span class="w-4 h-2 rounded-full bg-primary"></span>
+<span class="w-2 h-2 rounded-full bg-surface-container-high"></span>
+<span class="w-2 h-2 rounded-full bg-surface-container-high"></span>
+<span class="w-2 h-2 rounded-full bg-surface-container-high"></span>
+</div>
+</div>
+</div>
+<!-- Decorative Elements -->
+<div class="mt-12 text-on-surface/30 flex items-center gap-4">
+<span class="material-symbols-outlined text-sm">auto_stories</span>
+<span class="text-[11px] uppercase tracking-[0.2em] font-medium">Immersive Reading Mode Active</span>
+</div>
+</main>
+</body></html>

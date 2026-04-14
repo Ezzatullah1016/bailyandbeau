@@ -1,0 +1,184 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Bailey & Beau | Badge manager{% endblock %}
+{% block page_title %}Badge manager{% endblock %}
+{% block page_subtitle %}Create visibility into badge triggers, award frequency, and recent milestone activity across child profiles.{% endblock %}
+
+{% block content %}
+<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <article class="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+        <p class="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500">Total badges</p>
+        <p class="mt-3 text-3xl font-extrabold text-slate-900">{{ badge_stats.total }}</p>
+    </article>
+    <article class="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+        <p class="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500">Times awarded</p>
+        <p class="mt-3 text-3xl font-extrabold text-slate-900">{{ badge_stats.awarded }}</p>
+    </article>
+    <article class="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+        <p class="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500">Most earned</p>
+        <p class="mt-3 text-xl font-bold text-slate-900">{{ badge_stats.most_earned }}</p>
+    </article>
+    <article class="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+        <p class="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500">Never earned</p>
+        <p class="mt-3 text-3xl font-extrabold text-slate-900">{{ badge_stats.never_earned }}</p>
+    </article>
+</div>
+
+<div class="mt-6 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+    {# Left: badge table #}
+    <section class="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
+        <div class="flex items-center justify-between border-b border-stone-200 px-5 py-4">
+            <h3 class="text-lg font-semibold text-slate-900">All badges</h3>
+            <span class="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold">{{ badge_rows|length }} badges</span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="table-hover min-w-full text-left text-sm">
+                <thead class="bg-stone-50 text-slate-500">
+                    <tr>
+                        <th class="px-5 py-3 font-semibold">Badge</th>
+                        <th class="px-5 py-3 font-semibold">Trigger</th>
+                        <th class="px-5 py-3 font-semibold">Awarded</th>
+                        <th class="px-5 py-3 font-semibold">Status</th>
+                        <th class="px-5 py-3 font-semibold text-right">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-stone-100">
+                    {% for badge in badge_rows %}
+                    <tr class="{% if selected_badge and selected_badge.id == badge.id %}bg-rose-50/30{% endif %}">
+                        <td class="px-5 py-4">
+                            <p class="font-semibold text-slate-900">{{ badge.name }}</p>
+                            <p class="text-xs text-slate-500">{{ badge.description }}</p>
+                        </td>
+                        <td class="px-5 py-4 text-slate-600">{{ badge.trigger_type }}</td>
+                        <td class="px-5 py-4 font-semibold text-slate-900">{{ badge.award_total }}</td>
+                        <td class="px-5 py-4"><span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ badge.status_tone }}">{{ badge.status_label }}</span></td>
+                        <td class="px-5 py-4 text-right">
+                            <a href="?selected={{ badge.id }}" class="text-sm font-semibold text-brand-dark hover:underline">Awards</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="px-5 py-16 text-center"><div class="flex flex-col items-center gap-3"><span class="material-symbols-outlined text-4xl text-slate-300">military_tech</span><p class="text-sm font-medium text-slate-500">No badges configured yet.</p></div></td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    {# Right: selected badge detail + awards table #}
+    <section class="rounded-2xl border border-stone-200 bg-white shadow-sm overflow-hidden">
+        {% if selected_badge %}
+        <div class="border-b border-stone-200 px-5 py-4">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <h3 class="text-lg font-semibold text-slate-900">{{ selected_badge.name }}</h3>
+                    <p class="mt-0.5 text-sm text-slate-500">{{ selected_badge.description|default:'No description.' }}</p>
+                </div>
+                <span class="flex-shrink-0 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">{{ selected_badge.trigger_type|title }}</span>
+            </div>
+        </div>
+        <div class="grid grid-cols-2 border-b border-stone-200">
+            <div class="border-r border-stone-200 px-5 py-4">
+                <p class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Total awards</p>
+                <p class="mt-2 text-2xl font-bold text-slate-900">{{ selected_badge_awards }}</p>
+            </div>
+            <div class="px-5 py-4">
+                <p class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Last awarded</p>
+                <p class="mt-2 text-sm font-semibold text-slate-900">{% if selected_badge_last_awarded %}{{ selected_badge_last_awarded|date:'d M Y' }}{% else %}Never{% endif %}</p>
+            </div>
+        </div>
+
+        {# Awards table with revoke #}
+        <div>
+            <div class="border-b border-stone-200 px-5 py-3">
+                <p class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Award history</p>
+            </div>
+            {% if selected_badge_award_rows %}
+            <div class="overflow-x-auto">
+                <table class="table-hover min-w-full text-left text-sm">
+                    <thead class="bg-stone-50 text-slate-500">
+                        <tr>
+                            <th class="px-4 py-2.5 font-semibold">Child</th>
+                            <th class="px-4 py-2.5 font-semibold">Session</th>
+                            <th class="px-4 py-2.5 font-semibold">Date</th>
+                            <th class="px-4 py-2.5 font-semibold text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-stone-100">
+                        {% for award in selected_badge_award_rows %}
+                        <tr>
+                            <td class="px-4 py-3">
+                                <p class="font-medium text-slate-900">{{ award.child_profile.display_name }}</p>
+                                <p class="text-xs text-slate-500">{{ award.child_profile.user.get_full_name|default:award.child_profile.user.username }}</p>
+                            </td>
+                            <td class="px-4 py-3">
+                                {% if award.session %}
+                                <a href="{% url 'admin_session_detail' award.session.id %}" class="font-mono text-xs font-semibold text-brand-dark hover:underline">#{{ award.session.id|stringformat:'s'|slice:':8'|upper }}</a>
+                                {% else %}
+                                <span class="text-xs text-slate-400">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-xs text-slate-500">{{ award.created_at|date:'d M Y' }}</td>
+                            <td class="px-4 py-3 text-right">
+                                <form method="post">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="revoke_award">
+                                    <input type="hidden" name="award_id" value="{{ award.id }}">
+                                    <button type="submit" data-confirm="Revoke this badge award?" class="text-xs font-semibold text-rose-600 hover:underline">Revoke</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="px-5 py-6 text-sm text-slate-400">No awards issued for this badge yet.</p>
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="p-5">
+            <p class="text-sm text-slate-500">Select a badge to inspect its award history.</p>
+        </div>
+        {% endif %}
+    </section>
+</div>
+
+{# Recent awards across all badges #}
+<section class="mt-6 overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
+    <div class="border-b border-stone-200 px-5 py-4">
+        <h3 class="text-lg font-semibold text-slate-900">Recent awards (all badges)</h3>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="table-hover min-w-full text-left text-sm">
+            <thead class="bg-stone-50 text-slate-500">
+                <tr>
+                    <th class="px-5 py-3 font-semibold">Badge</th>
+                    <th class="px-5 py-3 font-semibold">Child / Account</th>
+                    <th class="px-5 py-3 font-semibold">Session</th>
+                    <th class="px-5 py-3 font-semibold">Awarded at</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-stone-100">
+                {% for award in recent_awards %}
+                <tr>
+                    <td class="px-5 py-4 font-semibold text-slate-900">{{ award.badge.name }}</td>
+                    <td class="px-5 py-4">
+                        <p class="font-medium text-slate-900">{{ award.child_profile.display_name }}</p>
+                        <p class="text-xs text-slate-500">{{ award.child_profile.user.get_full_name|default:award.child_profile.user.username }}</p>
+                    </td>
+                    <td class="px-5 py-4 text-slate-600">
+                        {% if award.session %}
+                        <a href="{% url 'admin_session_detail' award.session.id %}" class="text-sm font-semibold text-brand-dark hover:underline">#{{ award.session.id|stringformat:'s'|slice:':8'|upper }}</a>
+                        {% if award.session.book %}<p class="text-xs text-slate-500">{{ award.session.book.title }}</p>{% endif %}
+                        {% else %}—{% endif %}
+                    </td>
+                    <td class="px-5 py-4 text-slate-600">{{ award.created_at|date:'d M Y, H:i' }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4" class="px-5 py-16 text-center"><div class="flex flex-col items-center gap-3"><span class="material-symbols-outlined text-4xl text-slate-300">emoji_events</span><p class="text-sm font-medium text-slate-500">No badge awards issued yet.</p></div></td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

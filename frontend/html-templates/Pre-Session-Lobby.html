@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Storybook Live - Pre-Session Lobby</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,600;0,700;1,400&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-low": "#f9f3e9",
+                        "primary-fixed-dim": "#a8d38a",
+                        "on-secondary-fixed-variant": "#633f00",
+                        "surface-bright": "#fff9ee",
+                        "on-secondary": "#ffffff",
+                        "secondary-fixed": "#ffddb4",
+                        "primary-fixed": "#c4efa3",
+                        "tertiary-container": "#862400",
+                        "tertiary-fixed-dim": "#ffb59f",
+                        "outline": "#73796c",
+                        "on-secondary-fixed": "#291800",
+                        "on-secondary-container": "#6b4500",
+                        "secondary-container": "#feae2c",
+                        "on-tertiary-fixed-variant": "#852300",
+                        "tertiary": "#5f1700",
+                        "outline-variant": "#c3c9b9",
+                        "inverse-surface": "#33302a",
+                        "on-primary-fixed-variant": "#2c4f15",
+                        "on-background": "#1d1b16",
+                        "on-tertiary-fixed": "#3a0a00",
+                        "surface-tint": "#43682b",
+                        "on-tertiary-container": "#ff9c7e",
+                        "on-surface-variant": "#43493d",
+                        "on-surface": "#1d1b16",
+                        "on-error": "#ffffff",
+                        "surface-container": "#f3ede3",
+                        "error": "#ba1a1a",
+                        "on-primary-container": "#98c27b",
+                        "surface": "#fff9ee",
+                        "tertiary-fixed": "#ffdbd0",
+                        "on-error-container": "#93000a",
+                        "surface-variant": "#e8e2d8",
+                        "on-primary-fixed": "#0a2100",
+                        "background": "#fff9ee",
+                        "primary": "#173901",
+                        "error-container": "#ffdad6",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-highest": "#e8e2d8",
+                        "on-primary": "#ffffff",
+                        "surface-container-high": "#ede7dd",
+                        "primary-container": "#2d5016",
+                        "secondary": "#835500",
+                        "secondary-fixed-dim": "#ffb955",
+                        "inverse-primary": "#a8d38a",
+                        "surface-dim": "#dfd9d0",
+                        "on-tertiary": "#ffffff",
+                        "inverse-on-surface": "#f6f0e6"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Newsreader"],
+                        "body": ["Plus Jakarta Sans"],
+                        "label": ["Plus Jakarta Sans"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .tonal-transition {
+            background-color: transparent;
+        }
+        .no-border {
+            border: none !important;
+        }
+        .pulse-amber {
+            box-shadow: 0 0 0 0 rgba(254, 174, 44, 0.7);
+            animation: pulse-ring 2s infinite;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(254, 174, 44, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(254, 174, 44, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(254, 174, 44, 0); }
+        }
+    </style>
+</head>
+<body class="bg-surface font-body text-on-surface antialiased overflow-hidden">
+<main class="flex h-screen w-full">
+<!-- LEFT COLUMN -->
+<section class="w-1/2 bg-surface-container-lowest p-12 flex flex-col justify-between overflow-y-auto">
+<div>
+<!-- Brand Anchor: TopAppBar Logic for Branding -->
+<div class="mb-12">
+<span class="text-2xl font-bold text-primary-container font-headline italic tracking-tight">Bailey &amp; Beau</span>
+</div>
+<div class="max-w-md mx-auto space-y-8">
+<h2 class="text-4xl font-headline font-bold text-primary tracking-tight">Ready to Read Together?</h2>
+<!-- Session Info Card -->
+<div class="bg-surface-container rounded-xl p-6 border-none">
+<div class="flex flex-col gap-1 mb-4">
+<span class="font-label uppercase tracking-widest text-[11px] font-bold text-secondary">TODAY'S BOOK</span>
+<h3 class="text-2xl font-headline font-bold text-primary">The Big Red Adventure</h3>
+</div>
+<div class="flex items-center gap-4 text-on-surface-variant text-sm mb-4">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-base">auto_stories</span>
+<span>Reading Room</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-base">schedule</span>
+<span>20 minutes</span>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<img alt="Grandma Rose" class="w-10 h-10 rounded-full object-cover" data-alt="portrait of a warm elderly woman with glasses and silver hair in a cozy home library" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBAE5l8bXwaIFwP5O3WEqDPZCxGCJxMR6ISqBiph0IutK6eRa6IixeqFNhwTyq5iVkn0gOZJSQR0UzcD1eB_G-IhuD0sy3-VOqcx8e_dCr18eILlcfSvIKikRU6C9fFs_Jni8pmunN5kxc-z3yvTeVvZyBhL_FdeX_7uCl7g05aXflgB4v49wuwDlKnVVn2HkSInrIVVqinFNQrA4sBDNxgOftRQuN5OetOhl56_Mwiue3ntkh-1xpiBCL8iycJRBGa3vbjjbdZZWzr"/>
+<div class="flex flex-col">
+<span class="text-sm font-semibold text-primary">Grandma Rose</span>
+<span class="text-[10px] bg-primary-container text-on-primary w-fit px-2 py-0.5 rounded-full uppercase tracking-tighter">Host</span>
+</div>
+</div>
+</div>
+<!-- Tech Check -->
+<div class="space-y-4">
+<h4 class="text-sm font-bold uppercase tracking-wider text-on-surface-variant">Check your camera &amp; microphone</h4>
+<div class="relative aspect-video bg-primary-container rounded-xl overflow-hidden flex items-center justify-center group">
+<div class="absolute inset-0 opacity-40">
+<img alt="Camera Preview" class="w-full h-full object-cover grayscale" data-alt="a blurred artistic shot of a cozy reading corner with a soft armchair and warm floor lamp" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBPZYrUmHmPfp3pskM6nPqd4CS3QVsxuIoP79XUC903_rm1DTg5ErMHHWCj86LC0-sJtjT_SyXlDzrEJgiWyBvvXBtjO41_LT4bzvKytY7FbDSdl3z98LfRU2FqF-zaHCpxZXwRZetpLpeU62Z4L75N2em28Kcog4xdeMSbVN5RE4M63spTc8OC6lJFU7ZwNbAyBKSpR4Dly7MKjieteEeMhoq3Oocizc-k4YVonrXGdg2oX1T79PA8ytWfrtFlHawCHz4Q-QsJXLg0"/>
+</div>
+<div class="z-10 flex flex-col items-center">
+<span class="material-symbols-outlined text-on-primary text-4xl mb-2">videocam_off</span>
+<span class="text-on-primary/70 text-xs font-medium tracking-wide">Camera Preview</span>
+</div>
+<div class="absolute bottom-4 right-4 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full text-[10px] text-white">
+                                LIVE
+                            </div>
+</div>
+<div class="space-y-2">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-primary-fixed-dim"></div>
+<span class="text-sm text-on-surface-variant font-medium">Microphone: Ready</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-primary-fixed-dim"></div>
+<span class="text-sm text-on-surface-variant font-medium">Camera: Ready</span>
+</div>
+</div>
+</div>
+<button class="w-full py-4 bg-primary text-on-primary rounded-lg font-bold text-lg transition-all hover:scale-[1.01] active:scale-95 shadow-lg shadow-primary/10">
+                        I'm Ready — Join Session
+                    </button>
+<p class="text-center text-xs text-on-surface-variant/60 italic">
+                        Both participants must be ready before the session starts.
+                    </p>
+</div>
+</div>
+<!-- Footer anchor -->
+<div class="text-[10px] text-on-surface-variant/40 flex justify-center gap-4 mt-8">
+<span>© 2024 Bailey &amp; Beau</span>
+<span>Privacy Policy</span>
+<span>Help Center</span>
+</div>
+</section>
+<!-- RIGHT COLUMN -->
+<section class="w-1/2 bg-primary-container p-12 relative flex items-center justify-center overflow-hidden">
+<!-- Decorative "Book-like" elements -->
+<div class="absolute top-0 right-0 w-64 h-64 bg-primary blur-[120px] rounded-full -mr-32 -mt-32"></div>
+<div class="absolute bottom-0 left-0 w-64 h-64 bg-secondary blur-[120px] opacity-20 rounded-full -ml-32 -mb-32"></div>
+<div class="relative z-10 w-full max-w-sm flex flex-col items-center text-center">
+<!-- Book Cover -->
+<div class="w-[240px] h-[320px] bg-white rounded-xl shadow-2xl overflow-hidden mb-10 transform -rotate-2 hover:rotate-0 transition-transform duration-500 cursor-pointer">
+<img alt="The Big Red Adventure Cover Art" class="w-full h-full object-cover" data-alt="whimsical illustration of a giant red balloon flying over a lush green forest at sunset with animals looking up" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAFXd342RvAsXI9zSji1hviE8JcuCqqmtUpPytEhPFaJ__xyx0I24v872Dp0YdvQL3_ygxCTY1mozybsdX0o6YaRpRFdefqLB9lRS-ujevFbt-TC_LBNJwmMQDL1WoIhQREW81xP07icjw6pnkw9ftoHUWJu9jQ05PptdRT3dIk8Joy67fXAJ29OA3p3dgac0-aCWffs-zlmx5uTYf-ftXOrPNRqPTEFMb1y0QgzZsZoktC170ALyN6OJJ8GKVSNyXsA3aF7D6YFip9"/>
+</div>
+<h3 class="text-3xl font-headline font-bold text-on-primary mb-4">The Big Red Adventure</h3>
+<p class="text-on-primary/70 font-body leading-relaxed max-w-xs mb-8">
+                    A story about courage, friendship, and one very big surprise.
+                </p>
+<div class="w-full h-px bg-on-primary/20 mb-8"></div>
+<!-- Waiting State -->
+<div class="flex flex-col items-center gap-4">
+<div class="relative">
+<div class="w-4 h-4 bg-secondary-container rounded-full pulse-amber"></div>
+</div>
+<span class="text-on-primary font-medium tracking-wide text-sm">Waiting for Grandma Rose to join...</span>
+</div>
+</div>
+<!-- Side Decoration: Abstract Shape from Design System Strategy -->
+<div class="absolute bottom-0 right-0 p-8">
+<span class="material-symbols-outlined text-white/5 text-[180px] font-thin select-none pointer-events-none">auto_awesome</span>
+</div>
+</section>
+</main>
+</body></html>

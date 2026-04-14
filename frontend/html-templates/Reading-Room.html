@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Midnight Library Reading Room</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&amp;family=Plus+Jakarta+Sans:wght@200..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-container-highest": "#353535",
+                        "on-tertiary-fixed": "#291800",
+                        "outline": "#8d9385",
+                        "tertiary": "#ffb955",
+                        "secondary-container": "#3c4b30",
+                        "primary-container": "#2d5016",
+                        "surface-container-high": "#2a2a2a",
+                        "on-tertiary-fixed-variant": "#633f00",
+                        "surface-container": "#20201f",
+                        "on-secondary": "#26341c",
+                        "on-primary-fixed": "#0a2100",
+                        "on-secondary-fixed": "#111f09",
+                        "surface-variant": "#353535",
+                        "outline-variant": "#43493d",
+                        "primary": "#a8d38a",
+                        "on-secondary-container": "#a9bb99",
+                        "inverse-on-surface": "#313030",
+                        "secondary-fixed": "#d6e9c4",
+                        "error": "#ffb4ab",
+                        "surface-tint": "#a8d38a",
+                        "on-tertiary-container": "#f5a623",
+                        "surface-bright": "#393939",
+                        "error-container": "#93000a",
+                        "on-error-container": "#ffdad6",
+                        "on-tertiary": "#452b00",
+                        "secondary-fixed-dim": "#bacca9",
+                        "secondary": "#bacca9",
+                        "on-surface": "#e5e2e1",
+                        "on-error": "#690005",
+                        "on-primary": "#163801",
+                        "tertiary-fixed-dim": "#ffb955",
+                        "surface-container-lowest": "#0e0e0e",
+                        "background": "#131313",
+                        "inverse-surface": "#e5e2e1",
+                        "tertiary-container": "#644000",
+                        "on-background": "#e5e2e1",
+                        "on-primary-container": "#98c27b",
+                        "on-surface-variant": "#c3c9b9",
+                        "primary-fixed-dim": "#a8d38a",
+                        "primary-fixed": "#c4efa3",
+                        "surface-container-low": "#1c1b1b",
+                        "surface": "#131313",
+                        "on-primary-fixed-variant": "#2c4f15",
+                        "tertiary-fixed": "#ffddb4",
+                        "surface-dim": "#131313",
+                        "on-secondary-fixed-variant": "#3c4b30",
+                        "inverse-primary": "#43682b"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    fontFamily: {
+                        "headline": ["Newsreader", "serif"],
+                        "body": ["Plus Jakarta Sans", "sans-serif"],
+                        "label": ["Plus Jakarta Sans", "sans-serif"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #131313;
+            color: #e5e2e1;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            overflow: hidden;
+        }
+        .font-newsreader { font-family: 'Newsreader', serif; }
+        .font-plus-jakarta { font-family: 'Plus Jakarta Sans', sans-serif; }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col">
+<!-- TopNavBar Zone 1 -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-6 h-14 bg-stone-950/60 backdrop-blur-xl shadow-2xl shadow-stone-950/50">
+<div class="flex items-center gap-6">
+<span class="text-2xl font-newsreader italic text-lime-200">Midnight Library</span>
+<div class="h-6 w-[1px] bg-outline-variant/30"></div>
+<h1 class="font-newsreader text-xl tracking-tight text-on-surface">The Big Red Adventure</h1>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2 px-3 py-1 bg-tertiary-container/40 rounded-full border border-tertiary/20">
+<span class="material-symbols-outlined text-tertiary text-sm">timer</span>
+<span class="text-tertiary font-bold tracking-widest text-sm">18:32</span>
+</div>
+<span class="px-3 py-0.5 bg-secondary-container text-on-secondary-container text-xs font-bold rounded-full uppercase tracking-tighter">Host</span>
+<div class="flex items-center gap-2 ml-4">
+<button class="material-symbols-outlined text-stone-400 hover:text-stone-100 transition-colors">settings</button>
+<button class="bg-error-container hover:bg-error-container/80 text-on-error-container px-4 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95">End Session</button>
+</div>
+</div>
+</header>
+<main class="flex flex-1 pt-14 h-full overflow-hidden">
+<!-- SideNavBar / Participants Zone 3 -->
+<aside class="fixed left-0 top-0 h-full z-40 flex flex-col p-4 pt-20 bg-stone-900/80 backdrop-blur-2xl w-72 rounded-r-2xl shadow-[10px_0_30px_-15px_rgba(0,0,0,0.5)]">
+<div class="mb-6">
+<h3 class="text-lg font-bold text-stone-100 font-plus-jakarta">Reading Session</h3>
+<p class="text-xs text-stone-400">Live with 4 others</p>
+</div>
+<nav class="flex flex-col gap-1 mb-8">
+<a class="bg-lime-900/30 text-lime-300 rounded-xl font-bold flex items-center gap-3 px-4 py-3" href="#">
+<span class="material-symbols-outlined">videocam</span>
+<span class="text-sm">Video</span>
+</a>
+<a class="text-stone-400 hover:text-stone-100 hover:bg-stone-800/40 rounded-xl px-4 py-3 flex items-center gap-3 transition-all" href="#">
+<span class="material-symbols-outlined">draw</span>
+<span class="text-sm">Tools</span>
+</a>
+<a class="text-stone-400 hover:text-stone-100 hover:bg-stone-800/40 rounded-xl px-4 py-3 flex items-center gap-3 transition-all" href="#">
+<span class="material-symbols-outlined">group</span>
+<span class="text-sm">Participants</span>
+</a>
+<a class="text-stone-400 hover:text-stone-100 hover:bg-stone-800/40 rounded-xl px-4 py-3 flex items-center gap-3 transition-all" href="#">
+<span class="material-symbols-outlined">chat_bubble</span>
+<span class="text-sm">Chat</span>
+</a>
+<a class="text-stone-400 hover:text-stone-100 hover:bg-stone-800/40 rounded-xl px-4 py-3 flex items-center gap-3 transition-all" href="#">
+<span class="material-symbols-outlined">tune</span>
+<span class="text-sm">Settings</span>
+</a>
+</nav>
+<div class="mt-auto space-y-4">
+<div class="relative group aspect-video bg-stone-950 rounded-xl overflow-hidden ring-1 ring-white/10">
+<img class="w-full h-full object-cover opacity-80" data-alt="Close-up portrait of a young child smiling brightly while reading a book in soft warm evening light" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDOx0IwD22zS_dgbeVz6ETkxgmpGlDtK5feUst7rDIKIE8o7dVocfyLpIq1rMduPNZ8k4j9R2I44uEgkRJ57oHLipP4OBKr0W2XKI3_IrQrgwopUrg1kJyrfOuapKE5MwS1qwuyrQz8y3Q4nVMMgyFFLoSQLun0cbfcjNgqJorX68cYJjeur_rzOC7GNY3F60vDqFc8Qc1Ev2NW9jppazSvrSlo4x5KqFOc5va8v9Adm28dAYfHPHhkLra3adsN3UXFs1YpsnQUrEra"/>
+<div class="absolute bottom-2 left-2 px-2 py-0.5 bg-stone-900/80 backdrop-blur-md rounded-md text-[10px] font-bold text-white">You</div>
+<div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="w-6 h-6 flex items-center justify-center bg-stone-900/80 rounded-full"><span class="material-symbols-outlined text-xs">mic</span></button>
+<button class="w-6 h-6 flex items-center justify-center bg-stone-900/80 rounded-full"><span class="material-symbols-outlined text-xs">videocam</span></button>
+</div>
+</div>
+<div class="relative group aspect-video bg-stone-950 rounded-xl overflow-hidden ring-1 ring-white/10">
+<img class="w-full h-full object-cover opacity-80" data-alt="Portrait of an elderly woman with glasses smiling kindly through a webcam screen in a cozy home library" src="https://lh3.googleusercontent.com/aida-public/AB6AXuArtKYXX8IYW64ZI3lm39AasFWtkjyxYZujn_dvIKyNewZXTzGspxNsr5IiblEvrzaMkJuDW_-B8Mv4lEd7dELykmyv6FJUNe50YGU3CCc0TD6S_0Zoyl9eAoEaJTf5a4jJlVVUk7PuViF9BCj6lYKYSM5Mprc42mOFFlCIguBD5ZBzguxjdZKjdaQauRAwwhPtMSSnDQunE7c46Fbmq2z_YA4etHRgQJvW9iZcjovYg1hSGIwJRApDQfu8kqqHU8y_xGtJ0Fz-RCOR"/>
+<div class="absolute bottom-2 left-2 px-2 py-0.5 bg-stone-900/80 backdrop-blur-md rounded-md text-[10px] font-bold text-white">Grandma Rose</div>
+<div class="absolute top-2 right-2 flex gap-1">
+<span class="material-symbols-outlined text-xs text-error" style="font-variation-settings: 'FILL' 1;">mic_off</span>
+</div>
+</div>
+<button class="w-full py-3 bg-gradient-to-br from-primary to-primary-container text-on-primary font-bold rounded-full text-sm shadow-xl shadow-primary/10 active:scale-95 transition-all">
+                    End Session
+                </button>
+</div>
+</aside>
+<!-- Main Area Zone 2 -->
+<section class="flex-1 ml-72 flex flex-col bg-[#0F0F0F] relative">
+<!-- Warning Banner -->
+<div class="mx-auto mt-4 w-[90%] max-w-4xl bg-tertiary-container text-on-tertiary-container px-6 py-2.5 rounded-xl flex items-center justify-center gap-3 animate-pulse border border-tertiary/20">
+<span class="material-symbols-outlined text-lg">alarm_on</span>
+<span class="text-sm font-medium tracking-tight">5 minutes remaining — time to wrap up!</span>
+</div>
+<!-- Content Area / Book Container -->
+<div class="flex-1 flex items-center justify-center p-8 relative">
+<!-- The Open Book -->
+<div class="w-full max-w-5xl aspect-[4/3] flex bg-white rounded-2xl shadow-[0_50px_100px_-20px_rgba(0,0,0,0.7)] overflow-hidden relative group">
+<!-- Left Page (Page 4) -->
+<div class="flex-1 bg-white p-12 flex flex-col items-center border-r border-stone-200">
+<div class="w-full h-full border-2 border-dashed border-stone-100 rounded-lg flex items-center justify-center overflow-hidden">
+<img class="max-h-full object-contain" data-alt="A whimsical children's book illustration of a large red friendly dinosaur walking through a glowing blue forest" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBuE8Oep2_OAGbqgIAYdkjdzwqVgLhemLB2MvhtcFVwNpZOcyl5MllOfso7vyznr_M5OqKgKPzvEiBthbik78TLg3Z5ng7p_s8eTV1IQJr5a3DXpMiFjHXJDXZyqSHswR1ttfZ8IxNN0Kg-fjZQgaFEvpETnQ9_fZC4cXPrDK7zvfQwSajC4k2WlTXAQH4amJMSzg6fXJ4PkyaCTWfcfcREL1PmykpZE5F8TCrDg8fYfNQOWqJ5IagEQoF7IzNCWmLViMvpP4jZVOXO"/>
+</div>
+<div class="mt-6 text-center">
+<span class="font-newsreader text-stone-400 text-sm italic">Page 4</span>
+</div>
+</div>
+<!-- Right Page (Page 5) -->
+<div class="flex-1 bg-white p-12 flex flex-col items-center">
+<div class="w-full h-full border-2 border-dashed border-stone-100 rounded-lg p-8 flex flex-col justify-center">
+<p class="font-newsreader text-2xl text-stone-800 leading-relaxed italic text-center">
+                                "The mountain was high, and the wind was cold, but Red was brave, and Red was bold!"
+                            </p>
+</div>
+<div class="mt-6 text-center">
+<span class="font-newsreader text-stone-400 text-sm italic">Page 5</span>
+</div>
+</div>
+<!-- Central Fold Shadow -->
+<div class="absolute inset-y-0 left-1/2 -translate-x-1/2 w-8 bg-gradient-to-r from-stone-900/5 via-stone-900/10 to-stone-900/5"></div>
+</div>
+<!-- Floating Toolbar -->
+<div class="absolute bottom-12 left-1/2 -translate-x-1/2 bg-stone-900/80 backdrop-blur-xl px-6 py-3 rounded-2xl flex items-center gap-6 shadow-2xl border border-white/5">
+<div class="flex items-center gap-2">
+<button class="w-10 h-10 flex items-center justify-center rounded-xl bg-lime-900/30 text-lime-300">
+<span class="material-symbols-outlined">edit</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-stone-800/50 text-stone-400">
+<span class="material-symbols-outlined">auto_fix_high</span>
+</button>
+</div>
+<div class="h-6 w-[1px] bg-stone-700"></div>
+<div class="flex items-center gap-2">
+<button class="w-6 h-6 rounded-full bg-red-500 ring-2 ring-white/20"></button>
+<button class="w-6 h-6 rounded-full bg-lime-400 ring-2 ring-transparent"></button>
+<button class="w-6 h-6 rounded-full bg-amber-400 ring-2 ring-transparent"></button>
+<button class="w-6 h-6 rounded-full bg-blue-400 ring-2 ring-transparent"></button>
+</div>
+<div class="h-6 w-[1px] bg-stone-700"></div>
+<div class="flex flex-col gap-1 w-32">
+<div class="flex justify-between text-[10px] text-stone-500 uppercase tracking-widest font-bold">
+<span>Brush</span>
+<span>8px</span>
+</div>
+<div class="h-1.5 bg-stone-800 rounded-full overflow-hidden">
+<div class="h-full w-2/3 bg-lime-300 rounded-full"></div>
+</div>
+</div>
+<div class="h-6 w-[1px] bg-stone-700"></div>
+<button class="text-xs font-bold text-stone-400 hover:text-white transition-colors uppercase tracking-widest">Clear Canvas</button>
+</div>
+</div>
+<!-- Page Navigation Zone (Bottom Overlay) -->
+<div class="absolute bottom-6 right-6 flex items-center gap-4">
+<div class="flex items-center gap-2 px-4 py-2 bg-stone-950/40 backdrop-blur-md rounded-full text-xs font-medium text-stone-400">
+                    Page 4 of 24
+                </div>
+<div class="flex items-center gap-2">
+<button class="w-10 h-10 flex items-center justify-center bg-stone-800/80 rounded-full text-stone-200 hover:bg-stone-700 transition-all active:scale-95">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-center bg-stone-800/80 rounded-full text-stone-200 hover:bg-stone-700 transition-all active:scale-95">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+<button class="ml-4 px-6 py-2.5 bg-tertiary text-on-tertiary-fixed font-extrabold rounded-full text-sm flex items-center gap-2 hover:bg-tertiary/90 transition-all active:scale-95 shadow-xl shadow-tertiary/10">
+<span class="material-symbols-outlined text-lg">rocket_launch</span>
+                    Start Activity
+                </button>
+</div>
+</section>
+</main>
+<!-- Reading Progress Bar -->
+<div class="fixed bottom-0 left-0 w-full h-1 bg-surface-variant z-[60]">
+<div class="h-full w-1/6 bg-tertiary shadow-[0_0_10px_#ffb955]"></div>
+</div>
+</body></html>
