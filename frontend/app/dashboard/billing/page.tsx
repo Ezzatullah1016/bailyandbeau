@@ -121,8 +121,8 @@ export default function BillingPage() {
             <div className="bg-[#f9f3e9] rounded-xl p-5">
               <p className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-2">Sessions Remaining</p>
               <p className="font-headline text-4xl font-bold text-[#173901]">{totalSessions}</p>
-              {entitlement?.pack_sessions_remaining > 0 && (
-                <p className="text-xs text-stone-400 mt-1">incl. {entitlement.pack_sessions_remaining} pack credits</p>
+              {(entitlement?.pack_sessions_remaining ?? 0) > 0 && (
+                <p className="text-xs text-stone-400 mt-1">incl. {entitlement?.pack_sessions_remaining} pack credits</p>
               )}
             </div>
             <div className="bg-[#f9f3e9] rounded-xl p-5">
