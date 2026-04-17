@@ -1,0 +1,181 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { apiRequest } from '@/lib/api';
+
+interface Plan { code: string; name: string; price_monthly: number; sessions_per_month: number; description: string; }
+interface Entitlement {
+  subscription_status: string;
+  plan_code: string;
+  sessions_remaining: number;
+  pack_sessions_remaining: number;
+  renewal_date: string | null;
+}
+interface MeData { id: number; username: string; first_name: string; last_name: string; }
+
+const STATUS_COLORS: Record<string, string> = {
+  active: 'bg-emerald-100 text-emerald-800',
+  inactive: 'bg-stone-100 text-stone-600',
+  trialing: 'bg-blue-100 text-blue-700',
+  past_due: 'bg-red-100 text-red-700',
+};
+
+function Sidebar({ me }: { me: MeData | null }) {
+  const initials = me ? (`${me.first_name?.[0] ?? ''}${me.last_name?.[0] ?? ''}`).toUpperCase() || me.username[0].toUpperCase() : '?';
+  const displayName = me ? (me.first_name ? `${me.first_name} ${me.last_name}`.trim() : me.username) : '';
+  return (
+    <aside className="h-screen w-64 fixed left-0 top-0 overflow-y-auto bg-[#2d5016] flex flex-col py-8 z-50">
+      <div className="px-6 mb-10">
+        <h1 className="font-headline text-2xl italic text-[#feae2c]">Bailey &amp; Beau</h1>
+        <p className="text-[10px] uppercase tracking-widest text-[#a8d38a]/60 font-bold mt-1">The Living Storybook</p>
+      </div>
+      <nav className="flex-1 space-y-1 px-2">
+        {[
+          { href: '/dashboard',          icon: 'dashboard',    label: 'Dashboard', active: false },
+          { href: '/dashboard/library',  icon: 'auto_stories', label: 'Library',   active: false },
+          { href: '/dashboard/sessions', icon: 'history_edu',  label: 'Sessions',  active: false },
+          { href: '/dashboard/badges',   icon: 'military_tech',label: 'Badges',    active: false },
+          { href: '/dashboard/billing',  icon: 'payments',     label: 'Billing',   active: true  },
+          { href: '/dashboard/settings', icon: 'settings',     label: 'Settings',  active: false },
+        ].map((item) => (
+          <Link key={item.href} href={item.href}
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${item.active ? 'bg-emerald-900/50 text-[#feae2c] font-bold' : 'text-[#a8d38a]/70 hover:text-white hover:bg-emerald-900/40'}`}>
+            <span className="material-symbols-outlined" style={item.active ? { fontVariationSettings: "'FILL' 1" } : undefined}>{item.icon}</span>
+            {item.label}
+          </Link>
+        ))}
+      </nav>
+      <div className="px-4 mt-auto pt-8 border-t border-white/5">
+        <div className="flex items-center gap-3 p-2 rounded-xl bg-white/5">
+          <div className="h-10 w-10 rounded-full bg-[#feae2c] flex items-center justify-center text-[#2d5016] font-bold text-sm flex-shrink-0">{initials}</div>
+          <div className="flex-1 min-w-0">
+            <p className="text-white text-sm font-medium truncate">{displayName}</p>
+            <button onClick={() => { localStorage.removeItem('bb_access_token'); localStorage.removeItem('bb_refresh_token'); window.location.href = '/login'; }}
+              className="text-xs text-[#a8d38a]/50 hover:text-[#a8d38a] transition-colors">Sign Out</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+export default function BillingPage() {
+  const router = useRouter();
+  const [me, setMe] = useState<MeData | null>(null);
+  const [entitlement, setEntitlement] = useState<Entitlement | null>(null);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const token = localStorage.getItem('bb_access_token');
+    if (!token) { router.replace('/login'); return; }
+    Promise.all([
+      apiRequest<{ data: MeData }>('/me/').then((r) => setMe(r.data)),
+      apiRequest<{ data: Entitlement }>('/billing/entitlement/').then((r) => setEntitlement(r.data)),
+      apiRequest<{ data: Plan[] }>('/billing/plans/').then((r) => setPlans(r.data)).catch(() => {}),
+    ]).catch(() => router.replace('/login')).finally(() => setLoading(false));
+  }, [router]);
+
+  const totalSessions = (entitlement?.sessions_remaining ?? 0) + (entitlement?.pack_sessions_remaining ?? 0);
+
+  if (loading) return (
+    <div className="h-screen w-screen flex items-center justify-center bg-[#fff9ee]">
+      <span className="material-symbols-outlined text-5xl text-[#2d5016] animate-spin">sync</span>
+    </div>
+  );
+
+  return (
+    <>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Plus+Jakarta+Sans:wght@200..800&display=swap" />
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" />
+      <style>{`.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24}.font-headline{font-family:'Newsreader',serif}.font-body{font-family:'Plus Jakarta Sans',sans-serif}body{background-color:#fff9ee;font-family:'Plus Jakarta Sans',sans-serif}`}</style>
+      <Sidebar me={me} />
+      <header className="flex items-center w-full px-8 h-16 ml-64 sticky top-0 z-40 bg-[#fff9ee]/80 backdrop-blur-xl shadow-sm border-b border-[#c3c9b9]/20">
+        <div className="font-headline text-xl font-bold text-[#173901]">Billing</div>
+      </header>
+      <main className="ml-64 p-8 min-h-screen bg-[#f9f3e9] font-body text-[#1d1b16]">
+        <div className="mb-8">
+          <h2 className="font-headline text-4xl text-[#173901] font-bold mb-2">Billing & Subscription</h2>
+          <p className="text-stone-500">Manage your plan and session credits</p>
+        </div>
+
+        {/* Current plan card */}
+        <div className="bg-white rounded-2xl p-8 shadow-sm border border-[#c3c9b9]/10 mb-8">
+          <div className="flex items-start justify-between mb-6">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-2">Current Plan</p>
+              <h3 className="font-headline text-3xl font-bold text-[#173901] capitalize">
+                {entitlement?.plan_code?.replace(/-/g, ' ') ?? 'Free'}
+              </h3>
+            </div>
+            {entitlement?.subscription_status && (
+              <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${STATUS_COLORS[entitlement.subscription_status] ?? 'bg-stone-100 text-stone-600'}`}>
+                {entitlement.subscription_status}
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6">
+            <div className="bg-[#f9f3e9] rounded-xl p-5">
+              <p className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-2">Sessions Remaining</p>
+              <p className="font-headline text-4xl font-bold text-[#173901]">{totalSessions}</p>
+              {entitlement?.pack_sessions_remaining > 0 && (
+                <p className="text-xs text-stone-400 mt-1">incl. {entitlement.pack_sessions_remaining} pack credits</p>
+              )}
+            </div>
+            <div className="bg-[#f9f3e9] rounded-xl p-5">
+              <p className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-2">Subscription Sessions</p>
+              <p className="font-headline text-4xl font-bold text-[#835500]">{entitlement?.sessions_remaining ?? 0}</p>
+            </div>
+            <div className="bg-[#f9f3e9] rounded-xl p-5">
+              <p className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-2">Renewal Date</p>
+              <p className="font-headline text-xl font-bold text-[#173901]">
+                {entitlement?.renewal_date ? new Date(entitlement.renewal_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Plans */}
+        {plans.length > 0 && (
+          <div>
+            <h3 className="font-headline text-2xl text-[#173901] font-bold mb-6">Available Plans</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {plans.map((plan) => {
+                const isCurrent = plan.code === entitlement?.plan_code;
+                return (
+                  <div key={plan.code} className={`bg-white rounded-2xl p-6 shadow-sm border-2 transition-all ${isCurrent ? 'border-[#2d5016]' : 'border-[#c3c9b9]/10 hover:border-[#a8d38a]'}`}>
+                    {isCurrent && (
+                      <span className="inline-block px-3 py-0.5 bg-[#2d5016] text-white text-[10px] font-bold rounded-full uppercase tracking-wider mb-4">Current Plan</span>
+                    )}
+                    <h4 className="font-headline text-xl font-bold text-[#173901] mb-1">{plan.name}</h4>
+                    <p className="text-stone-400 text-sm mb-4">{plan.description}</p>
+                    <p className="font-headline text-3xl font-bold text-[#173901] mb-1">
+                      £{plan.price_monthly}<span className="text-base font-normal text-stone-400">/mo</span>
+                    </p>
+                    <p className="text-sm text-stone-500 mb-6">{plan.sessions_per_month} sessions per month</p>
+                    <button
+                      disabled={isCurrent}
+                      className={`w-full py-3 rounded-xl font-bold text-sm transition-all ${isCurrent ? 'bg-stone-100 text-stone-400 cursor-not-allowed' : 'bg-[#173901] text-white hover:bg-[#2d5016]'}`}>
+                      {isCurrent ? 'Current Plan' : 'Upgrade'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {plans.length === 0 && (
+          <div className="bg-white rounded-2xl p-8 shadow-sm border border-[#c3c9b9]/10 text-center">
+            <span className="material-symbols-outlined text-5xl text-stone-300 mb-4 block">payments</span>
+            <p className="text-stone-500 font-medium">Subscription plans coming soon.</p>
+            <p className="text-stone-400 text-sm mt-1">Contact us to upgrade your account.</p>
+          </div>
+        )}
+      </main>
+    </>
+  );
+}
