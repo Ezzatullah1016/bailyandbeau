@@ -70,6 +70,11 @@ export default function LobbyPage() {
 
   // ── Camera preview ────────────────────────────────────────────────────────
   useEffect(() => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCamReady(false);
+      setMicReady(false);
+      return;
+    }
     navigator.mediaDevices
       .getUserMedia({ video: true, audio: true })
       .then((stream) => {
