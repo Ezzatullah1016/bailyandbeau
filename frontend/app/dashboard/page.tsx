@@ -3,6 +3,12 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import {
+  ArrowRight, Bell, BookOpen, BookMarked, CalendarDays, CheckSquare,
+  CreditCard, DoorOpen, Lock, Medal, MoreHorizontal, Play, Settings,
+  UserCircle, X,
+} from 'lucide-react';
+import { Icon } from '@/components/ui/Icon';
 import { apiRequest, createSession, type UserBadgeData } from '@/lib/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -105,12 +111,12 @@ function Sidebar({ me }: { me: MeData | null }) {
 
       <nav className="flex-1 space-y-1 px-2">
         {[
-          { href: '/dashboard', icon: 'dashboard',    label: 'Dashboard',  active: true },
-          { href: '/dashboard/library',   icon: 'auto_stories',  label: 'Library',    active: false },
-          { href: '/dashboard/sessions',  icon: 'history_edu',   label: 'Sessions',   active: false },
-          { href: '/dashboard/badges',    icon: 'military_tech', label: 'Badges',     active: false },
-          { href: '/dashboard/billing',   icon: 'payments',      label: 'Billing',    active: false },
-          { href: '/dashboard/settings',  icon: 'settings',      label: 'Settings',   active: false },
+          { href: '/dashboard',           icon: 'dashboard',    label: 'Dashboard',  active: true  },
+          { href: '/dashboard/library',   icon: 'auto_stories', label: 'Library',    active: false },
+          { href: '/dashboard/sessions',  icon: 'history_edu',  label: 'Sessions',   active: false },
+          { href: '/dashboard/badges',    icon: 'military_tech',label: 'Badges',     active: false },
+          { href: '/dashboard/billing',   icon: 'payments',     label: 'Billing',    active: false },
+          { href: '/dashboard/settings',  icon: 'settings',     label: 'Settings',   active: false },
         ].map((item) => (
           <Link
             key={item.href}
@@ -121,18 +127,12 @@ function Sidebar({ me }: { me: MeData | null }) {
                 : 'text-[#a8d38a]/70 hover:text-white hover:bg-emerald-900/40'
             }`}
           >
-            <span
-              className="material-symbols-outlined"
-              style={item.active ? { fontVariationSettings: "'FILL' 1" } : undefined}
-            >
-              {item.icon}
-            </span>
+            <Icon name={item.icon} className="w-5 h-5" />
             {item.label}
           </Link>
         ))}
       </nav>
 
-      {/* User footer */}
       <div className="px-4 mt-auto pt-8 border-t border-white/5">
         <div className="flex items-center gap-3 p-2 rounded-xl bg-white/5">
           <div className="h-10 w-10 rounded-full bg-[#feae2c] flex items-center justify-center text-[#2d5016] font-bold text-sm flex-shrink-0">
@@ -177,7 +177,6 @@ function StartSessionModal({
     setError('');
     try {
       const data = await createSession(bookId, childId);
-      // Store host participant ID for the lobby page
       localStorage.setItem(`bb_participant_${data.id}`, data.host_participant_id);
       onStart(data.id, data.host_participant_id);
     } catch (e) {
@@ -193,7 +192,7 @@ function StartSessionModal({
         <div className="flex justify-between items-center mb-6">
           <h2 className="font-headline text-2xl text-[#173901] font-bold">Start a Session</h2>
           <button onClick={onClose} className="text-stone-400 hover:text-stone-600">
-            <span className="material-symbols-outlined">close</span>
+            <X className="w-5 h-5" />
           </button>
         </div>
 
@@ -231,7 +230,7 @@ function StartSessionModal({
             disabled={loading}
             className="w-full py-4 bg-[#173901] text-white rounded-xl font-bold text-sm transition-all hover:bg-[#2d5016] active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
           >
-            <span className="material-symbols-outlined text-lg">play_arrow</span>
+            <Play className="w-5 h-5" />
             {loading ? 'Creating session…' : 'Start Session'}
           </button>
         </div>
@@ -282,7 +281,7 @@ export default function DashboardPage() {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-[#fff9ee]">
         <div className="flex flex-col items-center gap-4">
-          <span className="material-symbols-outlined text-5xl text-[#2d5016] animate-spin">sync</span>
+          <Icon name="sync" className="w-10 h-10 text-[#2d5016] animate-spin" />
           <p className="text-sm text-[#43493d] font-medium">Loading dashboard…</p>
         </div>
       </div>
@@ -291,15 +290,6 @@ export default function DashboardPage() {
 
   return (
     <>
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Plus+Jakarta+Sans:wght@200..800&display=swap" />
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" />
-      <style>{`
-        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
-        .font-headline { font-family: 'Newsreader', serif; }
-        .font-body { font-family: 'Plus Jakarta Sans', sans-serif; }
-        body { background-color: #fff9ee; font-family: 'Plus Jakarta Sans', sans-serif; }
-      `}</style>
-
       {showModal && (
         <StartSessionModal
           books={books}
@@ -311,22 +301,19 @@ export default function DashboardPage() {
 
       <Sidebar me={me} />
 
-      {/* Top header bar */}
       <header className="flex justify-between items-center w-full px-8 h-16 ml-64 sticky top-0 z-40 bg-[#fff9ee]/80 backdrop-blur-xl shadow-sm border-b border-[#c3c9b9]/20">
         <div className="font-headline text-xl font-bold text-[#173901]">Dashboard</div>
         <div className="flex items-center gap-4">
           <button className="relative group">
-            <span className="material-symbols-outlined text-stone-500 group-hover:text-[#173901] transition-colors">notifications</span>
+            <Bell className="w-5 h-5 text-stone-500 group-hover:text-[#173901] transition-colors" />
             <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full border-2 border-white" />
           </button>
-          <span className="material-symbols-outlined text-stone-500 cursor-pointer">account_circle</span>
+          <UserCircle className="w-5 h-5 text-stone-500 cursor-pointer" />
         </div>
       </header>
 
-      {/* Main content */}
       <main className="ml-64 p-8 min-h-screen bg-[#f9f3e9] font-body text-[#1d1b16]">
 
-        {/* Welcome */}
         <section className="mb-10">
           <h2 className="font-headline text-4xl text-[#173901] font-bold mb-2">
             Welcome back, {firstName} 👋
@@ -338,13 +325,12 @@ export default function DashboardPage() {
           </p>
         </section>
 
-        {/* Stats grid */}
         <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
           <div className="bg-white p-6 rounded-xl shadow-sm flex flex-col border border-[#c3c9b9]/10">
             <span className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-4">Sessions Remaining</span>
             <div className="flex items-end justify-between">
               <span className="text-5xl font-headline font-bold text-[#173901]">{sessionsLeft}</span>
-              <span className="material-symbols-outlined text-[#a8d38a] text-4xl">calendar_today</span>
+              <CalendarDays className="w-8 h-8 text-[#a8d38a]" />
             </div>
             {entitlement?.plan_code && (
               <span className="mt-3 text-xs text-stone-400 capitalize">{entitlement.plan_code.replace(/-/g, ' ')}</span>
@@ -355,7 +341,7 @@ export default function DashboardPage() {
             <span className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-4">Sessions Completed</span>
             <div className="flex items-end justify-between">
               <span className="text-5xl font-headline font-bold text-[#835500]">{dash?.completed_sessions_count ?? 0}</span>
-              <span className="material-symbols-outlined text-[#feae2c] text-4xl">task_alt</span>
+              <CheckSquare className="w-8 h-8 text-[#feae2c]" />
             </div>
           </div>
 
@@ -363,12 +349,11 @@ export default function DashboardPage() {
             <span className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-4">Badges Earned</span>
             <div className="flex items-end justify-between">
               <span className="text-5xl font-headline font-bold text-[#5f1700]">{badges.length}</span>
-              <span className="material-symbols-outlined text-[#ffb59f] text-4xl">military_tech</span>
+              <Medal className="w-8 h-8 text-[#ffb59f]" />
             </div>
           </div>
         </section>
 
-        {/* Hero CTA card */}
         <section className="bg-[#2d5016] rounded-3xl p-8 mb-10 overflow-hidden relative flex flex-col md:flex-row items-center gap-8 shadow-xl shadow-[#173901]/10">
           <div className="flex-1 z-10">
             <span className="inline-block px-4 py-1.5 bg-[#feae2c] text-[#291800] text-xs font-bold rounded-full mb-6">
@@ -382,7 +367,7 @@ export default function DashboardPage() {
             </p>
             <div className="flex items-center gap-4 text-emerald-200/60 text-sm mb-8">
               <span className="flex items-center gap-1">
-                <span className="material-symbols-outlined text-sm">meeting_room</span> Reading Room
+                <DoorOpen className="w-4 h-4" /> Reading Room
               </span>
               {books[0]?.age_band && (
                 <>
@@ -397,7 +382,7 @@ export default function DashboardPage() {
                 disabled={sessionsLeft === 0 || books.length === 0 || children.length === 0}
                 className="px-8 py-3 bg-[#feae2c] hover:bg-amber-400 text-[#291800] font-bold rounded-lg transition-all flex items-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span className="material-symbols-outlined text-lg transition-transform group-hover:scale-125">play_arrow</span>
+                <Play className="w-5 h-5 transition-transform group-hover:scale-125" />
                 Start Session
               </button>
               <Link
@@ -415,25 +400,21 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Book cover */}
           <div className="w-48 h-64 flex-shrink-0 bg-white rounded-xl shadow-2xl relative overflow-hidden transform rotate-3 hover:rotate-0 transition-transform duration-500 flex items-center justify-center">
             {books[0]?.cover_image ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={books[0].cover_image} alt={books[0].title} className="w-full h-full object-cover" />
             ) : (
-              <span className="material-symbols-outlined text-[#2d5016] text-6xl">menu_book</span>
+              <BookOpen className="w-12 h-12 text-[#2d5016]" />
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
           </div>
 
-          {/* Decorative blur */}
           <div className="absolute -bottom-20 -right-20 w-80 h-80 bg-emerald-400/10 rounded-full blur-3xl" />
         </section>
 
-        {/* Bottom two-column section */}
         <div className="grid grid-cols-1 lg:grid-cols-10 gap-8">
 
-          {/* Recent sessions table */}
           <div className="lg:col-span-6 bg-white rounded-2xl p-6 shadow-sm border border-[#c3c9b9]/10">
             <div className="flex justify-between items-center mb-6">
               <h4 className="font-headline text-2xl text-[#173901] font-bold">Recent Sessions</h4>
@@ -442,7 +423,7 @@ export default function DashboardPage() {
 
             {(!dash?.recent_sessions || dash.recent_sessions.length === 0) ? (
               <div className="flex flex-col items-center gap-3 py-12 text-stone-400">
-                <span className="material-symbols-outlined text-5xl">history_edu</span>
+                <BookMarked className="w-10 h-10" />
                 <p className="text-sm font-medium">No sessions yet</p>
                 <button
                   onClick={() => setShowModal(true)}
@@ -469,7 +450,7 @@ export default function DashboardPage() {
                         <td className="py-4">
                           <div className="flex items-center gap-3">
                             <div className="h-8 w-6 bg-[#2d5016]/10 rounded flex items-center justify-center flex-shrink-0">
-                              <span className="material-symbols-outlined text-[#2d5016] text-sm">menu_book</span>
+                              <BookOpen className="w-4 h-4 text-[#2d5016]" />
                             </div>
                             <span className="font-semibold text-[#1d1b16] text-sm truncate max-w-[160px]">{s.book_title}</span>
                           </div>
@@ -490,8 +471,8 @@ export default function DashboardPage() {
                               Rejoin
                             </Link>
                           ) : (
-                            <button className="material-symbols-outlined text-stone-400 hover:text-[#173901] transition-colors text-sm">
-                              more_horiz
+                            <button className="text-stone-400 hover:text-[#173901] transition-colors">
+                              <MoreHorizontal className="w-4 h-4" />
                             </button>
                           )}
                         </td>
@@ -503,7 +484,6 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Badge collection */}
           <div className="lg:col-span-4 bg-white rounded-2xl p-6 shadow-sm border border-[#c3c9b9]/10">
             <div className="flex justify-between items-center mb-8">
               <h4 className="font-headline text-2xl text-[#173901] font-bold">Badge Collection</h4>
@@ -511,7 +491,7 @@ export default function DashboardPage() {
 
             {badges.length === 0 ? (
               <div className="flex flex-col items-center gap-3 py-8 text-stone-400">
-                <span className="material-symbols-outlined text-5xl">military_tech</span>
+                <Medal className="w-10 h-10" />
                 <p className="text-sm font-medium text-center">Complete sessions to earn badges!</p>
               </div>
             ) : (
@@ -526,10 +506,9 @@ export default function DashboardPage() {
                     </span>
                   </div>
                 ))}
-                {/* Locked next slot */}
                 <div className="flex flex-col items-center gap-2 opacity-40">
                   <div className="h-16 w-16 rounded-full bg-stone-200 flex items-center justify-center text-stone-400 border-2 border-dashed border-stone-300">
-                    <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>lock</span>
+                    <Lock className="w-6 h-6" />
                   </div>
                   <span className="text-[10px] font-bold text-stone-400 uppercase tracking-tighter">Next Milestone</span>
                 </div>
@@ -541,7 +520,7 @@ export default function DashboardPage() {
               className="flex items-center justify-center gap-2 w-full py-4 bg-[#f3ede3] text-[#173901] font-bold rounded-xl hover:bg-[#ede7dd] transition-all text-sm group"
             >
               View All Badges
-              <span className="material-symbols-outlined text-lg transition-transform group-hover:translate-x-1">arrow_forward</span>
+              <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
             </Link>
           </div>
         </div>

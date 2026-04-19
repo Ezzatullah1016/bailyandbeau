@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { CreditCard, RefreshCw } from 'lucide-react';
+import { Icon } from '@/components/ui/Icon';
 import { apiRequest } from '@/lib/api';
 
 interface Plan { code: string; name: string; price_monthly: number; sessions_per_month: number; description: string; }
@@ -42,14 +44,14 @@ function Sidebar({ me }: { me: MeData | null }) {
         ].map((item) => (
           <Link key={item.href} href={item.href}
             className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${item.active ? 'bg-emerald-900/50 text-[#feae2c] font-bold' : 'text-[#a8d38a]/70 hover:text-white hover:bg-emerald-900/40'}`}>
-            <span className="material-symbols-outlined" style={item.active ? { fontVariationSettings: "'FILL' 1" } : undefined}>{item.icon}</span>
+            <Icon name={item.icon} className="w-5 h-5" />
             {item.label}
           </Link>
         ))}
       </nav>
       <div className="px-4 mt-auto pt-8 border-t border-white/5">
         <div className="flex items-center gap-3 p-2 rounded-xl bg-white/5">
-          <div className="h-10 w-10 rounded-full bg-[#feae2c] flex items-center justify-center text-[#2d5016] font-bold text-sm flex-shrink-0">{initials}</div>
+          <div className="h-10 w-10 rounded-full bg-[#feae2c] flex items-center justify-center text-[#2d5016] font-bold text-sm shrink-0">{initials}</div>
           <div className="flex-1 min-w-0">
             <p className="text-white text-sm font-medium truncate">{displayName}</p>
             <button onClick={() => { localStorage.removeItem('bb_access_token'); localStorage.removeItem('bb_refresh_token'); window.location.href = '/login'; }}
@@ -82,26 +84,22 @@ export default function BillingPage() {
 
   if (loading) return (
     <div className="h-screen w-screen flex items-center justify-center bg-[#fff9ee]">
-      <span className="material-symbols-outlined text-5xl text-[#2d5016] animate-spin">sync</span>
+      <RefreshCw className="w-10 h-10 text-[#2d5016] animate-spin" />
     </div>
   );
 
   return (
     <>
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Plus+Jakarta+Sans:wght@200..800&display=swap" />
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" />
-      <style>{`.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24}.font-headline{font-family:'Newsreader',serif}.font-body{font-family:'Plus Jakarta Sans',sans-serif}body{background-color:#fff9ee;font-family:'Plus Jakarta Sans',sans-serif}`}</style>
       <Sidebar me={me} />
       <header className="flex items-center w-full px-8 h-16 ml-64 sticky top-0 z-40 bg-[#fff9ee]/80 backdrop-blur-xl shadow-sm border-b border-[#c3c9b9]/20">
         <div className="font-headline text-xl font-bold text-[#173901]">Billing</div>
       </header>
       <main className="ml-64 p-8 min-h-screen bg-[#f9f3e9] font-body text-[#1d1b16]">
         <div className="mb-8">
-          <h2 className="font-headline text-4xl text-[#173901] font-bold mb-2">Billing & Subscription</h2>
+          <h2 className="font-headline text-4xl text-[#173901] font-bold mb-2">Billing &amp; Subscription</h2>
           <p className="text-stone-500">Manage your plan and session credits</p>
         </div>
 
-        {/* Current plan card */}
         <div className="bg-white rounded-2xl p-8 shadow-sm border border-[#c3c9b9]/10 mb-8">
           <div className="flex items-start justify-between mb-6">
             <div>
@@ -138,7 +136,6 @@ export default function BillingPage() {
           </div>
         </div>
 
-        {/* Plans */}
         {plans.length > 0 && (
           <div>
             <h3 className="font-headline text-2xl text-[#173901] font-bold mb-6">Available Plans</h3>
@@ -170,7 +167,7 @@ export default function BillingPage() {
 
         {plans.length === 0 && (
           <div className="bg-white rounded-2xl p-8 shadow-sm border border-[#c3c9b9]/10 text-center">
-            <span className="material-symbols-outlined text-5xl text-stone-300 mb-4 block">payments</span>
+            <CreditCard className="w-10 h-10 text-stone-300 mx-auto mb-4" />
             <p className="text-stone-500 font-medium">Subscription plans coming soon.</p>
             <p className="text-stone-400 text-sm mt-1">Contact us to upgrade your account.</p>
           </div>

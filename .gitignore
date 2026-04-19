@@ -12,6 +12,9 @@ backend/media/
 frontend/node_modules/
 frontend/.next/
 frontend/out/
+frontend/Book-lulu.pdf
+frontend/public/Book-lulu.pdf
+frontend/public/pdf.worker.min.js
 frontend/.env.local
 frontend/.env.production.local
 
@@ -25,3 +28,4 @@ Thumbs.db
 
 # ─── Secrets ──────────────────────────────────────────────────────────────────
 *.pem
+.env

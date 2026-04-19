@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { Lock, Medal, RefreshCw } from 'lucide-react';
+import { Icon } from '@/components/ui/Icon';
 import { apiRequest } from '@/lib/api';
 
 interface Badge { id: string; name: string; code: string; description: string; icon_url: string; trigger_type: string; }
@@ -38,7 +40,7 @@ function Sidebar({ me }: { me: MeData | null }) {
         ].map((item) => (
           <Link key={item.href} href={item.href}
             className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${item.active ? 'bg-emerald-900/50 text-[#feae2c] font-bold' : 'text-[#a8d38a]/70 hover:text-white hover:bg-emerald-900/40'}`}>
-            <span className="material-symbols-outlined" style={item.active ? { fontVariationSettings: "'FILL' 1" } : undefined}>{item.icon}</span>
+            <Icon name={item.icon} className="w-5 h-5" />
             {item.label}
           </Link>
         ))}
@@ -78,15 +80,12 @@ export default function BadgesPage() {
 
   if (loading) return (
     <div className="h-screen w-screen flex items-center justify-center bg-[#fff9ee]">
-      <span className="material-symbols-outlined text-5xl text-[#2d5016] animate-spin">sync</span>
+      <RefreshCw className="w-10 h-10 text-[#2d5016] animate-spin" />
     </div>
   );
 
   return (
     <>
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Plus+Jakarta+Sans:wght@200..800&display=swap" />
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" />
-      <style>{`.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24}.font-headline{font-family:'Newsreader',serif}.font-body{font-family:'Plus Jakarta Sans',sans-serif}body{background-color:#fff9ee;font-family:'Plus Jakarta Sans',sans-serif}`}</style>
       <Sidebar me={me} />
       <header className="flex justify-between items-center w-full px-8 h-16 ml-64 sticky top-0 z-40 bg-[#fff9ee]/80 backdrop-blur-xl shadow-sm border-b border-[#c3c9b9]/20">
         <div className="font-headline text-xl font-bold text-[#173901]">Badges</div>
@@ -97,7 +96,6 @@ export default function BadgesPage() {
           <p className="text-stone-500">{earned.length} of {allBadges.length || '?'} badges earned</p>
         </div>
 
-        {/* Progress bar */}
         {allBadges.length > 0 && (
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-[#c3c9b9]/10 mb-8">
             <div className="flex justify-between items-center mb-3">
@@ -110,7 +108,6 @@ export default function BadgesPage() {
           </div>
         )}
 
-        {/* Earned badges */}
         {earned.length > 0 && (
           <section className="mb-10">
             <h3 className="font-headline text-2xl text-[#173901] font-bold mb-6">Earned Badges</h3>
@@ -130,7 +127,6 @@ export default function BadgesPage() {
           </section>
         )}
 
-        {/* All badges / locked */}
         {allBadges.length > 0 && (
           <section>
             <h3 className="font-headline text-2xl text-[#173901] font-bold mb-6">All Badges</h3>
@@ -141,7 +137,7 @@ export default function BadgesPage() {
                   <div key={badge.id} className={`bg-white rounded-2xl p-6 shadow-sm border border-[#c3c9b9]/10 flex flex-col items-center gap-3 text-center transition-all ${!isEarned ? 'opacity-50 grayscale' : ''}`}>
                     <div className={`h-20 w-20 rounded-full flex items-center justify-center text-4xl shadow-lg border-4 border-white ${isEarned ? 'bg-[#ffddb4] ring-2 ring-[#feae2c]/30' : 'bg-stone-100 border-dashed border-stone-300'}`}>
                       {isEarned ? (BADGE_ICONS[badge.code] ?? '🏅') : (
-                        <span className="material-symbols-outlined text-stone-400" style={{ fontVariationSettings: "'FILL' 1" }}>lock</span>
+                        <Lock className="w-8 h-8 text-stone-400" />
                       )}
                     </div>
                     <div>
@@ -158,7 +154,7 @@ export default function BadgesPage() {
 
         {earned.length === 0 && allBadges.length === 0 && (
           <div className="flex flex-col items-center gap-4 py-24 text-stone-400">
-            <span className="material-symbols-outlined text-6xl">military_tech</span>
+            <Medal className="w-12 h-12" />
             <p className="font-medium">Complete sessions to earn badges!</p>
             <Link href="/dashboard" className="px-6 py-2 bg-[#173901] text-white rounded-lg text-sm font-bold hover:bg-[#2d5016] transition-all">
               Start a Session

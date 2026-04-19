@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Check, ChevronDown } from 'lucide-react';
 import { apiRequest } from '@/lib/api';
 
 const AVATARS = [
@@ -25,7 +26,7 @@ export default function ChildSetupPage() {
   const router = useRouter();
   const [childName, setChildName] = useState('');
   const [ageBand, setAgeBand] = useState('3-5');
-  const [avatar, setAvatar] = useState(1); // index
+  const [avatar, setAvatar] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -48,7 +49,6 @@ export default function ChildSetupPage() {
 
   return (
     <main className="min-h-screen flex flex-col selection:bg-[#ffdad4]/30 bg-[#FAF7F2]">
-      {/* Background blobs */}
       <div className="fixed top-0 left-0 w-full h-full -z-10 pointer-events-none opacity-50 overflow-hidden">
         <div className="absolute -top-24 -left-24 w-[500px] h-[500px] rounded-full bg-[#865047]/5 blur-[120px]" />
         <div className="absolute bottom-0 right-0 w-[400px] h-[400px] rounded-full bg-[#44664a]/5 blur-[100px]" />
@@ -56,15 +56,12 @@ export default function ChildSetupPage() {
 
       <div className="flex-grow flex flex-col items-center justify-center p-6 md:p-12">
         <div className="w-full max-w-[480px] bg-white rounded-2xl p-10 shadow-[0_20px_50px_rgba(28,28,25,0.04)] relative overflow-hidden">
-          {/* Top accent bar */}
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#865047]/20 via-[#865047] to-[#865047]/20 opacity-30" />
 
-          {/* Logo */}
           <div className="flex flex-col items-center mb-8">
             <span className="text-2xl font-serif italic text-[#C4847A] tracking-tight">Bailey &amp; Beau</span>
           </div>
 
-          {/* Header */}
           <div className="text-center mb-10">
             <h2 className="text-3xl md:text-4xl font-headline italic text-[#1c1c19] mb-3 leading-tight">
               Tell Us About Your Child
@@ -76,7 +73,6 @@ export default function ChildSetupPage() {
 
           <form className="space-y-8" onSubmit={handleSubmit}>
             <div className="space-y-6">
-              {/* Child name */}
               <div className="space-y-2">
                 <label className="block text-[13px] font-semibold text-[#524341] uppercase tracking-wider pl-1">
                   Child&apos;s First Name
@@ -91,7 +87,6 @@ export default function ChildSetupPage() {
                 />
               </div>
 
-              {/* Age band */}
               <div className="space-y-2">
                 <label className="block text-[13px] font-semibold text-[#524341] uppercase tracking-wider pl-1">
                   Age Range
@@ -107,13 +102,12 @@ export default function ChildSetupPage() {
                     ))}
                   </select>
                   <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#524341]/60">
-                    <span className="material-symbols-outlined">expand_more</span>
+                    <ChevronDown className="w-5 h-5" />
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Avatar selection */}
             <div className="space-y-4">
               <label className="block text-[13px] font-semibold text-[#524341] uppercase tracking-wider pl-1 text-center">
                 Pick an Avatar
@@ -139,7 +133,7 @@ export default function ChildSetupPage() {
                     </div>
                     {avatar === i && (
                       <div className="absolute -top-1 -right-1 bg-[#44664a] text-white rounded-full p-0.5 shadow-md">
-                        <span className="material-symbols-outlined text-[14px] font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>check</span>
+                        <Check className="w-3 h-3" strokeWidth={3} />
                       </div>
                     )}
                   </button>
@@ -149,7 +143,6 @@ export default function ChildSetupPage() {
 
             {error && <p className="text-sm text-red-600 font-medium text-center">{error}</p>}
 
-            {/* Submit */}
             <button
               type="submit"
               disabled={loading}
@@ -158,7 +151,6 @@ export default function ChildSetupPage() {
               {loading ? 'Saving…' : 'Continue to Dashboard'}
             </button>
 
-            {/* Step dots — step 2 of 2 */}
             <div className="flex justify-center items-center gap-3 pt-2">
               <div className="w-2.5 h-2.5 rounded-full bg-[#865047]/20" />
               <div className="w-2.5 h-2.5 rounded-full bg-[#865047] ring-4 ring-[#865047]/10" />

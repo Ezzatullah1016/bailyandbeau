@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { Baby, CheckCircle, LogOut, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
+import { Icon } from '@/components/ui/Icon';
 import { apiRequest } from '@/lib/api';
 
 interface MeData { id: number; username: string; email: string; first_name: string; last_name: string; }
@@ -30,14 +32,14 @@ function Sidebar({ me }: { me: MeData | null }) {
         ].map((item) => (
           <Link key={item.href} href={item.href}
             className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${item.active ? 'bg-emerald-900/50 text-[#feae2c] font-bold' : 'text-[#a8d38a]/70 hover:text-white hover:bg-emerald-900/40'}`}>
-            <span className="material-symbols-outlined" style={item.active ? { fontVariationSettings: "'FILL' 1" } : undefined}>{item.icon}</span>
+            <Icon name={item.icon} className="w-5 h-5" />
             {item.label}
           </Link>
         ))}
       </nav>
       <div className="px-4 mt-auto pt-8 border-t border-white/5">
         <div className="flex items-center gap-3 p-2 rounded-xl bg-white/5">
-          <div className="h-10 w-10 rounded-full bg-[#feae2c] flex items-center justify-center text-[#2d5016] font-bold text-sm flex-shrink-0">{initials}</div>
+          <div className="h-10 w-10 rounded-full bg-[#feae2c] flex items-center justify-center text-[#2d5016] font-bold text-sm shrink-0">{initials}</div>
           <div className="flex-1 min-w-0">
             <p className="text-white text-sm font-medium truncate">{displayName}</p>
             <button onClick={() => { localStorage.removeItem('bb_access_token'); localStorage.removeItem('bb_refresh_token'); window.location.href = '/login'; }}
@@ -56,12 +58,8 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-
-  // Profile form state
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-
-  // Add child form
   const [showAddChild, setShowAddChild] = useState(false);
   const [newChildName, setNewChildName] = useState('');
   const [newChildAge, setNewChildAge] = useState('3-5');
@@ -109,15 +107,12 @@ export default function SettingsPage() {
 
   if (loading) return (
     <div className="h-screen w-screen flex items-center justify-center bg-[#fff9ee]">
-      <span className="material-symbols-outlined text-5xl text-[#2d5016] animate-spin">sync</span>
+      <RefreshCw className="w-10 h-10 text-[#2d5016] animate-spin" />
     </div>
   );
 
   return (
     <>
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Plus+Jakarta+Sans:wght@200..800&display=swap" />
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" />
-      <style>{`.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24}.font-headline{font-family:'Newsreader',serif}.font-body{font-family:'Plus Jakarta Sans',sans-serif}body{background-color:#fff9ee;font-family:'Plus Jakarta Sans',sans-serif}`}</style>
       <Sidebar me={me} />
       <header className="flex items-center w-full px-8 h-16 ml-64 sticky top-0 z-40 bg-[#fff9ee]/80 backdrop-blur-xl shadow-sm border-b border-[#c3c9b9]/20">
         <div className="font-headline text-xl font-bold text-[#173901]">Settings</div>
@@ -129,7 +124,6 @@ export default function SettingsPage() {
         </div>
 
         <div className="max-w-2xl space-y-8">
-          {/* Profile */}
           <div className="bg-white rounded-2xl p-8 shadow-sm border border-[#c3c9b9]/10">
             <h3 className="font-headline text-xl font-bold text-[#173901] mb-6">Profile</h3>
             <form onSubmit={saveProfile} className="space-y-4">
@@ -158,27 +152,30 @@ export default function SettingsPage() {
               <div className="flex items-center gap-4 pt-2">
                 <button type="submit" disabled={saving}
                   className="px-6 py-3 bg-[#173901] text-white font-bold text-sm rounded-xl hover:bg-[#2d5016] transition-all disabled:opacity-60 flex items-center gap-2">
-                  {saving ? <span className="material-symbols-outlined text-sm animate-spin">sync</span> : <span className="material-symbols-outlined text-sm">save</span>}
+                  {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   {saving ? 'Saving…' : 'Save Changes'}
                 </button>
-                {saved && <span className="text-emerald-600 text-sm font-medium flex items-center gap-1"><span className="material-symbols-outlined text-sm">check_circle</span> Saved!</span>}
+                {saved && (
+                  <span className="text-emerald-600 text-sm font-medium flex items-center gap-1">
+                    <CheckCircle className="w-4 h-4" /> Saved!
+                  </span>
+                )}
               </div>
             </form>
           </div>
 
-          {/* Children */}
           <div className="bg-white rounded-2xl p-8 shadow-sm border border-[#c3c9b9]/10">
             <div className="flex justify-between items-center mb-6">
               <h3 className="font-headline text-xl font-bold text-[#173901]">Child Profiles</h3>
               <button onClick={() => setShowAddChild(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-[#173901] text-white text-sm font-bold rounded-xl hover:bg-[#2d5016] transition-all">
-                <span className="material-symbols-outlined text-sm">add</span> Add Child
+                <Plus className="w-4 h-4" /> Add Child
               </button>
             </div>
 
             {children.length === 0 && !showAddChild && (
               <div className="text-center py-8 text-stone-400">
-                <span className="material-symbols-outlined text-4xl mb-2 block">child_care</span>
+                <Baby className="w-8 h-8 mx-auto mb-2" />
                 <p className="text-sm">No child profiles yet</p>
               </div>
             )}
@@ -195,9 +192,8 @@ export default function SettingsPage() {
                       <p className="text-xs text-stone-400">Ages {child.age_band}</p>
                     </div>
                   </div>
-                  <button onClick={() => removeChild(child.id)}
-                    className="text-stone-300 hover:text-red-400 transition-colors">
-                    <span className="material-symbols-outlined text-sm">delete</span>
+                  <button onClick={() => removeChild(child.id)} className="text-stone-300 hover:text-red-400 transition-colors">
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               ))}
@@ -231,13 +227,12 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {/* Danger zone */}
           <div className="bg-white rounded-2xl p-8 shadow-sm border border-red-100">
             <h3 className="font-headline text-xl font-bold text-red-700 mb-4">Sign Out</h3>
             <p className="text-stone-500 text-sm mb-4">Sign out of your Bailey &amp; Beau account on this device.</p>
             <button onClick={() => { localStorage.removeItem('bb_access_token'); localStorage.removeItem('bb_refresh_token'); window.location.href = '/login'; }}
               className="px-6 py-3 bg-red-50 text-red-700 font-bold text-sm rounded-xl hover:bg-red-100 border border-red-200 transition-all flex items-center gap-2">
-              <span className="material-symbols-outlined text-sm">logout</span> Sign Out
+              <LogOut className="w-4 h-4" /> Sign Out
             </button>
           </div>
         </div>

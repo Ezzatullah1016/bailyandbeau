@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { usePlaceholderPdf } from '@/lib/usePlaceholderPdf';
 import { useParams, useRouter } from 'next/navigation';
 import {
   LiveKitRoom,
@@ -26,6 +27,32 @@ import {
 } from '@/lib/api';
 import { AnnotationToolbar, type AnnotationTool } from '@/components/annotation/AnnotationToolbar';
 import type { AnnotationCanvasHandle } from '@/components/annotation/AnnotationCanvas';
+import {
+  AlarmClock,
+  BookMarked,
+  BookOpen,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  FileText,
+  Loader2,
+  MessageCircle,
+  Mic,
+  MicOff,
+  Pencil,
+  Rocket,
+  Settings,
+  SlidersHorizontal,
+  Star,
+  Timer,
+  Trophy,
+  User,
+  Users,
+  Video,
+  VideoOff,
+  WifiOff,
+  X,
+} from 'lucide-react';
 
 // Dynamic import for Fabric canvas (SSR-unsafe)
 const AnnotationCanvas = dynamic(
@@ -71,16 +98,17 @@ function ConnectionBanner() {
 
   if (state === ConnectionState.Connected) return null;
 
-  const map: Record<string, { bg: string; text: string; icon: string; label: string }> = {
-    [ConnectionState.Connecting]:   { bg: 'bg-amber-900/80 border-amber-600/30', text: 'text-amber-200', icon: 'sync',               label: 'Connecting…' },
-    [ConnectionState.Reconnecting]: { bg: 'bg-amber-900/80 border-amber-600/30', text: 'text-amber-200', icon: 'sync_problem',        label: 'Reconnecting…' },
-    [ConnectionState.Disconnected]: { bg: 'bg-red-900/80 border-red-600/30',     text: 'text-red-200',   icon: 'signal_disconnected', label: 'Disconnected — trying to rejoin' },
+  const map: Record<string, { bg: string; text: string; Icon: React.ElementType; label: string }> = {
+    [ConnectionState.Connecting]:   { bg: 'bg-amber-900/80 border-amber-600/30', text: 'text-amber-200', Icon: Loader2,  label: 'Connecting…' },
+    [ConnectionState.Reconnecting]: { bg: 'bg-amber-900/80 border-amber-600/30', text: 'text-amber-200', Icon: WifiOff,  label: 'Reconnecting…' },
+    [ConnectionState.Disconnected]: { bg: 'bg-red-900/80 border-red-600/30',     text: 'text-red-200',   Icon: WifiOff,  label: 'Disconnected — trying to rejoin' },
   };
   const s = map[state] ?? map[ConnectionState.Disconnected];
+  const BannerIcon = s.Icon;
 
   return (
     <div className={`mx-auto mt-4 w-[90%] max-w-4xl px-6 py-2.5 rounded-xl flex items-center justify-center gap-3 border animate-pulse ${s.bg}`}>
-      <span className={`material-symbols-outlined text-lg ${s.text}`}>{s.icon}</span>
+      <BannerIcon className={`w-5 h-5 ${s.text}`} />
       <span className={`text-sm font-medium tracking-tight ${s.text}`}>{s.label}</span>
     </div>
   );
@@ -98,7 +126,7 @@ function ParticipantTile({ identity, label, isHost }: { identity: string; label:
         <VideoTrack trackRef={track} className="w-full h-full object-cover opacity-80" />
       ) : (
         <div className="w-full h-full flex items-center justify-center">
-          <span className="material-symbols-outlined text-stone-600 text-4xl">person</span>
+          <User className="w-10 h-10 text-stone-600" />
         </div>
       )}
       <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
@@ -142,14 +170,14 @@ function LocalControls() {
         className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${isMicrophoneEnabled ? 'bg-stone-800/50 text-stone-300 hover:bg-stone-700/50' : 'bg-red-900/50 text-red-300 hover:bg-red-800/50'}`}
         title={isMicrophoneEnabled ? 'Mute' : 'Unmute'}
       >
-        <span className="material-symbols-outlined text-sm">{isMicrophoneEnabled ? 'mic' : 'mic_off'}</span>
+        {isMicrophoneEnabled ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
       </button>
       <button
         onClick={() => localParticipant.setCameraEnabled(!isCameraEnabled)}
         className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${isCameraEnabled ? 'bg-stone-800/50 text-stone-300 hover:bg-stone-700/50' : 'bg-red-900/50 text-red-300 hover:bg-red-800/50'}`}
         title={isCameraEnabled ? 'Stop camera' : 'Start camera'}
       >
-        <span className="material-symbols-outlined text-sm">{isCameraEnabled ? 'videocam' : 'videocam_off'}</span>
+        {isCameraEnabled ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
       </button>
     </div>
   );
@@ -162,7 +190,7 @@ function BookPageImage({ url, pageNumber }: { url: string; pageNumber: number })
   return (
     <div className="relative w-full h-full flex items-center justify-center bg-white">
       {!loaded && (
-        <span className="absolute material-symbols-outlined text-stone-300 text-5xl animate-pulse">hourglass_top</span>
+        <Loader2 className="absolute w-12 h-12 text-stone-300 animate-spin" />
       )}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
@@ -177,7 +205,7 @@ function BookPageImage({ url, pageNumber }: { url: string; pageNumber: number })
   );
 }
 
-// ─── Session-complete overlay (from Session-Completion.html) ──────────────────
+// ─── Session-complete overlay ─────────────────────────────────────────────────
 
 function CompletionOverlay({
   bookTitle,
@@ -199,23 +227,20 @@ function CompletionOverlay({
 
   return (
     <div className="fixed inset-0 z-[200] bg-[#2d5016] flex items-center justify-center p-6 overflow-y-auto">
-      {/* Background decoration */}
       <div className="fixed inset-0 pointer-events-none" style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.15) 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
       <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#173901] opacity-20 blur-[120px] rounded-full pointer-events-none" />
       <div className="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-[#835500] opacity-20 blur-[120px] rounded-full pointer-events-none" />
 
-      {/* Header */}
       <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-6 py-6 pointer-events-none">
         <div className="text-2xl font-bold text-white italic font-headline pointer-events-auto">
           Bailey &amp; Beau
         </div>
         <button onClick={onDashboard} className="w-10 h-10 flex items-center justify-center text-white/80 hover:text-white pointer-events-auto transition-colors">
-          <span className="material-symbols-outlined text-3xl">close</span>
+          <X className="w-7 h-7" />
         </button>
       </header>
 
       <main className="relative z-10 w-full max-w-[560px] flex flex-col items-center text-center mt-20">
-        {/* Celebration */}
         <div className="mb-8 flex flex-col items-center">
           <span className="text-[72px] leading-none mb-4" role="img" aria-label="Party Popper">🎉</span>
           <h1 className="font-headline text-5xl text-white italic tracking-tight mb-3">Amazing Session!</h1>
@@ -224,7 +249,6 @@ function CompletionOverlay({
           </p>
         </div>
 
-        {/* Badge reveal */}
         <div className="w-full bg-white rounded-[2rem] p-10 shadow-[0_32px_64px_-12px_rgba(23,57,1,0.3)] mb-8">
           <div className="flex flex-col items-center">
             <span className="text-xs font-extrabold uppercase tracking-[0.2em] text-[#835500] mb-10">
@@ -237,7 +261,7 @@ function CompletionOverlay({
                   <div className="absolute w-[200px] h-[200px] border border-[#835500]/10 rounded-full" />
                   <div className="absolute w-[160px] h-[160px] border border-[#835500]/30 rounded-full" />
                   <div className="relative w-[120px] h-[120px] bg-[#feae2c] rounded-full flex items-center justify-center shadow-lg">
-                    <span className="material-symbols-outlined text-white text-5xl" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                    <Star className="w-12 h-12 text-white fill-white" />
                   </div>
                 </div>
                 <h2 className="font-headline text-[32px] text-[#173901] italic mb-2">{badge.badge_name}</h2>
@@ -245,37 +269,36 @@ function CompletionOverlay({
               </>
             ) : (
               <div className="flex items-center justify-center w-[120px] h-[120px] rounded-full bg-[#f3ede3] mb-8">
-                <span className="material-symbols-outlined text-[#2d5016] text-5xl" style={{ fontVariationSettings: "'FILL' 1" }}>menu_book</span>
+                <BookMarked className="w-14 h-14 text-[#2d5016]" />
               </div>
             )}
 
             <div className="w-full h-px bg-[#c3c9b9]/20 mb-8" />
 
-            {/* Session summary grid */}
             <div className="grid grid-cols-2 gap-y-6 gap-x-4 w-full text-left">
               <div className="flex items-start gap-3">
-                <span className="material-symbols-outlined text-[#173901] text-xl">auto_stories</span>
+                <BookOpen className="w-5 h-5 text-[#173901] mt-0.5 shrink-0" />
                 <div className="flex flex-col">
                   <span className="text-[10px] font-bold text-[#43493d] uppercase tracking-wider">Book</span>
                   <span className="text-sm font-semibold text-[#173901]">{bookTitle}</span>
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <span className="material-symbols-outlined text-[#173901] text-xl">schedule</span>
+                <Clock className="w-5 h-5 text-[#173901] mt-0.5 shrink-0" />
                 <div className="flex flex-col">
                   <span className="text-[10px] font-bold text-[#43493d] uppercase tracking-wider">Duration</span>
                   <span className="text-sm font-semibold text-[#173901]">{mins} minutes</span>
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <span className="material-symbols-outlined text-[#173901] text-xl">description</span>
+                <FileText className="w-5 h-5 text-[#173901] mt-0.5 shrink-0" />
                 <div className="flex flex-col">
                   <span className="text-[10px] font-bold text-[#43493d] uppercase tracking-wider">Pages Read</span>
                   <span className="text-sm font-semibold text-[#173901]">{pagesRead} of {pageCount}</span>
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <span className="material-symbols-outlined text-[#173901] text-xl">emoji_events</span>
+                <Trophy className="w-5 h-5 text-[#173901] mt-0.5 shrink-0" />
                 <div className="flex flex-col">
                   <span className="text-[10px] font-bold text-[#43493d] uppercase tracking-wider">Badges</span>
                   <span className="text-sm font-semibold text-[#173901]">{badges.length} earned</span>
@@ -285,7 +308,6 @@ function CompletionOverlay({
           </div>
         </div>
 
-        {/* Actions */}
         <div className="flex flex-col sm:flex-row items-center gap-4 w-full mb-10">
           <button
             onClick={onDashboard}
@@ -306,13 +328,23 @@ function TimerWarning({ remaining }: { remaining: number }) {
   const is2min = remaining <= 2 * 60;
   return (
     <div className={`mx-auto mt-4 w-[90%] max-w-4xl px-6 py-2.5 rounded-xl flex items-center justify-center gap-3 border animate-pulse ${is2min ? 'bg-red-900/70 border-red-600/30' : 'bg-[#644000] border-[#ffb955]/20'}`}>
-      <span className="material-symbols-outlined text-lg text-[#ffb955]">alarm_on</span>
+      <AlarmClock className="w-5 h-5 text-[#ffb955]" />
       <span className="text-sm font-medium tracking-tight text-[#ffb955]">
         {is2min ? '2 minutes remaining — finishing up!' : '5 minutes remaining — time to wrap up!'}
       </span>
     </div>
   );
 }
+
+// ─── Tab config ───────────────────────────────────────────────────────────────
+
+const TAB_ICONS: Record<string, React.ElementType> = {
+  video:        Video,
+  tools:        Pencil,
+  participants: Users,
+  chat:         MessageCircle,
+  settings:     SlidersHorizontal,
+};
 
 // ─── Room content ─────────────────────────────────────────────────────────────
 
@@ -335,15 +367,19 @@ function RoomContent({
   const { localParticipant } = useLocalParticipant();
 
   // ── Pages ─────────────────────────────────────────────────────────────────
-  const [pages, setPages] = useState<BookPageData[]>([]);
-  const [currentPage, setCurrentPage] = useState(0);
+  const [backendPages, setBackendPages] = useState<BookPageData[]>([]);
   const [loadingPages, setLoadingPages] = useState(true);
+  const placeholderPages = usePlaceholderPdf(
+    loadingPages || backendPages.length > 0 ? '' : '/Book-lulu.pdf',
+  );
+  const pages = backendPages.length > 0 ? backendPages : placeholderPages;
+  const [currentPage, setCurrentPage] = useState(0);
   const [activeTab, setActiveTab] = useState<'video' | 'tools' | 'participants' | 'chat' | 'settings'>('video');
 
   // ── Timer ─────────────────────────────────────────────────────────────────
   const [timerActive, setTimerActive] = useState(false);
   const [remaining, setRemaining] = useState(SESSION_DURATION_S);
-  const timerStartedAtRef = useRef<number | null>(null); // epoch ms when TIMER_START received
+  const timerStartedAtRef = useRef<number | null>(null);
 
   // ── Annotation ────────────────────────────────────────────────────────────
   const [annTool, setAnnTool] = useState<AnnotationTool>('pen');
@@ -362,7 +398,7 @@ function RoomContent({
   useEffect(() => {
     const guestPid = role === 'guest' ? participantId : undefined;
     getBookPages(bookId, guestPid)
-      .then(setPages)
+      .then(setBackendPages)
       .catch(() => {})
       .finally(() => setLoadingPages(false));
   }, [bookId, participantId, role]);
@@ -396,7 +432,6 @@ function RoomContent({
       setRemaining(rem);
       if (rem === 0) {
         clearInterval(interval);
-        // Auto-complete when timer hits 0 (host only)
         if (role === 'host') {
           handleEndSession(true);
         }
@@ -468,7 +503,6 @@ function RoomContent({
       const clamped = Math.max(0, Math.min(index, pages.length - 1));
       setCurrentPage(clamped);
       broadcastPageTurn(clamped);
-      // Clear canvas on page turn
       canvasRef.current?.clearCanvas(false);
       room.localParticipant.publishData(buildMsg('CANVAS_CLEAR', {}), { reliable: true });
     },
@@ -519,7 +553,6 @@ function RoomContent({
       const elapsed = timerStartedAtRef.current
         ? Math.floor((Date.now() - timerStartedAtRef.current) / 1000)
         : 0;
-      // Broadcast to guests
       room.localParticipant.publishData(
         buildMsg('SESSION_COMPLETE', { duration: elapsed }),
         { reliable: true },
@@ -543,14 +576,13 @@ function RoomContent({
   const progressPct = ((currentPage + 1) / pageCount) * 100;
 
   const tabs = [
-    { id: 'video',        icon: 'videocam',    label: 'Video' },
-    { id: 'tools',        icon: 'draw',        label: 'Tools' },
-    { id: 'participants', icon: 'group',        label: 'Participants' },
-    { id: 'chat',         icon: 'chat_bubble', label: 'Chat' },
-    { id: 'settings',     icon: 'tune',        label: 'Settings' },
+    { id: 'video',        label: 'Video' },
+    { id: 'tools',        label: 'Tools' },
+    { id: 'participants', label: 'Participants' },
+    { id: 'chat',         label: 'Chat' },
+    { id: 'settings',     label: 'Settings' },
   ] as const;
 
-  // Host identity: the local participant is host when role === 'host'
   const hostIdentity = role === 'host' ? room.localParticipant.identity : undefined;
 
   return (
@@ -583,7 +615,7 @@ function RoomContent({
               onClick={role === 'host' && !timerActive ? handleStartTimer : undefined}
               style={role === 'host' && !timerActive ? { cursor: 'pointer' } : undefined}
             >
-              <span className="material-symbols-outlined text-[#ffb955] text-sm">timer</span>
+              <Timer className="w-4 h-4 text-[#ffb955]" />
               <span className="text-[#ffb955] font-bold tracking-widest text-sm">{fmtTime(remaining)}</span>
               {role === 'host' && !timerActive && (
                 <span className="text-[#ffb955]/60 text-[10px] ml-1">tap to start</span>
@@ -595,7 +627,9 @@ function RoomContent({
             </span>
 
             <div className="flex items-center gap-2 ml-4">
-              <button className="material-symbols-outlined text-stone-400 hover:text-stone-100 transition-colors">settings</button>
+              <button className="w-8 h-8 flex items-center justify-center text-stone-400 hover:text-stone-100 transition-colors">
+                <Settings className="w-5 h-5" />
+              </button>
               {role === 'host' ? (
                 <button
                   onClick={() => handleEndSession(false)}
@@ -625,16 +659,19 @@ function RoomContent({
             </div>
 
             <nav className="flex flex-col gap-1 mb-6">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`rounded-xl font-bold flex items-center gap-3 px-4 py-3 transition-all text-left ${activeTab === tab.id ? 'bg-lime-900/30 text-lime-300' : 'text-stone-400 hover:text-stone-100 hover:bg-stone-800/40'}`}
-                >
-                  <span className="material-symbols-outlined">{tab.icon}</span>
-                  <span className="text-sm">{tab.label}</span>
-                </button>
-              ))}
+              {tabs.map((tab) => {
+                const TabIcon = TAB_ICONS[tab.id];
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`rounded-xl font-bold flex items-center gap-3 px-4 py-3 transition-all text-left ${activeTab === tab.id ? 'bg-lime-900/30 text-lime-300' : 'text-stone-400 hover:text-stone-100 hover:bg-stone-800/40'}`}
+                  >
+                    <TabIcon className="w-5 h-5" />
+                    <span className="text-sm">{tab.label}</span>
+                  </button>
+                );
+              })}
             </nav>
 
             <div className="mt-auto space-y-4">
@@ -665,16 +702,15 @@ function RoomContent({
                 {loadingPages ? (
                   <div className="flex-1 flex items-center justify-center bg-stone-100">
                     <div className="flex flex-col items-center gap-3 text-stone-400">
-                      <span className="material-symbols-outlined text-5xl animate-spin">sync</span>
+                      <Loader2 className="w-12 h-12 animate-spin" />
                       <span className="text-sm font-medium">Loading book…</span>
                     </div>
                   </div>
                 ) : pages.length === 0 ? (
                   <div className="flex-1 flex items-center justify-center bg-stone-50">
                     <div className="flex flex-col items-center gap-3 text-stone-400 p-12 text-center">
-                      <span className="material-symbols-outlined text-6xl">menu_book</span>
-                      <p className="text-stone-500 font-medium">No pages available yet.</p>
-                      <p className="text-xs text-stone-400">Upload pages via the admin panel.</p>
+                      <Loader2 className="w-12 h-12 animate-spin" />
+                      <p className="text-stone-500 font-medium">Loading placeholder book…</p>
                     </div>
                   </div>
                 ) : (
@@ -729,7 +765,7 @@ function RoomContent({
                       className="w-10 h-10 flex items-center justify-center bg-stone-800/80 rounded-full text-stone-200 hover:bg-stone-700 transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
                       aria-label="Previous page"
                     >
-                      <span className="material-symbols-outlined">chevron_left</span>
+                      <ChevronLeft className="w-5 h-5" />
                     </button>
                     <button
                       onClick={() => goToPage(currentPage + 1)}
@@ -737,11 +773,11 @@ function RoomContent({
                       className="w-10 h-10 flex items-center justify-center bg-stone-800/80 rounded-full text-stone-200 hover:bg-stone-700 transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
                       aria-label="Next page"
                     >
-                      <span className="material-symbols-outlined">chevron_right</span>
+                      <ChevronRight className="w-5 h-5" />
                     </button>
                   </div>
                   <button className="ml-4 px-6 py-2.5 bg-[#ffb955] text-[#291800] font-extrabold rounded-full text-sm flex items-center gap-2 hover:opacity-90 transition-all active:scale-95 shadow-xl shadow-[#ffb955]/10">
-                    <span className="material-symbols-outlined text-lg">rocket_launch</span>
+                    <Rocket className="w-5 h-5" />
                     Start Activity
                   </button>
                 </>
@@ -772,7 +808,6 @@ export default function ReadingRoomPage() {
   const [bookId, setBookId] = useState<string | null>(null);
   const [bookTitle, setBookTitle] = useState('Reading Room');
 
-  // Apply dark body style for reading room, clean up on unmount
   useEffect(() => {
     document.body.classList.add('reading-room');
     return () => document.body.classList.remove('reading-room');
@@ -812,7 +847,7 @@ export default function ReadingRoomPage() {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-[#131313] text-[#e5e2e1]">
         <div className="flex flex-col items-center gap-4">
-          <span className="material-symbols-outlined text-5xl text-lime-400 animate-spin">sync</span>
+          <Loader2 className="w-12 h-12 text-lime-400 animate-spin" />
           <p className="text-sm text-stone-400">Loading session…</p>
         </div>
       </div>

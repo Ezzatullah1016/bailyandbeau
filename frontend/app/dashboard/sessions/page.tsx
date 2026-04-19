@@ -3,20 +3,15 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { BookMarked, BookOpen, Link2, Plus, RefreshCw } from 'lucide-react';
+import { Icon } from '@/components/ui/Icon';
 import { apiRequest } from '@/lib/api';
 
 interface Session {
-  id: string;
-  book_title: string;
-  child_name: string;
-  status: string;
-  room_type: string;
-  created_at: string;
-  started_at: string | null;
-  ended_at: string | null;
-  invite_token?: string;
+  id: string; book_title: string; child_name: string; status: string;
+  room_type: string; created_at: string; started_at: string | null;
+  ended_at: string | null; invite_token?: string;
 }
-
 interface MeData { id: number; username: string; first_name: string; last_name: string; }
 
 const STATUS_PILL: Record<string, string> = {
@@ -57,14 +52,14 @@ function Sidebar({ me }: { me: MeData | null }) {
         ].map((item) => (
           <Link key={item.href} href={item.href}
             className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${item.active ? 'bg-emerald-900/50 text-[#feae2c] font-bold' : 'text-[#a8d38a]/70 hover:text-white hover:bg-emerald-900/40'}`}>
-            <span className="material-symbols-outlined" style={item.active ? { fontVariationSettings: "'FILL' 1" } : undefined}>{item.icon}</span>
+            <Icon name={item.icon} className="w-5 h-5" />
             {item.label}
           </Link>
         ))}
       </nav>
       <div className="px-4 mt-auto pt-8 border-t border-white/5">
         <div className="flex items-center gap-3 p-2 rounded-xl bg-white/5">
-          <div className="h-10 w-10 rounded-full bg-[#feae2c] flex items-center justify-center text-[#2d5016] font-bold text-sm flex-shrink-0">{initials}</div>
+          <div className="h-10 w-10 rounded-full bg-[#feae2c] flex items-center justify-center text-[#2d5016] font-bold text-sm shrink-0">{initials}</div>
           <div className="flex-1 min-w-0">
             <p className="text-white text-sm font-medium truncate">{displayName}</p>
             <button onClick={() => { localStorage.removeItem('bb_access_token'); localStorage.removeItem('bb_refresh_token'); window.location.href = '/login'; }}
@@ -103,20 +98,17 @@ export default function SessionsPage() {
 
   if (loading) return (
     <div className="h-screen w-screen flex items-center justify-center bg-[#fff9ee]">
-      <span className="material-symbols-outlined text-5xl text-[#2d5016] animate-spin">sync</span>
+      <RefreshCw className="w-10 h-10 text-[#2d5016] animate-spin" />
     </div>
   );
 
   return (
     <>
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Plus+Jakarta+Sans:wght@200..800&display=swap" />
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" />
-      <style>{`.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24}.font-headline{font-family:'Newsreader',serif}.font-body{font-family:'Plus Jakarta Sans',sans-serif}body{background-color:#fff9ee;font-family:'Plus Jakarta Sans',sans-serif}`}</style>
       <Sidebar me={me} />
       <header className="flex justify-between items-center w-full px-8 h-16 ml-64 sticky top-0 z-40 bg-[#fff9ee]/80 backdrop-blur-xl shadow-sm border-b border-[#c3c9b9]/20">
         <div className="font-headline text-xl font-bold text-[#173901]">Sessions</div>
         <Link href="/dashboard" className="px-4 py-2 bg-[#173901] text-white text-sm font-bold rounded-lg hover:bg-[#2d5016] transition-all flex items-center gap-2">
-          <span className="material-symbols-outlined text-sm">add</span> New Session
+          <Plus className="w-4 h-4" /> New Session
         </Link>
       </header>
       <main className="ml-64 p-8 min-h-screen bg-[#f9f3e9] font-body text-[#1d1b16]">
@@ -125,7 +117,6 @@ export default function SessionsPage() {
           <p className="text-stone-500">{sessions.length} session{sessions.length !== 1 ? 's' : ''} total</p>
         </div>
 
-        {/* Filters */}
         <div className="flex gap-3 mb-8 flex-wrap">
           {['all', 'completed', 'active', 'lobby', 'pending', 'cancelled'].map((f) => (
             <button key={f} onClick={() => setFilter(f)}
@@ -138,7 +129,7 @@ export default function SessionsPage() {
         <div className="bg-white rounded-2xl shadow-sm border border-[#c3c9b9]/10 overflow-hidden">
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center gap-4 py-24 text-stone-400">
-              <span className="material-symbols-outlined text-6xl">history_edu</span>
+              <BookMarked className="w-12 h-12" />
               <p className="font-medium">No sessions found</p>
               <Link href="/dashboard" className="px-6 py-2 bg-[#173901] text-white rounded-lg text-sm font-bold hover:bg-[#2d5016] transition-all">
                 Start a Session
@@ -159,8 +150,8 @@ export default function SessionsPage() {
                     <tr key={s.id} className="hover:bg-[#f9f3e9] transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="h-8 w-6 bg-[#2d5016]/10 rounded flex items-center justify-center flex-shrink-0">
-                            <span className="material-symbols-outlined text-[#2d5016] text-sm">menu_book</span>
+                          <div className="h-8 w-6 bg-[#2d5016]/10 rounded flex items-center justify-center shrink-0">
+                            <BookOpen className="w-4 h-4 text-[#2d5016]" />
                           </div>
                           <span className="font-semibold text-[#1d1b16] text-sm truncate max-w-[180px]">{s.book_title}</span>
                         </div>
@@ -176,13 +167,12 @@ export default function SessionsPage() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           {(s.status === 'active' || s.status === 'lobby') && (
-                            <Link href={`/session/${s.id}/lobby`}
-                              className="text-xs font-bold text-[#2d5016] hover:underline">Rejoin</Link>
+                            <Link href={`/session/${s.id}/lobby`} className="text-xs font-bold text-[#2d5016] hover:underline">Rejoin</Link>
                           )}
                           {(s.status === 'pending' || s.status === 'lobby' || s.status === 'active') && (
                             <button onClick={() => copyInviteLink(s.id)}
                               className="text-xs font-bold text-[#835500] hover:underline flex items-center gap-1">
-                              <span className="material-symbols-outlined text-xs">link</span> Copy Invite
+                              <Link2 className="w-3 h-3" /> Copy Invite
                             </button>
                           )}
                         </div>

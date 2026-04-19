@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Eye, EyeOff } from 'lucide-react';
 import { apiRequest, storeTokens } from '@/lib/api';
 
 type AuthResponse = {
@@ -18,11 +19,9 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Login fields
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
 
-  // Register fields
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
@@ -53,18 +52,11 @@ export default function LoginPage() {
     const nameParts = fullName.trim().split(' ');
     const firstName = nameParts[0] ?? '';
     const lastName = nameParts.slice(1).join(' ');
-    // username derived from email prefix + random suffix to avoid collisions
     const username = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '') + Math.floor(Math.random() * 9000 + 1000);
     try {
       const res = await apiRequest<AuthResponse>('/auth/register/', {
         method: 'POST',
-        body: JSON.stringify({
-          username,
-          email,
-          password: regPassword,
-          first_name: firstName,
-          last_name: lastName,
-        }),
+        body: JSON.stringify({ username, email, password: regPassword, first_name: firstName, last_name: lastName }),
       });
       storeTokens(res.data.tokens.access, res.data.tokens.refresh);
       router.push('/onboarding/plan');
@@ -77,7 +69,6 @@ export default function LoginPage() {
 
   return (
     <main className="min-h-screen flex items-center justify-center p-4 bg-[#FAF7F2]">
-      {/* Background blobs */}
       <div className="fixed -z-10 bottom-0 right-0 w-64 h-64 opacity-20 pointer-events-none">
         <div className="w-full h-full bg-gradient-to-tl from-[#ffdad4]/20 to-transparent rounded-full blur-3xl" />
       </div>
@@ -86,7 +77,6 @@ export default function LoginPage() {
       </div>
 
       <div className="w-full max-w-[480px] bg-white rounded-2xl p-10 shadow-[0_8px_40px_-12px_rgba(28,28,25,0.08)]">
-        {/* Logo */}
         <div className="flex flex-col items-center mb-8">
           <div className="text-2xl font-serif italic text-[#C4847A] mb-6">Bailey &amp; Beau</div>
           <h1 className="font-headline text-3xl font-bold text-[#1c1c19] text-center mb-2">
@@ -97,24 +87,18 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Tab switcher */}
         <div className="flex rounded-lg bg-[#f0ede9] p-1 mb-7">
           {(['login', 'register'] as const).map((t) => (
             <button
               key={t}
               onClick={() => { setTab(t); setError(''); }}
-              className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all ${
-                tab === t
-                  ? 'bg-white text-[#1c1c19] shadow-sm'
-                  : 'text-[#524341] hover:text-[#1c1c19]'
-              }`}
+              className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all ${tab === t ? 'bg-white text-[#1c1c19] shadow-sm' : 'text-[#524341] hover:text-[#1c1c19]'}`}
             >
               {t === 'login' ? 'Sign In' : 'Register'}
             </button>
           ))}
         </div>
 
-        {/* Login form */}
         {tab === 'login' && (
           <form className="space-y-5" onSubmit={handleLogin}>
             <div className="flex flex-col space-y-1.5">
@@ -145,9 +129,7 @@ export default function LoginPage() {
                   onClick={() => setShowPassword((v) => !v)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-[#847370]/60 hover:text-[#1c1c19] transition-colors"
                 >
-                  <span className="material-symbols-outlined text-[20px]">
-                    {showPassword ? 'visibility_off' : 'visibility'}
-                  </span>
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
@@ -162,7 +144,6 @@ export default function LoginPage() {
           </form>
         )}
 
-        {/* Register form */}
         {tab === 'register' && (
           <form className="space-y-5" onSubmit={handleRegister}>
             <div className="flex flex-col space-y-1.5">
@@ -206,9 +187,7 @@ export default function LoginPage() {
                   onClick={() => setShowPassword((v) => !v)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-[#847370]/60 hover:text-[#1c1c19] transition-colors"
                 >
-                  <span className="material-symbols-outlined text-[20px]">
-                    {showPassword ? 'visibility_off' : 'visibility'}
-                  </span>
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
@@ -223,7 +202,6 @@ export default function LoginPage() {
           </form>
         )}
 
-        {/* Footer link */}
         <div className="mt-8 text-center text-sm text-[#524341]">
           {tab === 'login' ? (
             <>

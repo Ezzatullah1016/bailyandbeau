@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { BookOpen, Clock, Rocket, BookMarked, Sparkles, VideoOff } from 'lucide-react';
 import {
   getSession,
   joinViaInvite,
@@ -209,7 +210,6 @@ export default function LobbyPage() {
 
   return (
     <>
-
       <main className="flex h-screen w-full overflow-hidden font-body text-[#1d1b16] antialiased bg-[#fff9ee]">
 
         {/* ── LEFT COLUMN ──────────────────────────────────────────────────── */}
@@ -236,11 +236,11 @@ export default function LobbyPage() {
                 </div>
                 <div className="flex items-center gap-4 text-[#43493d] text-sm mb-4">
                   <div className="flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-base">auto_stories</span>
+                    <BookOpen className="w-4 h-4" />
                     <span>Reading Room</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-base">schedule</span>
+                    <Clock className="w-4 h-4" />
                     <span>20 minutes</span>
                   </div>
                 </div>
@@ -285,7 +285,7 @@ export default function LobbyPage() {
                     <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
                   ) : (
                     <div className="flex flex-col items-center">
-                      <span className="material-symbols-outlined text-white text-4xl mb-2">videocam_off</span>
+                      <VideoOff className="w-10 h-10 text-white mb-2" />
                       <span className="text-white/70 text-xs font-medium tracking-wide">Camera Preview</span>
                     </div>
                   )}
@@ -335,9 +335,9 @@ export default function LobbyPage() {
                       ? 'Waiting for host to start the session…'
                       : guestReady
                       ? 'Starting session…'
-                      : 'Waiting for the other participant to join…'}
+                      : 'Waiting for the other participant to join… or start solo below.'}
                   </p>
-                  {/* Host can manually start once guest is ready */}
+                  {/* Host can start once guest is ready, or start solo if no guest joins */}
                   {!isGuestMode && guestReady && (
                     <button
                       onClick={handleHostStart}
@@ -346,14 +346,20 @@ export default function LobbyPage() {
                       Start Session
                     </button>
                   )}
+                  {!isGuestMode && !guestReady && (
+                    <button
+                      onClick={handleHostStart}
+                      className="mt-2 px-8 py-3 bg-[#173901] text-white rounded-lg font-bold text-sm transition-all hover:scale-[1.01] active:scale-95"
+                    >
+                      Start Solo Session
+                    </button>
+                  )}
                 </div>
               )}
 
               {phase === 'starting' && (
                 <div className="flex flex-col items-center gap-3 py-4">
-                  <span className="material-symbols-outlined text-[#2d5016] text-4xl animate-pulse">
-                    rocket_launch
-                  </span>
+                  <Rocket className="w-10 h-10 text-[#2d5016] animate-pulse" />
                   <p className="text-sm text-[#173901] font-bold">Session starting…</p>
                 </div>
               )}
@@ -375,7 +381,7 @@ export default function LobbyPage() {
 
           <div className="relative z-10 w-full max-w-sm flex flex-col items-center text-center">
             <div className="w-[240px] h-[320px] bg-white rounded-xl shadow-2xl overflow-hidden mb-10 transform -rotate-2 hover:rotate-0 transition-transform duration-500 cursor-pointer flex items-center justify-center">
-              <span className="material-symbols-outlined text-[#2d5016] text-7xl">menu_book</span>
+              <BookMarked className="w-20 h-20 text-[#2d5016]" />
             </div>
 
             <h3 className="text-3xl font-headline font-bold text-white mb-4">{bookTitle}</h3>
@@ -405,13 +411,8 @@ export default function LobbyPage() {
             </div>
           </div>
 
-          <div className="absolute bottom-0 right-0 p-8">
-            <span
-              className="material-symbols-outlined text-white/5 select-none pointer-events-none"
-              style={{ fontSize: '180px', fontVariationSettings: "'wght' 100" }}
-            >
-              auto_awesome
-            </span>
+          <div className="absolute bottom-0 right-0 p-8 opacity-5 select-none pointer-events-none">
+            <Sparkles className="w-40 h-40 text-white" />
           </div>
         </section>
       </main>

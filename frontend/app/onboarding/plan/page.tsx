@@ -2,44 +2,33 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Check, CheckCircle } from 'lucide-react';
 import { apiRequest } from '@/lib/api';
 
 interface BillingPlan {
-  code: string;
-  name: string;
-  price_gbp: string;
-  interval: string;
-  sessions_included: number;
+  code: string; name: string; price_gbp: string;
+  interval: string; sessions_included: number;
 }
 
 const PLAN_FEATURES: Record<string, string[]> = {
   'monthly-starter': [
-    '8 reading sessions / month',
-    'Full book library access',
-    'Shared annotation canvas',
-    'Session timer & badges',
-    'Guest invite link',
+    '8 reading sessions / month', 'Full book library access',
+    'Shared annotation canvas', 'Session timer & badges', 'Guest invite link',
   ],
   'monthly-plus': [
-    '20 reading sessions / month',
-    'Everything in Starter',
-    'Priority support',
-    'Session recordings (coming soon)',
-    'Multiple child profiles',
+    '20 reading sessions / month', 'Everything in Starter',
+    'Priority support', 'Session recordings (coming soon)', 'Multiple child profiles',
   ],
   'session-pack-5': [
-    '5 sessions, never expire',
-    'Full book library access',
-    'Shared annotation canvas',
-    'Session timer & badges',
-    'Guest invite link',
+    '5 sessions, never expire', 'Full book library access',
+    'Shared annotation canvas', 'Session timer & badges', 'Guest invite link',
   ],
 };
 
 const PLAN_BADGE: Record<string, { label: string; color: string }> = {
-  'monthly-starter': { label: 'Popular', color: 'bg-[#44664a] text-white' },
-  'monthly-plus': { label: 'Best Value', color: 'bg-[#7c572d] text-white' },
-  'session-pack-5': { label: 'Flexible', color: 'bg-[#524341] text-white' },
+  'monthly-starter': { label: 'Popular',    color: 'bg-[#44664a] text-white' },
+  'monthly-plus':    { label: 'Best Value', color: 'bg-[#7c572d] text-white' },
+  'session-pack-5':  { label: 'Flexible',   color: 'bg-[#524341] text-white' },
 };
 
 export default function ChoosePlanPage() {
@@ -63,11 +52,9 @@ export default function ChoosePlanPage() {
         method: 'POST',
         body: JSON.stringify({ plan_code: selected }),
       });
-      // Redirect to Stripe checkout
       window.location.href = res.data.checkout_url;
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Could not start checkout.';
-      // If Stripe not configured, skip to child setup
       if (msg.includes('stripe') || msg.includes('Stripe') || msg.includes('500') || msg.includes('not configured')) {
         router.push('/onboarding/child');
       } else {
@@ -78,16 +65,11 @@ export default function ChoosePlanPage() {
     }
   }
 
-  function handleSkip() {
-    router.push('/onboarding/child');
-  }
-
   const intervalLabel = (interval: string) =>
     interval === 'one_off' ? 'one-off' : `/${interval}`;
 
   return (
     <main className="min-h-screen flex flex-col items-center bg-[#FAF7F2]">
-      {/* Header */}
       <header className="flex justify-center items-center w-full py-8 px-4">
         <div className="text-2xl font-serif italic text-[#C4847A] tracking-tight">Bailey &amp; Beau</div>
       </header>
@@ -101,9 +83,8 @@ export default function ChoosePlanPage() {
             <p className="text-[#524341]/70 text-lg">You can change or cancel at any time.</p>
           </div>
 
-          {/* Plan grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-            {plans.map((plan, i) => {
+            {plans.map((plan) => {
               const isSelected = selected === plan.code;
               const badge = PLAN_BADGE[plan.code];
               const features = PLAN_FEATURES[plan.code] ?? [];
@@ -119,7 +100,6 @@ export default function ChoosePlanPage() {
                       : 'border border-[#E0D5C8] bg-[#fcf9f4] hover:bg-[#f6f3ee]'
                   } ${isFeatured && !isSelected ? 'md:scale-[1.02]' : ''}`}
                 >
-                  {/* Badge */}
                   {badge && (
                     <div className="absolute -top-3 right-4">
                       <span className={`inline-block px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-full shadow-sm ${badge.color}`}>
@@ -128,11 +108,10 @@ export default function ChoosePlanPage() {
                     </div>
                   )}
 
-                  {/* Selection ring */}
                   <div className={`absolute top-4 right-4 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
                     isSelected ? 'border-[#C4847A] bg-[#C4847A]' : 'border-[#d7c2bf]'
                   }`}>
-                    {isSelected && <span className="material-symbols-outlined text-white text-sm" style={{ fontVariationSettings: "'FILL' 1", fontSize: 14 }}>check</span>}
+                    {isSelected && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
                   </div>
 
                   <div className="mb-4 pt-1">
@@ -147,13 +126,12 @@ export default function ChoosePlanPage() {
                   <ul className="flex-grow space-y-3 mb-6">
                     {features.map((f, fi) => (
                       <li key={fi} className="flex items-start gap-2.5 text-sm text-[#1c1c19]">
-                        <span className="material-symbols-outlined text-[#44664a] text-base shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+                        <CheckCircle className="w-4 h-4 text-[#44664a] shrink-0 mt-0.5" fill="#44664a" color="white" />
                         <span>{f}</span>
                       </li>
                     ))}
                   </ul>
 
-                  {/* Order indicator */}
                   <div className={`text-xs font-semibold text-center py-2 rounded-lg transition-all ${
                     isSelected ? 'bg-[#C4847A] text-white' : 'bg-[#f0ede9] text-[#524341]'
                   }`}>
@@ -163,7 +141,6 @@ export default function ChoosePlanPage() {
               );
             })}
 
-            {/* Loading skeleton */}
             {plans.length === 0 && [0, 1, 2].map((i) => (
               <div key={i} className="h-64 rounded-xl bg-[#f0ede9] animate-pulse" />
             ))}
@@ -180,7 +157,7 @@ export default function ChoosePlanPage() {
               {loading ? 'Starting checkout…' : 'Continue to Payment'}
             </button>
             <button
-              onClick={handleSkip}
+              onClick={() => router.push('/onboarding/child')}
               className="text-sm text-[#847370] hover:text-[#524341] underline underline-offset-4 transition-colors"
             >
               Skip for now — I&apos;ll choose later
