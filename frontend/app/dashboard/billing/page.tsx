@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { CreditCard, RefreshCw } from 'lucide-react';
-import { Icon } from '@/components/ui/Icon';
 import { apiRequest } from '@/lib/api';
+import { Sidebar } from '@/components/dashboard/Sidebar';
+import { usePathname } from 'next/navigation';
 
 interface Plan { code: string; name: string; price_monthly: number; sessions_per_month: number; description: string; }
 interface Entitlement {
@@ -24,47 +25,10 @@ const STATUS_COLORS: Record<string, string> = {
   past_due: 'bg-red-100 text-red-700',
 };
 
-function Sidebar({ me }: { me: MeData | null }) {
-  const initials = me ? (`${me.first_name?.[0] ?? ''}${me.last_name?.[0] ?? ''}`).toUpperCase() || me.username[0].toUpperCase() : '?';
-  const displayName = me ? (me.first_name ? `${me.first_name} ${me.last_name}`.trim() : me.username) : '';
-  return (
-    <aside className="h-screen w-64 fixed left-0 top-0 overflow-y-auto bg-[#2d5016] flex flex-col py-8 z-50">
-      <div className="px-6 mb-10">
-        <h1 className="font-headline text-2xl italic text-[#feae2c]">Bailey &amp; Beau</h1>
-        <p className="text-[10px] uppercase tracking-widest text-[#a8d38a]/60 font-bold mt-1">The Living Storybook</p>
-      </div>
-      <nav className="flex-1 space-y-1 px-2">
-        {[
-          { href: '/dashboard',          icon: 'dashboard',    label: 'Dashboard', active: false },
-          { href: '/dashboard/library',  icon: 'auto_stories', label: 'Library',   active: false },
-          { href: '/dashboard/sessions', icon: 'history_edu',  label: 'Sessions',  active: false },
-          { href: '/dashboard/badges',   icon: 'military_tech',label: 'Badges',    active: false },
-          { href: '/dashboard/billing',  icon: 'payments',     label: 'Billing',   active: true  },
-          { href: '/dashboard/settings', icon: 'settings',     label: 'Settings',  active: false },
-        ].map((item) => (
-          <Link key={item.href} href={item.href}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${item.active ? 'bg-emerald-900/50 text-[#feae2c] font-bold' : 'text-[#a8d38a]/70 hover:text-white hover:bg-emerald-900/40'}`}>
-            <Icon name={item.icon} className="w-5 h-5" />
-            {item.label}
-          </Link>
-        ))}
-      </nav>
-      <div className="px-4 mt-auto pt-8 border-t border-white/5">
-        <div className="flex items-center gap-3 p-2 rounded-xl bg-white/5">
-          <div className="h-10 w-10 rounded-full bg-[#feae2c] flex items-center justify-center text-[#2d5016] font-bold text-sm shrink-0">{initials}</div>
-          <div className="flex-1 min-w-0">
-            <p className="text-white text-sm font-medium truncate">{displayName}</p>
-            <button onClick={() => { localStorage.removeItem('bb_access_token'); localStorage.removeItem('bb_refresh_token'); window.location.href = '/login'; }}
-              className="text-xs text-[#a8d38a]/50 hover:text-[#a8d38a] transition-colors">Sign Out</button>
-          </div>
-        </div>
-      </div>
-    </aside>
-  );
-}
 
 export default function BillingPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const [me, setMe] = useState<MeData | null>(null);
   const [entitlement, setEntitlement] = useState<Entitlement | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -83,18 +47,18 @@ export default function BillingPage() {
   const totalSessions = (entitlement?.sessions_remaining ?? 0) + (entitlement?.pack_sessions_remaining ?? 0);
 
   if (loading) return (
-    <div className="h-screen w-screen flex items-center justify-center bg-[#fff9ee]">
+    <div className="h-screen w-screen flex items-center justify-center bg-[#f0f9f0]">
       <RefreshCw className="w-10 h-10 text-[#2d5016] animate-spin" />
     </div>
   );
 
   return (
     <>
-      <Sidebar me={me} />
-      <header className="flex items-center w-full px-8 h-16 ml-64 sticky top-0 z-40 bg-[#fff9ee]/80 backdrop-blur-xl shadow-sm border-b border-[#c3c9b9]/20">
+      <Sidebar me={me} currentPath={pathname} />
+      <header className="flex items-center w-full px-8 h-16 ml-64 sticky top-0 z-40 bg-[#f0f9f0]/80 backdrop-blur-xl shadow-sm border-b border-[#2d5016]/10">
         <div className="font-headline text-xl font-bold text-[#173901]">Billing</div>
       </header>
-      <main className="ml-64 p-8 min-h-screen bg-[#f9f3e9] font-body text-[#1d1b16]">
+      <main className="ml-64 p-8 min-h-screen bg-[#f7faf6] font-body text-[#1d1b16]">
         <div className="mb-8">
           <h2 className="font-headline text-4xl text-[#173901] font-bold mb-2">Billing &amp; Subscription</h2>
           <p className="text-stone-500">Manage your plan and session credits</p>
@@ -116,18 +80,18 @@ export default function BillingPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6">
-            <div className="bg-[#f9f3e9] rounded-xl p-5">
+            <div className="bg-[#f0f9f0] rounded-xl p-5">
               <p className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-2">Sessions Remaining</p>
               <p className="font-headline text-4xl font-bold text-[#173901]">{totalSessions}</p>
               {(entitlement?.pack_sessions_remaining ?? 0) > 0 && (
                 <p className="text-xs text-stone-400 mt-1">incl. {entitlement?.pack_sessions_remaining} pack credits</p>
               )}
             </div>
-            <div className="bg-[#f9f3e9] rounded-xl p-5">
+            <div className="bg-[#f0f9f0] rounded-xl p-5">
               <p className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-2">Subscription Sessions</p>
               <p className="font-headline text-4xl font-bold text-[#835500]">{entitlement?.sessions_remaining ?? 0}</p>
             </div>
-            <div className="bg-[#f9f3e9] rounded-xl p-5">
+            <div className="bg-[#f0f9f0] rounded-xl p-5">
               <p className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-2">Renewal Date</p>
               <p className="font-headline text-xl font-bold text-[#173901]">
                 {entitlement?.renewal_date ? new Date(entitlement.renewal_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}

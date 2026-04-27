@@ -501,8 +501,11 @@ function RoomContent({
     (index: number) => {
       if (role !== 'host') return;
       const clamped = Math.max(0, Math.min(index, pages.length - 1));
-      setCurrentPage(clamped);
-      broadcastPageTurn(clamped);
+      // In spread mode, we always ensure index is even to keep alignment, 
+      // unless it's the very last page of an odd-numbered book.
+      const spreadIndex = clamped % 2 === 0 ? clamped : clamped - 1;
+      setCurrentPage(spreadIndex);
+      broadcastPageTurn(spreadIndex);
       canvasRef.current?.clearCanvas(false);
       room.localParticipant.publishData(buildMsg('CANVAS_CLEAR', {}), { reliable: true });
     },
@@ -572,8 +575,7 @@ function RoomContent({
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const pageCount = pages.length || 1;
-  const currentPageData = pages[currentPage] ?? null;
-  const progressPct = ((currentPage + 1) / pageCount) * 100;
+  const progressPct = (Math.min(currentPage + 2, pageCount) / pageCount) * 100;
 
   const tabs = [
     { id: 'video',        label: 'Video' },
@@ -714,11 +716,34 @@ function RoomContent({
                     </div>
                   </div>
                 ) : (
-                  <div className="flex-1 relative">
-                    {currentPageData && (
-                      <BookPageImage url={currentPageData.image_url} pageNumber={currentPage + 1} />
-                    )}
-                    {/* Annotation canvas — overlaid on top of book page */}
+                  <div className="flex-1 flex relative">
+                    {/* Left Page */}
+                    <div className="flex-1 relative bg-white">
+                      {pages[currentPage] && (
+                        <BookPageImage url={pages[currentPage].image_url} pageNumber={currentPage + 1} />
+                      )}
+                      <div className="absolute bottom-4 left-4 pointer-events-none z-20">
+                        <span className="font-headline text-stone-400 text-[10px] italic">
+                          Page {currentPage + 1}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Right Page */}
+                    <div className="flex-1 relative bg-white border-l border-stone-100">
+                      {pages[currentPage + 1] && (
+                        <BookPageImage url={pages[currentPage + 1].image_url} pageNumber={currentPage + 2} />
+                      )}
+                      {pages[currentPage + 1] && (
+                        <div className="absolute bottom-4 right-4 pointer-events-none z-20 text-right">
+                          <span className="font-headline text-stone-400 text-[10px] italic">
+                            Page {currentPage + 2}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Annotation canvas — overlaid on top of both pages */}
                     <AnnotationCanvas
                       ref={canvasRef}
                       tool={annTool}
@@ -726,11 +751,6 @@ function RoomContent({
                       brushSize={annBrush}
                       onSync={handleCanvasSync}
                     />
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none z-20">
-                      <span className="font-headline text-stone-400 text-sm italic">
-                        Page {currentPage + 1}
-                      </span>
-                    </div>
                   </div>
                 )}
 
@@ -753,23 +773,27 @@ function RoomContent({
             {/* Page navigation */}
             <div className="absolute bottom-6 right-6 flex items-center gap-4 z-10">
               <div className="flex items-center gap-2 px-4 py-2 bg-stone-950/40 backdrop-blur-md rounded-full text-xs font-medium text-stone-400">
-                Page {currentPage + 1} of {pageCount}
+                {pages[currentPage + 1] ? (
+                  <>Pages {currentPage + 1}-{currentPage + 2} of {pageCount}</>
+                ) : (
+                  <>Page {currentPage + 1} of {pageCount}</>
+                )}
               </div>
 
               {role === 'host' && (
                 <>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => goToPage(currentPage - 1)}
-                      disabled={currentPage === 0}
+                      onClick={() => goToPage(currentPage - 2)}
+                      disabled={currentPage <= 0}
                       className="w-10 h-10 flex items-center justify-center bg-stone-800/80 rounded-full text-stone-200 hover:bg-stone-700 transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
                       aria-label="Previous page"
                     >
                       <ChevronLeft className="w-5 h-5" />
                     </button>
                     <button
-                      onClick={() => goToPage(currentPage + 1)}
-                      disabled={currentPage >= pageCount - 1}
+                      onClick={() => goToPage(currentPage + 2)}
+                      disabled={currentPage >= pageCount - 2}
                       className="w-10 h-10 flex items-center justify-center bg-stone-800/80 rounded-full text-stone-200 hover:bg-stone-700 transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
                       aria-label="Next page"
                     >
