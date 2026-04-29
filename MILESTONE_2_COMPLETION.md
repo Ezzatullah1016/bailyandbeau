@@ -92,11 +92,13 @@ The backend runs on `http://16.16.146.231`. All API endpoints are prefixed `/api
 | URL | What It Is | Credentials |
 |---|---|---|
 | `http://16.16.146.231/` | Public home page | — |
-| `http://16.16.146.231/login/` | Auth portal (login / register) | — |
+| `http://16.16.146.231/login/` | Auth portal (login / register) | **`client-review` / `BaileyBeauReview2026!`** (provision with `python manage.py seed_client_review_user` on the server) |
 | `http://16.16.146.231/admin/` | Django admin panel | `admin` / `admin1234` |
 | `http://16.16.146.231/super-admin/dashboard/` | Custom super-admin dashboard | Login first |
 | `http://16.16.146.231/super-admin/sessions/` | Session monitor | Login first |
 | `http://16.16.146.231/super-admin/books/` | Book library | Login first |
+
+**Provisioning `http://16.16.146.231/login/` for QA:** SSH into the host, `cd` to the Django project, activate the app venv, then run `python manage.py seed_client_review_user`. That creates or resets **`client-review`** with password **`BaileyBeauReview2026!`**. Rotate or disable this account in Django admin when testing finishes.
 
 ### REST API — Session & Reading Room Endpoints
 

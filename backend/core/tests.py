@@ -329,6 +329,29 @@ class AuthApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["data"]["email"], "jwtparent@example.com")
 
+    def test_login_accepts_email_and_case_insensitive_username(self):
+        User.objects.create_user(
+            username="CaseUser",
+            email="caseuser@example.com",
+            password="StrongPass123!",
+            first_name="Case",
+            last_name="Test",
+        )
+        r_email = self.client.post(
+            "/api/v1/auth/login/",
+            data={"username": "caseuser@example.com", "password": "StrongPass123!"},
+            content_type="application/json",
+        )
+        self.assertEqual(r_email.status_code, 200)
+        self.assertIn("access", r_email.json()["data"]["tokens"])
+
+        r_ci = self.client.post(
+            "/api/v1/auth/login/",
+            data={"username": "caseuser", "password": "StrongPass123!"},
+            content_type="application/json",
+        )
+        self.assertEqual(r_ci.status_code, 200)
+
 
 class ReportingApiTests(TestCase):
     def setUp(self):

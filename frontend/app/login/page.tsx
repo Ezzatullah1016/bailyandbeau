@@ -34,7 +34,7 @@ export default function LoginPage() {
     try {
       const res = await apiRequest<AuthResponse>('/auth/login/', {
         method: 'POST',
-        body: JSON.stringify({ username: loginUsername, password: loginPassword }),
+        body: JSON.stringify({ username: loginUsername.trim(), password: loginPassword }),
       });
       storeTokens(res.data.tokens.access, res.data.tokens.refresh);
       router.push('/dashboard');

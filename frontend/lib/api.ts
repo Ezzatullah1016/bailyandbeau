@@ -1,17 +1,32 @@
 const defaultBaseUrl = 'http://127.0.0.1:8000/api/v1';
 const devFallbackBaseUrls = ['http://127.0.0.1:8001/api/v1'];
 
+/** Try-order for login/API calls: explicit env, same-origin `/api/v1` when not on localhost, then local defaults. */
+function computeApiBaseCandidates(): string[] {
+  const explicit = process.env.NEXT_PUBLIC_API_BASE_URL;
+  const urls: string[] = [];
+  if (explicit) urls.push(explicit);
+  if (typeof window !== 'undefined') {
+    const { hostname, origin } = window.location;
+    if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      const sameOrigin = `${origin}/api/v1`;
+      if (!urls.includes(sameOrigin)) urls.push(sameOrigin);
+    }
+  }
+  if (!urls.includes(defaultBaseUrl)) urls.push(defaultBaseUrl);
+  if (process.env.NODE_ENV !== 'production') {
+    for (const u of devFallbackBaseUrls) {
+      if (!urls.includes(u)) urls.push(u);
+    }
+  }
+  return urls;
+}
+
 export const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? defaultBaseUrl;
-const apiBaseUrls = Array.from(
-  new Set([
-    apiBaseUrl,
-    ...(process.env.NODE_ENV !== 'production' ? [defaultBaseUrl, ...devFallbackBaseUrls] : []),
-  ]),
-);
 
 async function fetchWithFallback(path: string, init?: RequestInit): Promise<Response> {
   let lastError: unknown;
-  for (const baseUrl of apiBaseUrls) {
+  for (const baseUrl of computeApiBaseCandidates()) {
     try {
       return await fetch(`${baseUrl}${path}`, init);
     } catch (error) {

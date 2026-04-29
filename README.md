@@ -100,6 +100,18 @@ Local demo credentials created by the command:
 - Admin: `admin` / `Admin123!`
 - Parent demo user: `demo-parent` / `Demo123!`
 
+### Client QA login (staging / production)
+
+Create a dedicated account for external testers (same credentials every time; safe to reset the password in Django admin after review):
+
+```powershell
+& ".\.venv\Scripts\python.exe" manage.py seed_client_review_user
+```
+
+- **`client-review` / `BaileyBeauReview2026!`** — parent-style user with active entitlement for dashboard testing.
+
+Run this once per deployed environment from the backend directory (after migrations). Share only with trusted reviewers and rotate the password when testing ends.
+
 ## Environment template
 
 Copy `.env.example` values into your deployment environment for:
