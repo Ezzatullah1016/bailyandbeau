@@ -4,6 +4,7 @@ import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff } from 'lucide-react';
 import { apiRequest, storeTokens } from '@/lib/api';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 
 type AuthResponse = {
   data: {
@@ -68,7 +69,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-4 bg-[#FAF7F2]">
+    <main className="min-h-screen flex items-center justify-center p-4 bg-[#ece6ee]">
       <div className="fixed -z-10 bottom-0 right-0 w-64 h-64 opacity-20 pointer-events-none">
         <div className="w-full h-full bg-gradient-to-tl from-[#ffdad4]/20 to-transparent rounded-full blur-3xl" />
       </div>
@@ -78,11 +79,13 @@ export default function LoginPage() {
 
       <div className="w-full max-w-[480px] bg-white rounded-2xl p-10 shadow-[0_8px_40px_-12px_rgba(28,28,25,0.08)]">
         <div className="flex flex-col items-center mb-8">
-          <div className="text-2xl font-serif italic text-[#C4847A] mb-6">Bailey &amp; Beau</div>
-          <h1 className="font-headline text-3xl font-bold text-[#1c1c19] text-center mb-2">
+          <div className="mb-6 flex justify-center">
+            <BrandLogo className="max-h-12" />
+          </div>
+          <h1 className="font-headline text-3xl font-bold text-[#3d3b62] text-center mb-2">
             {tab === 'login' ? 'Welcome back' : 'Create Your Account'}
           </h1>
-          <p className="font-jost text-[#8B7355] text-center text-sm">
+          <p className="font-body text-[#764f84] text-center text-sm">
             {tab === 'login' ? 'Sign in to continue reading together.' : 'Start reading together in minutes.'}
           </p>
         </div>
@@ -104,7 +107,7 @@ export default function LoginPage() {
             <div className="flex flex-col space-y-1.5">
               <label className="text-sm font-medium text-[#524341] px-1">Username or email</label>
               <input
-                className="w-full px-4 py-3 rounded-lg bg-[#ebe8e3] border-none ring-1 ring-inset ring-[#d7c2bf]/30 focus:ring-2 focus:ring-[#C4847A]/40 text-[#1c1c19] placeholder:text-[#847370]/60 transition-all outline-none"
+                className="w-full px-4 py-3 rounded-lg bg-[#faf7f9] border-none ring-1 ring-inset ring-[#764f84]/20 focus:ring-2 focus:ring-[#3b85a6]/50 text-[#3d3b62] placeholder:text-[#764f84]/60 transition-all outline-none"
                 placeholder="Your username"
                 value={loginUsername}
                 onChange={(e) => setLoginUsername(e.target.value)}
@@ -116,7 +119,7 @@ export default function LoginPage() {
               <label className="text-sm font-medium text-[#524341] px-1">Password</label>
               <div className="relative">
                 <input
-                  className="w-full px-4 py-3 rounded-lg bg-[#ebe8e3] border-none ring-1 ring-inset ring-[#d7c2bf]/30 focus:ring-2 focus:ring-[#C4847A]/40 text-[#1c1c19] placeholder:text-[#847370]/60 transition-all outline-none"
+                  className="w-full px-4 py-3 rounded-lg bg-[#faf7f9] border-none ring-1 ring-inset ring-[#764f84]/20 focus:ring-2 focus:ring-[#3b85a6]/50 text-[#3d3b62] placeholder:text-[#764f84]/60 transition-all outline-none"
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Your password"
                   value={loginPassword}
@@ -137,7 +140,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-4 mt-2 bg-[#C4847A] text-white font-semibold rounded-lg hover:brightness-105 active:scale-[0.98] transition-all shadow-sm disabled:opacity-60"
+              className="w-full py-4 mt-2 bg-[#3d3b62] text-[#eccdca] font-semibold rounded-lg hover:brightness-105 active:scale-[0.98] transition-all shadow-sm disabled:opacity-60"
             >
               {loading ? 'Signing in…' : 'Sign In'}
             </button>
@@ -149,7 +152,7 @@ export default function LoginPage() {
             <div className="flex flex-col space-y-1.5">
               <label className="text-sm font-medium text-[#524341] px-1">Full Name</label>
               <input
-                className="w-full px-4 py-3 rounded-lg bg-[#ebe8e3] border-none ring-1 ring-inset ring-[#d7c2bf]/30 focus:ring-2 focus:ring-[#C4847A]/40 text-[#1c1c19] placeholder:text-[#847370]/60 transition-all outline-none"
+                className="w-full px-4 py-3 rounded-lg bg-[#faf7f9] border-none ring-1 ring-inset ring-[#764f84]/20 focus:ring-2 focus:ring-[#3b85a6]/50 text-[#3d3b62] placeholder:text-[#764f84]/60 transition-all outline-none"
                 placeholder="Your name"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
@@ -160,7 +163,7 @@ export default function LoginPage() {
             <div className="flex flex-col space-y-1.5">
               <label className="text-sm font-medium text-[#524341] px-1">Email Address</label>
               <input
-                className="w-full px-4 py-3 rounded-lg bg-[#ebe8e3] border-none ring-1 ring-inset ring-[#d7c2bf]/30 focus:ring-2 focus:ring-[#C4847A]/40 text-[#1c1c19] placeholder:text-[#847370]/60 transition-all outline-none"
+                className="w-full px-4 py-3 rounded-lg bg-[#faf7f9] border-none ring-1 ring-inset ring-[#764f84]/20 focus:ring-2 focus:ring-[#3b85a6]/50 text-[#3d3b62] placeholder:text-[#764f84]/60 transition-all outline-none"
                 type="email"
                 placeholder="you@email.com"
                 value={email}
@@ -173,7 +176,7 @@ export default function LoginPage() {
               <label className="text-sm font-medium text-[#524341] px-1">Password</label>
               <div className="relative">
                 <input
-                  className="w-full px-4 py-3 rounded-lg bg-[#ebe8e3] border-none ring-1 ring-inset ring-[#d7c2bf]/30 focus:ring-2 focus:ring-[#C4847A]/40 text-[#1c1c19] placeholder:text-[#847370]/60 transition-all outline-none"
+                  className="w-full px-4 py-3 rounded-lg bg-[#faf7f9] border-none ring-1 ring-inset ring-[#764f84]/20 focus:ring-2 focus:ring-[#3b85a6]/50 text-[#3d3b62] placeholder:text-[#764f84]/60 transition-all outline-none"
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Min. 8 characters"
                   value={regPassword}
@@ -195,7 +198,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-4 mt-2 bg-[#C4847A] text-white font-semibold rounded-lg hover:brightness-105 active:scale-[0.98] transition-all shadow-sm disabled:opacity-60"
+              className="w-full py-4 mt-2 bg-[#3d3b62] text-[#eccdca] font-semibold rounded-lg hover:brightness-105 active:scale-[0.98] transition-all shadow-sm disabled:opacity-60"
             >
               {loading ? 'Creating account…' : 'Create Account'}
             </button>
@@ -206,14 +209,14 @@ export default function LoginPage() {
           {tab === 'login' ? (
             <>
               Don&apos;t have an account?{' '}
-              <button onClick={() => { setTab('register'); setError(''); }} className="ml-1 text-[#C4847A] font-semibold hover:underline underline-offset-4">
+              <button onClick={() => { setTab('register'); setError(''); }} className="ml-1 text-[#c84a71] font-semibold hover:underline underline-offset-4">
                 Sign Up
               </button>
             </>
           ) : (
             <>
               Already have an account?{' '}
-              <button onClick={() => { setTab('login'); setError(''); }} className="ml-1 text-[#C4847A] font-semibold hover:underline underline-offset-4">
+              <button onClick={() => { setTab('login'); setError(''); }} className="ml-1 text-[#c84a71] font-semibold hover:underline underline-offset-4">
                 Sign In
               </button>
             </>

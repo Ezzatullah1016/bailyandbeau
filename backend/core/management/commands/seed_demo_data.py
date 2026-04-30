@@ -116,16 +116,32 @@ class Command(BaseCommand):
 
         activity_book = next((book for book in created_books if book.slug == "colour-adventure"), None)
         if activity_book:
-            ActivityConfig.objects.get_or_create(
+
+            def quiz_envelope(book):
+                return {
+                    "schema_version": ActivityConfig.SCHEMA_VERSION,
+                    "activity_type": "quiz",
+                    "book_id": str(book.id),
+                    "ui": {
+                        "title": "Pick the bright stars",
+                        "instructions": "Choose the answer that matches the story.",
+                        "theme": "default",
+                    },
+                    "payload": {
+                        "question": "Which star is the brightest?",
+                        "options": ["Blue", "Gold", "Grey"],
+                        "correct_index": 1,
+                        "reveal_mode": "host_controlled",
+                    },
+                    "validation": {},
+                }
+
+            ActivityConfig.objects.update_or_create(
                 book=activity_book,
                 title="Pick the bright stars",
                 defaults={
                     "activity_type": ActivityConfig.ActivityType.QUIZ,
-                    "config": {
-                        "question": "Which star is the brightest?",
-                        "options": ["Blue", "Gold", "Grey"],
-                        "correct_index": 1,
-                    },
+                    "config": quiz_envelope(activity_book),
                     "sort_order": 1,
                     "is_active": True,
                 },

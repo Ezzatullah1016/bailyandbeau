@@ -1,3 +1,5 @@
+import type { ActivityConfigData } from '@/components/activity/types';
+
 const defaultBaseUrl = 'http://127.0.0.1:8000/api/v1';
 const devFallbackBaseUrls = ['http://127.0.0.1:8001/api/v1'];
 
@@ -310,21 +312,30 @@ export async function getBookPages(bookId: string, participantId?: string): Prom
   return res.data;
 }
 
+export async function getBookActivities(bookId: string, participantId?: string): Promise<ActivityConfigData[]> {
+  const qs = participantId ? `?participant_id=${encodeURIComponent(participantId)}` : '';
+  const res = await apiRequest<{ data: ActivityConfigData[] }>(`/books/${bookId}/activities/${qs}`);
+  return res.data;
+}
+
 // ─── Session snapshot ────────────────────────────────────────────────────────
 
 export async function updateSnapshot(
   sessionId: string,
   participantId: string,
   pageNumber: number,
+  timerRemainingSeconds?: number,
+  annotationState?: Record<string, unknown>,
+  activityState?: Record<string, unknown>,
 ) {
   await apiRequest(`/sessions/${sessionId}/snapshot/`, {
     method: 'PUT',
     body: JSON.stringify({
       participant_id: participantId,
       current_page: pageNumber,
-      timer_state: {},
-      annotation_state: {},
-      activity_state: {},
+      ...(typeof timerRemainingSeconds === 'number' ? { timer_remaining_seconds: timerRemainingSeconds } : {}),
+      annotation_state: annotationState ?? {},
+      activity_state: activityState ?? {},
     }),
   });
 }

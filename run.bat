@@ -8,13 +8,13 @@ for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":3000 "') do taskkill /PID %
 
 :: Start Django backend in a new window
 echo Starting Django backend on http://localhost:8000 ...
-start "Django Backend" cmd /k "cd /d c:\laragon\www\bailyandbeau\backend && python manage.py runserver 8000"
+start "Django Backend" cmd /k "cd /d %~dp0backend && .\venv\Scripts\python.exe manage.py runserver 8000"
 
 :: Wait a moment then start Next.js frontend
 timeout /t 2 /nobreak >nul
 
 echo Starting Next.js frontend on http://localhost:3000 ...
-start "Next.js Frontend" cmd /k "cd /d c:\laragon\www\bailyandbeau\frontend && npm run dev"
+start "Next.js Frontend" cmd /k "cd /d %~dp0frontend && npm run dev"
 
 echo.
 echo Both servers are starting up.

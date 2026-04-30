@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Icon } from '@/components/ui/Icon';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 
 interface MeData {
   id: number;
@@ -38,10 +39,12 @@ export function Sidebar({ me, currentPath }: SidebarProps) {
   ];
 
   return (
-    <aside className="h-screen w-64 fixed left-0 top-0 overflow-y-auto bg-[#2d5016] flex flex-col py-8 z-50 shadow-2xl">
+    <aside className="h-screen w-64 fixed left-0 top-0 overflow-y-auto bg-[#3d3b62] flex flex-col py-8 z-50 shadow-2xl border-r border-[#764f84]/30">
       <div className="px-6 mb-10">
-        <h1 className="font-headline text-2xl italic text-white">Bailey &amp; Beau</h1>
-        <p className="text-[10px] uppercase tracking-widest text-white/50 font-bold mt-1">The Living Storybook</p>
+        <BrandLogo />
+        <p className="text-[10px] uppercase tracking-widest text-[#eccdca]/70 font-bold mt-3">
+          The Living Storybook
+        </p>
       </div>
 
       <nav className="flex-1 space-y-1 px-2">

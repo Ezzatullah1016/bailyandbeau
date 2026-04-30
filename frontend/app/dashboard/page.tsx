@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowRight, Bell, BookOpen, BookMarked, CalendarDays, CheckSquare,
   CreditCard, DoorOpen, Lock, Medal, MoreHorizontal, Play, Settings,
@@ -96,11 +96,13 @@ const BADGE_ICONS: Record<string, string> = {
 function StartSessionModal({
   books,
   childProfiles,
+  initialBookId,
   onClose,
   onStart,
 }: {
   books: Book[];
   childProfiles: ChildProfile[];
+  initialBookId?: string | null;
   onClose: () => void;
   onStart: (sessionId: string, participantId: string) => void;
 }) {
@@ -108,6 +110,13 @@ function StartSessionModal({
   const [childId, setChildId] = useState(childProfiles[0]?.id ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!initialBookId || books.length === 0) return;
+    if (books.some((b) => b.id === initialBookId)) {
+      setBookId(initialBookId);
+    }
+  }, [initialBookId, books]);
 
   async function handleStart() {
     if (!bookId || !childId) { setError('Select a book and child profile.'); return; }
@@ -128,7 +137,7 @@ function StartSessionModal({
     <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="font-headline text-2xl text-[#173901] font-bold">Start a Session</h2>
+          <h2 className="font-headline text-2xl text-[#3d3b62] font-bold">Start a Session</h2>
           <button onClick={onClose} className="text-stone-400 hover:text-stone-600">
             <X className="w-5 h-5" />
           </button>
@@ -149,11 +158,11 @@ function StartSessionModal({
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-[#43493d] mb-2">Reading with</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-[#764f84] mb-2">Reading with</label>
             <select
               value={childId}
               onChange={(e) => setChildId(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-[#c3c9b9] bg-white text-[#1d1b16] text-sm focus:outline-none focus:ring-2 focus:ring-[#2d5016]"
+              className="w-full px-4 py-3 rounded-xl border border-[#764f84]/30 bg-white text-[#3d3b62] text-sm focus:outline-none focus:ring-2 focus:ring-[#3b85a6]"
             >
               {childProfiles.map((c) => (
                 <option key={c.id} value={c.id}>{c.display_name} (age {c.age_band})</option>
@@ -166,7 +175,7 @@ function StartSessionModal({
           <button
             onClick={handleStart}
             disabled={loading}
-            className="w-full py-4 bg-[#173901] text-white rounded-xl font-bold text-sm transition-all hover:bg-[#2d5016] active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
+            className="w-full py-4 bg-[#3d3b62] text-[#eccdca] rounded-xl font-bold text-sm transition-all hover:opacity-95 active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
           >
             <Play className="w-5 h-5" />
             {loading ? 'Creating session…' : 'Start Session'}
@@ -179,9 +188,11 @@ function StartSessionModal({
 
 // ─── Dashboard Page ───────────────────────────────────────────────────────────
 
-export default function DashboardPage() {
+function DashboardInner() {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const startBook = searchParams.get('startBook');
 
   const [me, setMe] = useState<MeData | null>(null);
   const [dash, setDash] = useState<DashboardData | null>(null);
@@ -208,6 +219,13 @@ export default function DashboardPage() {
       .finally(() => setLoading(false));
   }, [router]);
 
+  useEffect(() => {
+    if (!startBook || books.length === 0) return;
+    if (books.some((b) => b.id === startBook)) {
+      setShowModal(true);
+    }
+  }, [startBook, books]);
+
   function handleSessionStarted(sessionId: string) {
     setShowModal(false);
     router.push(`/session/${sessionId}/lobby`);
@@ -218,10 +236,10 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-[#f0f9f0]">
+      <div className="h-screen w-screen flex items-center justify-center bg-[#ece6ee]">
         <div className="flex flex-col items-center gap-4">
-          <Icon name="sync" className="w-10 h-10 text-[#2d5016] animate-spin" />
-          <p className="text-sm text-[#2d5016] font-medium">Loading dashboard…</p>
+          <Icon name="sync" className="w-10 h-10 text-[#3d3b62] animate-spin" />
+          <p className="text-sm text-[#764f84] font-medium">Loading dashboard…</p>
         </div>
       </div>
     );
@@ -233,6 +251,7 @@ export default function DashboardPage() {
         <StartSessionModal
           books={books}
           childProfiles={children}
+          initialBookId={startBook}
           onClose={() => setShowModal(false)}
           onStart={handleSessionStarted}
         />
@@ -240,21 +259,21 @@ export default function DashboardPage() {
 
       <Sidebar me={me} currentPath={pathname} />
 
-      <header className="flex justify-between items-center w-full px-8 h-16 ml-64 sticky top-0 z-40 bg-[#f0f9f0]/80 backdrop-blur-xl shadow-sm border-b border-[#2d5016]/10">
-        <div className="font-headline text-xl font-bold text-[#173901]">Dashboard</div>
+      <header className="flex justify-between items-center w-full px-8 h-16 ml-64 sticky top-0 z-40 bg-[#ece6ee]/90 backdrop-blur-xl shadow-sm border-b border-[#764f84]/15">
+        <div className="font-headline text-xl font-bold text-[#3d3b62]">Dashboard</div>
         <div className="flex items-center gap-4">
           <button className="relative group">
-            <Bell className="w-5 h-5 text-stone-500 group-hover:text-[#173901] transition-colors" />
+            <Bell className="w-5 h-5 text-[#764f84] group-hover:text-[#3d3b62] transition-colors" />
             <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full border-2 border-white" />
           </button>
           <UserCircle className="w-5 h-5 text-stone-500 cursor-pointer" />
         </div>
       </header>
 
-      <main className="ml-64 p-8 min-h-screen bg-[#f7faf6] font-body text-[#1d1b16]">
+      <main className="ml-64 p-8 min-h-screen bg-[#f5f0f3] font-body text-[#3d3b62]">
 
         <section className="mb-10">
-          <h2 className="font-headline text-4xl text-[#173901] font-bold mb-2">
+          <h2 className="font-headline text-4xl text-[#3d3b62] font-bold mb-2">
             Welcome back, {firstName} 👋
           </h2>
           <p className="text-stone-500 font-medium">
@@ -265,30 +284,30 @@ export default function DashboardPage() {
         </section>
 
         <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-          <div className="bg-white p-6 rounded-xl shadow-sm flex flex-col border border-[#c3c9b9]/10">
-            <span className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-4">Sessions Remaining</span>
+          <div className="bg-white p-6 rounded-xl shadow-sm flex flex-col border border-[#764f84]/10">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#764f84] mb-4">Sessions Remaining</span>
             <div className="flex items-end justify-between">
-              <span className="text-5xl font-headline font-bold text-[#173901]">{sessionsLeft}</span>
-              <CalendarDays className="w-8 h-8 text-[#a8d38a]" />
+              <span className="text-5xl font-headline font-bold text-[#3d3b62]">{sessionsLeft}</span>
+              <CalendarDays className="w-8 h-8 text-[#3b85a6]" />
             </div>
             {entitlement?.plan_code && (
               <span className="mt-3 text-xs text-stone-400 capitalize">{entitlement.plan_code.replace(/-/g, ' ')}</span>
             )}
           </div>
 
-          <div className="bg-white p-6 rounded-xl shadow-sm flex flex-col border border-[#c3c9b9]/10">
-            <span className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-4">Sessions Completed</span>
+          <div className="bg-white p-6 rounded-xl shadow-sm flex flex-col border border-[#764f84]/10">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#764f84] mb-4">Sessions Completed</span>
             <div className="flex items-end justify-between">
-              <span className="text-5xl font-headline font-bold text-[#835500]">{dash?.completed_sessions_count ?? 0}</span>
-              <CheckSquare className="w-8 h-8 text-[#feae2c]" />
+              <span className="text-5xl font-headline font-bold text-[#764f84]">{dash?.completed_sessions_count ?? 0}</span>
+              <CheckSquare className="w-8 h-8 text-[#f0c75e]" />
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-xl shadow-sm flex flex-col border border-[#c3c9b9]/10">
-            <span className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-4">Badges Earned</span>
+          <div className="bg-white p-6 rounded-xl shadow-sm flex flex-col border border-[#764f84]/10">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#764f84] mb-4">Badges Earned</span>
             <div className="flex items-end justify-between">
-              <span className="text-5xl font-headline font-bold text-[#5f1700]">{badges.length}</span>
-              <Medal className="w-8 h-8 text-[#ffb59f]" />
+              <span className="text-5xl font-headline font-bold text-[#c84a71]">{badges.length}</span>
+              <Medal className="w-8 h-8 text-[#eccdca]" />
             </div>
           </div>
         </section>
@@ -310,7 +329,7 @@ export default function DashboardPage() {
               </span>
               {books[0]?.age_band && (
                 <>
-                  <span className="h-1 w-1 rounded-full bg-emerald-700" />
+                  <span className="h-1 w-1 rounded-full bg-[#f0c75e]" />
                   <span>Ages {books[0].age_band}</span>
                 </>
               )}
@@ -326,7 +345,7 @@ export default function DashboardPage() {
               </button>
               <Link
                 href="/dashboard/library"
-                className="px-8 py-3 border border-white/20 hover:bg-white/10 text-white font-bold rounded-lg transition-all"
+                className="px-8 py-3 border border-[#eccdca]/35 hover:bg-[#eccdca]/10 text-[#eccdca] font-bold rounded-lg transition-all"
               >
                 Browse Library
               </Link>
@@ -344,12 +363,12 @@ export default function DashboardPage() {
               // eslint-disable-next-line @next/next/no-img-element
               <img src={books[0].cover_image} alt={books[0].title} className="w-full h-full object-cover" />
             ) : (
-              <BookOpen className="w-12 h-12 text-[#2d5016]" />
+              <BookOpen className="w-12 h-12 text-[#764f84]" />
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
           </div>
 
-          <div className="absolute -bottom-20 -right-20 w-80 h-80 bg-emerald-400/10 rounded-full blur-3xl" />
+          <div className="absolute -bottom-20 -right-20 w-80 h-80 bg-[#764f84]/20 rounded-full blur-3xl" />
         </section>
 
         <div className="grid grid-cols-1 lg:grid-cols-10 gap-8">
@@ -465,5 +484,22 @@ export default function DashboardPage() {
         </div>
       </main>
     </>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense
+      fallback={(
+        <div className="h-screen w-screen flex items-center justify-center bg-[#ece6ee]">
+          <div className="flex flex-col items-center gap-4">
+            <Icon name="sync" className="w-10 h-10 text-[#3d3b62] animate-spin" />
+            <p className="text-sm text-[#764f84] font-medium">Loading dashboard…</p>
+          </div>
+        </div>
+      )}
+    >
+      <DashboardInner />
+    </Suspense>
   );
 }

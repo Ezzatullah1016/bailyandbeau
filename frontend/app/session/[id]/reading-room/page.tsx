@@ -16,6 +16,7 @@ import { ConnectionState, Track } from 'livekit-client';
 import { useSession } from '@/contexts/SessionContext';
 import {
   completeSession,
+  getBookActivities,
   getBookPages,
   getGuestToken,
   getSession,
@@ -25,6 +26,8 @@ import {
   type BookPageData,
   type UserBadgeData,
 } from '@/lib/api';
+import ActivityRoom from '@/components/activity/ActivityRoom';
+import type { ActivityConfigData } from '@/components/activity/types';
 import { AnnotationToolbar, type AnnotationTool } from '@/components/annotation/AnnotationToolbar';
 import type { AnnotationCanvasHandle } from '@/components/annotation/AnnotationCanvas';
 import {
@@ -392,6 +395,14 @@ function RoomContent({
   const [badges, setBadges] = useState<UserBadgeData[]>([]);
   const [sessionDurationSecs, setSessionDurationSecs] = useState(0);
 
+  const [activities, setActivities] = useState<ActivityConfigData[]>([]);
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [activityIndex, setActivityIndex] = useState(0);
+  const [activityStateByActivity, setActivityStateByActivity] = useState<Record<string, Record<string, unknown>>>(
+    {},
+  );
+  const activitySnapshotRef = useRef<Record<string, unknown>>({});
+
   const decoder = useRef(new TextDecoder()).current;
 
   // ── Fetch pages ───────────────────────────────────────────────────────────
@@ -403,6 +414,13 @@ function RoomContent({
       .finally(() => setLoadingPages(false));
   }, [bookId, participantId, role]);
 
+  useEffect(() => {
+    const guestPid = role === 'guest' ? participantId : undefined;
+    getBookActivities(bookId, guestPid)
+      .then(setActivities)
+      .catch(() => setActivities([]));
+  }, [bookId, participantId, role]);
+
   // ── Restore snapshot ──────────────────────────────────────────────────────
   useEffect(() => {
     getSnapshot(sessionId, participantId)
@@ -410,13 +428,26 @@ function RoomContent({
         if (snap && typeof snap.page_number === 'number' && snap.page_number > 0) {
           setCurrentPage(snap.page_number - 1);
         }
-        if (snap?.timer_state && typeof (snap.timer_state as Record<string,unknown>).remaining_seconds === 'number') {
-          const rem = (snap.timer_state as Record<string,unknown>).remaining_seconds as number;
+        if (snap?.timer_state && typeof (snap.timer_state as Record<string, unknown>).remaining_seconds === 'number') {
+          const rem = (snap.timer_state as Record<string, unknown>).remaining_seconds as number;
           if (rem > 0 && rem < SESSION_DURATION_S) {
             setRemaining(rem);
             setTimerActive(true);
             timerStartedAtRef.current = Date.now() - (SESSION_DURATION_S - rem) * 1000;
           }
+        }
+        if (snap?.activity_state && typeof snap.activity_state === 'object') {
+          const state = snap.activity_state as Record<string, unknown>;
+          activitySnapshotRef.current = state;
+          const open = Boolean(state.activity_open);
+          const idx = typeof state.activity_index === 'number' ? state.activity_index : 0;
+          const stateBy =
+            state.state_by_activity && typeof state.state_by_activity === 'object'
+              ? (state.state_by_activity as Record<string, Record<string, unknown>>)
+              : {};
+          setActivityOpen(open);
+          setActivityIndex(idx);
+          setActivityStateByActivity(stateBy);
         }
       })
       .catch(() => {});
@@ -477,6 +508,62 @@ function RoomContent({
             fetchBadgesAndShow(
               typeof msg.payload.duration === 'number' ? msg.payload.duration : 0,
             );
+          }
+          break;
+
+        case 'ACTIVITY_OPEN':
+          if (role === 'guest') {
+            setActivityOpen(Boolean(msg.payload.activity_open ?? true));
+            const idx = typeof msg.payload.activity_index === 'number' ? msg.payload.activity_index : 0;
+            if (typeof msg.payload.activity_index === 'number') {
+              setActivityIndex(msg.payload.activity_index);
+            }
+            const sb =
+              msg.payload.state_by_activity && typeof msg.payload.state_by_activity === 'object'
+                ? (msg.payload.state_by_activity as Record<string, Record<string, unknown>>)
+                : {};
+            if (msg.payload.state_by_activity && typeof msg.payload.state_by_activity === 'object') {
+              setActivityStateByActivity(sb);
+            }
+            activitySnapshotRef.current = {
+              activity_open: true,
+              activity_index: idx,
+              state_by_activity: sb,
+            };
+          }
+          break;
+
+        case 'ACTIVITY_CLOSE':
+          if (role === 'guest') {
+            setActivityOpen(false);
+            activitySnapshotRef.current = {
+              activity_open: false,
+              activity_index: 0,
+              state_by_activity: {},
+            };
+          }
+          break;
+
+        case 'ACTIVITY_SYNC': {
+          const idx = typeof msg.payload.activity_index === 'number' ? msg.payload.activity_index : undefined;
+          if (idx !== undefined) setActivityIndex(idx);
+          const sb =
+            msg.payload.state_by_activity && typeof msg.payload.state_by_activity === 'object'
+              ? (msg.payload.state_by_activity as Record<string, Record<string, unknown>>)
+              : undefined;
+          if (sb) setActivityStateByActivity(sb);
+          const prev = activitySnapshotRef.current;
+          activitySnapshotRef.current = {
+            activity_open: true,
+            activity_index: idx ?? (typeof prev.activity_index === 'number' ? prev.activity_index : 0),
+            state_by_activity: sb ?? (prev.state_by_activity as Record<string, unknown>) ?? {},
+          };
+          break;
+        }
+
+        case 'ACTIVITY_NAV':
+          if (role === 'guest' && typeof msg.payload.index === 'number') {
+            setActivityIndex(msg.payload.index);
           }
           break;
       }
@@ -589,6 +676,35 @@ function RoomContent({
 
   return (
     <>
+      <ActivityRoom
+        role={role}
+        activities={activities}
+        open={activityOpen}
+        initialIndex={activityIndex}
+        initialStateByActivity={activityStateByActivity}
+        onClose={() => {
+          setActivityOpen(false);
+          const closed = { activity_open: false, activity_index: 0, state_by_activity: {} };
+          activitySnapshotRef.current = closed;
+          if (role === 'host') {
+            room.localParticipant.publishData(buildMsg('ACTIVITY_CLOSE', {}), { reliable: true });
+            updateSnapshot(sessionId, participantId, currentPage + 1, remaining, {}, closed).catch(() => {});
+          }
+        }}
+        onActivityStateSync={(activityState) => {
+          activitySnapshotRef.current = activityState;
+          const idx =
+            typeof activityState.activity_index === 'number' ? activityState.activity_index : activityIndex;
+          const stateBy =
+            activityState.state_by_activity && typeof activityState.state_by_activity === 'object'
+              ? (activityState.state_by_activity as Record<string, Record<string, unknown>>)
+              : activityStateByActivity;
+          setActivityIndex(idx);
+          setActivityStateByActivity(stateBy);
+          updateSnapshot(sessionId, participantId, currentPage + 1, remaining, {}, activityState).catch(() => {});
+        }}
+      />
+
       {showComplete && (
         <CompletionOverlay
           bookTitle={bookTitle}
@@ -800,9 +916,28 @@ function RoomContent({
                       <ChevronRight className="w-5 h-5" />
                     </button>
                   </div>
-                  <button className="ml-4 px-6 py-2.5 bg-[#ffb955] text-[#291800] font-extrabold rounded-full text-sm flex items-center gap-2 hover:opacity-90 transition-all active:scale-95 shadow-xl shadow-[#ffb955]/10">
+                  <button
+                    type="button"
+                    disabled={activities.length === 0}
+                    onClick={() => {
+                      setActivityOpen(true);
+                      const openState = {
+                        activity_open: true,
+                        activity_index: activityIndex,
+                        state_by_activity: activityStateByActivity,
+                      };
+                      activitySnapshotRef.current = openState;
+                      if (role === 'host') {
+                        room.localParticipant.publishData(buildMsg('ACTIVITY_OPEN', openState), { reliable: true });
+                        updateSnapshot(sessionId, participantId, currentPage + 1, remaining, {}, openState).catch(
+                          () => {},
+                        );
+                      }
+                    }}
+                    className="ml-4 px-6 py-2.5 bg-[#f0c75e] text-[#3d3b62] font-extrabold rounded-full text-sm flex items-center gap-2 hover:opacity-90 transition-all active:scale-95 shadow-xl shadow-[#f0c75e]/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
                     <Rocket className="w-5 h-5" />
-                    Start Activity
+                    {activities.length === 0 ? 'No activities' : 'Start activity'}
                   </button>
                 </>
               )}
