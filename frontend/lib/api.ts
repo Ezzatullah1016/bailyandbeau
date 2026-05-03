@@ -331,8 +331,9 @@ export async function getBookPages(bookId: string, participantId?: string): Prom
 
 export type { ActivityConfigData } from '@/components/activity/types';
 
-export async function getBookActivities(bookId: string): Promise<import('@/components/activity/types').ActivityConfigData[]> {
-  const res = await apiRequest<{ data: import('@/components/activity/types').ActivityConfigData[] }>(`/books/${bookId}/activities/`);
+export async function getBookActivities(bookId: string, participantId?: string): Promise<import('@/components/activity/types').ActivityConfigData[]> {
+  const url = participantId ? `/books/${bookId}/activities/?participant=${participantId}` : `/books/${bookId}/activities/`;
+  const res = await apiRequest<{ data: import('@/components/activity/types').ActivityConfigData[] }>(url);
   return res.data;
 }
 
