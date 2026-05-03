@@ -1,5 +1,3 @@
-import type { ActivityConfigData } from '@/components/activity/types';
-
 const defaultBaseUrl = 'http://127.0.0.1:8000/api/v1';
 const devFallbackBaseUrls = ['http://127.0.0.1:8001/api/v1'];
 
@@ -331,16 +329,10 @@ export async function getBookPages(bookId: string, participantId?: string): Prom
 
 // ─── Book activities ─────────────────────────────────────────────────────────
 
-export interface ActivityConfigData {
-  id: string;
-  activity_type: 'drawing' | 'drag_drop' | 'quiz' | 'hotspot';
-  title: string;
-  config: Record<string, unknown>;
-  sort_order: number;
-}
+export type { ActivityConfigData } from '@/components/activity/types';
 
-export async function getBookActivities(bookId: string): Promise<ActivityConfigData[]> {
-  const res = await apiRequest<{ data: ActivityConfigData[] }>(`/books/${bookId}/activities/`);
+export async function getBookActivities(bookId: string): Promise<import('@/components/activity/types').ActivityConfigData[]> {
+  const res = await apiRequest<{ data: import('@/components/activity/types').ActivityConfigData[] }>(`/books/${bookId}/activities/`);
   return res.data;
 }
 
