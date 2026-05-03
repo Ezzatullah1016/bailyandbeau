@@ -155,7 +155,7 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
           });
         },
 
-        clearCanvas(local = false) {
+        clearCanvas(_local = false) {
           const canvas = fabricRef.current;
           if (!canvas) return;
           isRemoteLoadRef.current = true;
@@ -190,7 +190,7 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
       <div
         ref={containerRef}
         className="absolute inset-0 z-10 pointer-events-auto"
-        style={{ cursor: tool === 'eraser' ? 'cell' : tool === 'stamp' ? 'copy' : 'crosshair' }}
+        style={{ cursor: tool === 'eraser' ? 'cell' : 'crosshair' }}
       >
         <canvas ref={canvasElRef} className="absolute inset-0" />
       </div>
