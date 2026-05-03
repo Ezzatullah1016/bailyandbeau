@@ -59,10 +59,11 @@ export default function LibraryPage() {
   return (
     <>
       <Sidebar me={me} currentPath={pathname} />
-      <header className="flex justify-between items-center w-full px-8 h-16 ml-64 sticky top-0 z-40 bg-[#faf7f6]/80 backdrop-blur-xl shadow-sm border-b border-[#3d3b62]/10">
+      <div className="ml-64 flex-1 min-w-0 overflow-x-hidden flex flex-col">
+      <header className="flex justify-between items-center w-full px-8 h-16 sticky top-0 z-40 bg-[#faf7f6]/80 backdrop-blur-xl shadow-sm border-b border-[#3d3b62]/10">
         <div className="font-baloo text-xl font-bold text-[#3d3b62]">Library</div>
       </header>
-      <main className="ml-64 p-8 min-h-screen bg-[#faf7f6] font-karla text-[#1d1b16]">
+      <main className="p-8 min-h-screen bg-[#faf7f6] font-karla text-[#1d1b16]">
         <div className="mb-8">
           <h2 className="font-baloo text-4xl text-[#3d3b62] font-bold mb-2">Book Library</h2>
           <p className="text-stone-500">{books.length} book{books.length !== 1 ? 's' : ''} available</p>
@@ -124,6 +125,7 @@ export default function LibraryPage() {
           </div>
         )}
       </main>
+      </div>
     </>
   );
 }

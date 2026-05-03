@@ -188,7 +188,9 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
           if (!canvas) return;
           if (!local) isRemoteLoadRef.current = true;
           canvas.clear();
-          canvas.renderAll();
+          canvas.setBackgroundColor('white', () => {
+            canvas.renderAll();
+          });
           isRemoteLoadRef.current = false;
           if (local) {
             emitSync(canvas);

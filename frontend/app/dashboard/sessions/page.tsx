@@ -69,13 +69,14 @@ export default function SessionsPage() {
   return (
     <>
       <Sidebar me={me} currentPath={pathname} />
-      <header className="flex justify-between items-center w-full px-8 h-16 ml-64 sticky top-0 z-40 bg-[#faf7f6]/80 backdrop-blur-xl shadow-sm border-b border-[#3d3b62]/10">
+      <div className="ml-64 flex-1 min-w-0 overflow-x-hidden flex flex-col">
+      <header className="flex justify-between items-center w-full px-8 h-16 sticky top-0 z-40 bg-[#faf7f6]/80 backdrop-blur-xl shadow-sm border-b border-[#3d3b62]/10">
         <div className="font-baloo text-xl font-bold text-[#3d3b62]">Sessions</div>
         <Link href="/dashboard" className="font-baloo px-4 py-2 bg-[#3d3b62] text-white text-sm font-bold rounded-lg hover:bg-[#764f84] transition-all flex items-center gap-2">
           <Plus className="w-4 h-4" /> New Session
         </Link>
       </header>
-      <main className="ml-64 p-8 min-h-screen bg-[#faf7f6] font-karla text-[#1d1b16]">
+      <main className="p-8 min-h-screen bg-[#faf7f6] font-karla text-[#1d1b16]">
         <div className="mb-8">
           <h2 className="font-baloo text-4xl text-[#3d3b62] font-bold mb-2">Session History</h2>
           <p className="text-stone-500">{sessions.length} session{sessions.length !== 1 ? 's' : ''} total</p>
@@ -149,6 +150,7 @@ export default function SessionsPage() {
           )}
         </div>
       </main>
+      </div>
     </>
   );
 }

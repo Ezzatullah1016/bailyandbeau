@@ -259,7 +259,8 @@ function DashboardInner() {
 
       <Sidebar me={me} currentPath={pathname} />
 
-      <header className="flex justify-between items-center w-full px-8 h-16 ml-64 sticky top-0 z-40 bg-[#faf7f6]/80 backdrop-blur-xl shadow-sm border-b border-[#3d3b62]/10">
+      <div className="ml-64 flex-1 min-w-0 overflow-x-hidden flex flex-col">
+      <header className="flex justify-between items-center w-full px-8 h-16 sticky top-0 z-40 bg-[#faf7f6]/80 backdrop-blur-xl shadow-sm border-b border-[#3d3b62]/10">
         <div className="font-baloo text-xl font-bold text-[#3d3b62]">Dashboard</div>
         <div className="flex items-center gap-4">
           <button className="relative group">
@@ -270,7 +271,7 @@ function DashboardInner() {
         </div>
       </header>
 
-      <main className="ml-64 p-8 min-h-screen bg-[#faf7f6] font-karla text-[#1d1b16]">
+      <main className="p-8 min-h-screen bg-[#faf7f6] font-karla text-[#1d1b16]">
 
         <section className="mb-10">
           <h2 className="font-baloo text-4xl text-[#3d3b62] font-bold mb-2">
@@ -345,7 +346,7 @@ function DashboardInner() {
               </button>
               <Link
                 href="/dashboard/library"
-                className="font-baloo px-8 py-3 border border-[#3d3b62] bg-transparent hover:bg-[#eccdca] text-[#3d3b62] font-bold rounded-lg transition-all"
+                className="font-baloo px-8 py-3 border border-white bg-transparent hover:bg-white/10 text-white font-bold rounded-lg transition-all"
               >
                 Browse Library
               </Link>
@@ -483,6 +484,7 @@ function DashboardInner() {
           </div>
         </div>
       </main>
+      </div>
     </>
   );
 }
