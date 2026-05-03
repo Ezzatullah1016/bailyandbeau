@@ -12,6 +12,7 @@ interface Session {
   id: string; book_title: string; child_name: string; status: string;
   room_type: string; created_at: string; started_at: string | null;
   ended_at: string | null; invite_token?: string;
+  reading_duration_seconds?: number;
 }
 interface MeData { id: number; username: string; first_name: string; last_name: string; }
 
@@ -21,6 +22,7 @@ const STATUS_PILL: Record<string, string> = {
   pending:   'bg-stone-100 text-stone-600',
   lobby:     'bg-blue-100 text-blue-700',
   cancelled: 'bg-red-100 text-red-700',
+  expired:   'bg-stone-200 text-stone-400',
 };
 
 function fmtDate(iso: string) {
@@ -83,7 +85,7 @@ export default function SessionsPage() {
         </div>
 
         <div className="flex gap-3 mb-8 flex-wrap">
-          {['all', 'completed', 'active', 'lobby', 'pending', 'cancelled'].map((f) => (
+          {['all', 'completed', 'active', 'lobby', 'pending', 'cancelled', 'expired'].map((f) => (
             <button key={f} onClick={() => setFilter(f)}
               className={`px-4 py-2 rounded-full text-sm font-bold capitalize transition-all ${filter === f ? 'bg-[#3d3b62] text-white' : 'bg-white text-stone-500 hover:bg-[#eccdca]/30 border border-[#eccdca]'}`}>
               {f === 'all' ? 'All' : f}

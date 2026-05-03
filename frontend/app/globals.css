@@ -7,6 +7,21 @@ body.reading-room {
   background: linear-gradient(135deg, #3d3b62 0%, #764f84 100%);
 }
 
+/* ─── Reaction float animation ──────────────────────────────────────────── */
+@keyframes reaction-float {
+  0%   { opacity: 1;   transform: translateY(0)   scale(1); }
+  80%  { opacity: 0.8; transform: translateY(-80px) scale(1.2); }
+  100% { opacity: 0;   transform: translateY(-120px) scale(0.8); }
+}
+.reaction-float {
+  animation: reaction-float 1.8s ease-out forwards;
+  pointer-events: none;
+  position: absolute;
+  font-size: 2.5rem;
+  line-height: 1;
+  user-select: none;
+}
+
 /* ─── Lobby pulse animation ──────────────────────────────────────────────── */
 .pulse-amber {
   box-shadow: 0 0 0 0 rgba(254, 174, 44, 0.7);

@@ -289,6 +289,12 @@ class ReadingSession(TimeStampedModel):
             self.livekit_room_name = f"session-{self.id}"
         super().save(*args, **kwargs)
 
+    @property
+    def reading_duration_seconds(self) -> int:
+        if self.started_at and self.ended_at:
+            return max(0, int((self.ended_at - self.started_at).total_seconds()))
+        return 0
+
     def __str__(self):
         return f"{self.book.title} · {self.child_profile.display_name}"
 
@@ -414,6 +420,26 @@ class ReadingReminder(TimeStampedModel):
 
     class Meta:
         ordering = ["time_of_day", "title"]
+
+    @property
+    def next_due(self) -> str:
+        """Return ISO date string of the next scheduled reminder."""
+        from datetime import date, timedelta
+        today = date.today()
+        weekday = today.weekday()  # 0=Mon, 6=Sun
+        if self.frequency == self.Frequency.DAILY:
+            next_date = today
+        elif self.frequency == self.Frequency.WEEKLY:
+            next_date = today
+        elif self.frequency == self.Frequency.WEEKDAYS:
+            # Skip to Monday if today is weekend
+            if weekday >= 5:
+                next_date = today + timedelta(days=(7 - weekday))
+            else:
+                next_date = today
+        else:
+            next_date = today
+        return f"{next_date}T{self.time_of_day.strftime('%H:%M')}:00"
 
     def __str__(self):
         return f"{self.title} for {self.child_profile}"

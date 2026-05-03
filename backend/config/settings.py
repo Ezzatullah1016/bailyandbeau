@@ -15,6 +15,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import sentry_sdk
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -236,6 +237,13 @@ else:
     # Local filesystem — files land in MEDIA_ROOT
     MEDIA_URL = os.getenv('MEDIA_URL', '/media/')
     MEDIA_ROOT = os.getenv('MEDIA_ROOT', BASE_DIR / 'media')
+
+# ─── LiveKit production guard ────────────────────────────────────────────────
+if not DEBUG and (not LIVEKIT_API_KEY or not LIVEKIT_API_SECRET):
+    raise ImproperlyConfigured(
+        "LIVEKIT_API_KEY and LIVEKIT_API_SECRET must be set in production. "
+        "Sessions will not function without them."
+    )
 
 # ─── Sentry Error Monitoring ──────────────────────────────────────────────────
 SENTRY_DSN = os.getenv('SENTRY_DSN', '')

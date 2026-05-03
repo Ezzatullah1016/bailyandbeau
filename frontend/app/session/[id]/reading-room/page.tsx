@@ -163,6 +163,27 @@ function ParticipantList({ hostIdentity }: { hostIdentity?: string }) {
   );
 }
 
+function ParticipantRoster({ hostIdentity }: { hostIdentity?: string }) {
+  const participants = useParticipants();
+  return (
+    <div className="space-y-2">
+      {participants.map((p) => (
+        <div key={p.identity} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-stone-800/40">
+          <div className="w-8 h-8 rounded-full bg-[#764f84]/40 flex items-center justify-center">
+            <User className="w-4 h-4 text-white/80" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-stone-100 truncate">{p.name || p.identity}</p>
+            {p.identity === hostIdentity && (
+              <p className="text-[10px] text-[#f0c75e] uppercase tracking-wider">Host</p>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Local controls ───────────────────────────────────────────────────────────
 
 function LocalControls() {
@@ -392,12 +413,28 @@ function RoomContent({
   const [annTool, setAnnTool] = useState<AnnotationTool>('pen');
   const [annColor, setAnnColor] = useState('#ef4444');
   const [annBrush, setAnnBrush] = useState(8);
-  const [annStampEmoji, setAnnStampEmoji] = useState('⭐');
   const canvasRef = useRef<AnnotationCanvasHandle>(null);
+
+  // ── Reactions overlay ─────────────────────────────────────────────────────
+  const [reactions, setReactions] = useState<{ id: number; emoji: string; x: number }[]>([]);
+  const reactionCounterRef = useRef(0);
+
+  const spawnReaction = useCallback((emoji: string) => {
+    const id = ++reactionCounterRef.current;
+    const x = 10 + Math.random() * 80; // random % across screen
+    setReactions((prev) => [...prev, { id, emoji, x }]);
+    setTimeout(() => setReactions((prev) => prev.filter((r) => r.id !== id)), 2000);
+  }, []);
 
   // ── Host transfer ─────────────────────────────────────────────────────────
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferring, setTransferring] = useState(false);
+
+  // ── Chat ──────────────────────────────────────────────────────────────────
+  const [chatMessages, setChatMessages] = useState<{ id: number; from: string; text: string; self: boolean }[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const chatCounterRef = useRef(0);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   // ── Completion ────────────────────────────────────────────────────────────
   const [showComplete, setShowComplete] = useState(false);
@@ -576,6 +613,19 @@ function RoomContent({
             setActivityIndex(msg.payload.index);
           }
           break;
+
+        case 'REACTION':
+          if (typeof msg.payload.emoji === 'string') {
+            spawnReaction(msg.payload.emoji);
+          }
+          break;
+
+        case 'CHAT':
+          if (typeof msg.payload.text === 'string') {
+            const from = typeof msg.payload.from === 'string' ? msg.payload.from : 'Guest';
+            setChatMessages((prev) => [...prev, { id: ++chatCounterRef.current, from, text: msg.payload.text as string, self: false }]);
+          }
+          break;
       }
     }
     room.on('dataReceived', onData);
@@ -625,6 +675,24 @@ function RoomContent({
     canvasRef.current?.clearCanvas(true);
     room.localParticipant.publishData(buildMsg('CANVAS_CLEAR', {}), { reliable: true });
   }, [room]);
+
+  const handleReaction = useCallback((emoji: string) => {
+    spawnReaction(emoji);
+    room.localParticipant.publishData(buildMsg('REACTION', { emoji }), { reliable: true });
+  }, [room, spawnReaction]);
+
+  const sendChat = useCallback(() => {
+    const text = chatInput.trim();
+    if (!text) return;
+    const from = room.localParticipant.name || room.localParticipant.identity || 'Me';
+    room.localParticipant.publishData(buildMsg('CHAT', { text, from }), { reliable: true });
+    setChatMessages((prev) => [...prev, { id: ++chatCounterRef.current, from: 'Me', text, self: true }]);
+    setChatInput('');
+  }, [chatInput, room]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
 
   // ── Host: start timer ─────────────────────────────────────────────────────
   const handleStartTimer = useCallback(() => {
@@ -745,6 +813,21 @@ function RoomContent({
         />
       )}
 
+      {/* Reaction overlay — floats above everything */}
+      {reactions.length > 0 && (
+        <div className="fixed inset-0 z-[200] pointer-events-none overflow-hidden">
+          {reactions.map((r) => (
+            <span
+              key={r.id}
+              className="reaction-float"
+              style={{ left: `${r.x}%`, bottom: '10%' }}
+            >
+              {r.emoji}
+            </span>
+          ))}
+        </div>
+      )}
+
       <div className="h-screen w-screen flex flex-col bg-gradient-to-br from-[#3d3b62] to-[#764f84] text-[#e5e2e1] overflow-hidden">
 
         {/* ── Top nav ──────────────────────────────────────────────────────── */}
@@ -811,14 +894,14 @@ function RoomContent({
               <p className="text-xs text-stone-400">Live</p>
             </div>
 
-            <nav className="flex flex-col gap-1 mb-6">
+            <nav className="flex flex-col gap-1 mb-4">
               {tabs.map((tab) => {
                 const TabIcon = TAB_ICONS[tab.id];
                 return (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`rounded-xl font-bold flex items-center gap-3 px-4 py-3 transition-all text-left ${activeTab === tab.id ? 'bg-lime-900/30 text-lime-300' : 'text-stone-400 hover:text-stone-100 hover:bg-stone-800/40'}`}
+                    className={`rounded-xl font-bold flex items-center gap-3 px-4 py-3 transition-all text-left ${activeTab === tab.id ? 'bg-[#764f84]/40 text-white' : 'text-stone-400 hover:text-stone-100 hover:bg-stone-800/40'}`}
                   >
                     <TabIcon className="w-5 h-5" />
                     <span className="text-sm">{tab.label}</span>
@@ -827,9 +910,115 @@ function RoomContent({
               })}
             </nav>
 
-            <div className="mt-auto space-y-4">
-              <ParticipantList hostIdentity={hostIdentity} />
-              <div className="flex items-center justify-between pt-2">
+            {/* Tab content */}
+            <div className="flex-1 overflow-y-auto min-h-0 mb-4">
+              {activeTab === 'video' && (
+                <ParticipantList hostIdentity={hostIdentity} />
+              )}
+
+              {activeTab === 'participants' && (
+                <ParticipantRoster hostIdentity={hostIdentity} />
+              )}
+
+              {activeTab === 'tools' && (
+                <div className="space-y-4 px-1">
+                  <p className="text-xs text-stone-400 font-semibold uppercase tracking-wider">Drawing Tools</p>
+                  <p className="text-xs text-stone-500">Use the floating toolbar at the bottom of the book to draw, highlight, erase, and react.</p>
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-[10px] text-stone-500 uppercase tracking-widest mb-2">Brush Size</p>
+                      <div
+                        className="h-2 bg-stone-800 rounded-full overflow-hidden cursor-pointer"
+                        onClick={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const pct = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+                          setAnnBrush(Math.round(2 + pct * 30));
+                        }}
+                      >
+                        <div className="h-full bg-[#f0c75e] rounded-full" style={{ width: `${((annBrush - 2) / 30) * 100}%` }} />
+                      </div>
+                      <p className="text-[10px] text-stone-500 mt-1">{annBrush}px</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-stone-500 uppercase tracking-widest mb-2">Color</p>
+                      <div className="flex gap-2 flex-wrap">
+                        {['#ef4444','#f0c75e','#22c55e','#3b82f6','#a855f7'].map((c) => (
+                          <button key={c} onClick={() => setAnnColor(c)} className={`w-7 h-7 rounded-full transition-all ${annColor === c ? 'ring-2 ring-white/60 scale-110' : ''}`} style={{ backgroundColor: c }} />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'chat' && (
+                <div className="flex flex-col h-full" style={{ minHeight: '200px' }}>
+                  <div className="flex-1 overflow-y-auto space-y-2 mb-3 pr-1">
+                    {chatMessages.length === 0 && (
+                      <p className="text-xs text-stone-500 text-center pt-4">No messages yet. Say hi!</p>
+                    )}
+                    {chatMessages.map((m) => (
+                      <div key={m.id} className={`flex flex-col ${m.self ? 'items-end' : 'items-start'}`}>
+                        <span className="text-[10px] text-stone-500 mb-0.5 px-1">{m.from}</span>
+                        <div className={`px-3 py-2 rounded-2xl text-sm max-w-[90%] break-words ${m.self ? 'bg-[#764f84] text-white rounded-br-sm' : 'bg-stone-800 text-stone-100 rounded-bl-sm'}`}>
+                          {m.text}
+                        </div>
+                      </div>
+                    ))}
+                    <div ref={chatEndRef} />
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') sendChat(); }}
+                      placeholder="Type a message…"
+                      className="flex-1 bg-stone-800 text-stone-100 text-sm rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-[#764f84] placeholder-stone-600"
+                    />
+                    <button onClick={sendChat} className="w-9 h-9 flex items-center justify-center bg-[#764f84] rounded-xl text-white hover:bg-[#9b6cb0] transition-colors">
+                      <Rocket className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'settings' && (
+                <div className="space-y-3 px-1">
+                  <p className="text-xs text-stone-400 font-semibold uppercase tracking-wider mb-3">Session Settings</p>
+                  {role === 'host' && !timerActive && (
+                    <button
+                      onClick={handleStartTimer}
+                      className="w-full flex items-center gap-3 px-4 py-3 bg-stone-800/50 hover:bg-stone-700/50 rounded-xl text-stone-200 text-sm font-semibold transition-colors"
+                    >
+                      <Timer className="w-4 h-4 text-[#f0c75e]" />
+                      Start Session Timer
+                    </button>
+                  )}
+                  {role === 'host' && (
+                    <button
+                      onClick={() => setShowTransferModal(true)}
+                      className="w-full flex items-center gap-3 px-4 py-3 bg-stone-800/50 hover:bg-stone-700/50 rounded-xl text-stone-200 text-sm font-semibold transition-colors"
+                    >
+                      <Users className="w-4 h-4 text-[#3b85a6]" />
+                      Transfer Host
+                    </button>
+                  )}
+                  {role === 'host' && (
+                    <button
+                      onClick={() => router.push(`/session/${sessionId}/activity?bookId=${bookId}`)}
+                      className="w-full flex items-center gap-3 px-4 py-3 bg-stone-800/50 hover:bg-stone-700/50 rounded-xl text-stone-200 text-sm font-semibold transition-colors"
+                    >
+                      <Star className="w-4 h-4 text-[#c84a71]" />
+                      Open Activity
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Always-visible bottom bar */}
+            <div className="space-y-3 border-t border-stone-700/50 pt-3">
+              <div className="flex items-center justify-between">
                 <LocalControls />
               </div>
               {role === 'host' && (
@@ -900,7 +1089,6 @@ function RoomContent({
                       tool={annTool}
                       color={annColor}
                       brushSize={annBrush}
-                      stampEmoji={annStampEmoji}
                       onSync={handleCanvasSync}
                     />
                   </div>
@@ -915,13 +1103,12 @@ function RoomContent({
                 tool={annTool}
                 color={annColor}
                 brushSize={annBrush}
-                selectedEmoji={annStampEmoji}
                 onToolChange={setAnnTool}
                 onColorChange={setAnnColor}
                 onBrushSizeChange={setAnnBrush}
                 onClear={handleClearCanvas}
                 onUndo={() => canvasRef.current?.undo()}
-                onStampEmoji={setAnnStampEmoji}
+                onReaction={handleReaction}
               />
             </div>
 

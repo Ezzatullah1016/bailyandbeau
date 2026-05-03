@@ -26,7 +26,6 @@ interface Props {
   tool: AnnotationTool;
   color: string;
   brushSize: number;
-  stampEmoji?: string;
   onSync: (json: string) => void;
 }
 
@@ -40,7 +39,7 @@ function hexToRgba(hex: string, alpha: number): string {
 }
 
 const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
-  function AnnotationCanvas({ tool, color, brushSize, stampEmoji = '⭐', onSync }, ref) {
+  function AnnotationCanvas({ tool, color, brushSize, onSync }, ref) {
     const canvasElRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const fabricRef = useRef<FabricCanvas | null>(null);
@@ -139,35 +138,8 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
             canvas.requestRenderAll();
           }
         });
-      } else if (tool === 'stamp') {
-        canvas.isDrawingMode = false;
       }
     }, [tool, color, brushSize]);
-
-    // ── Handle stamp clicks ────────────────────────────────────────────────
-    useEffect(() => {
-      const canvas = fabricRef.current;
-      if (!canvas || tool !== 'stamp') return;
-
-      canvas.off('mouse:down');
-      canvas.on('mouse:down', (opt: any) => {
-        import('fabric').then(({ fabric }) => {
-          const pointer = canvas.getPointer(opt.e);
-          const text = new fabric.Text(stampEmoji, {
-            left: pointer.x,
-            top: pointer.y,
-            fontSize: 36,
-            selectable: false,
-            evented: false,
-            originX: 'center',
-            originY: 'center',
-          });
-          canvas.add(text);
-          canvas.requestRenderAll();
-          emitSync(canvas);
-        });
-      });
-    }, [tool, stampEmoji, emitSync]);
 
     // ── Expose imperative handles ─────────────────────────────────────────
     useImperativeHandle(
@@ -186,15 +158,12 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
         clearCanvas(local = false) {
           const canvas = fabricRef.current;
           if (!canvas) return;
-          if (!local) isRemoteLoadRef.current = true;
+          isRemoteLoadRef.current = true;
           canvas.clear();
           canvas.setBackgroundColor('white', () => {
             canvas.renderAll();
+            isRemoteLoadRef.current = false;
           });
-          isRemoteLoadRef.current = false;
-          if (local) {
-            emitSync(canvas);
-          }
         },
 
         getJSON() {

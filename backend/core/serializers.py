@@ -249,6 +249,7 @@ class NotificationPreferenceSerializer(serializers.ModelSerializer):
 class ReadingReminderSerializer(serializers.ModelSerializer):
     child_profile_id = serializers.UUIDField(write_only=True, required=False)
     child_name = serializers.CharField(source="child_profile.display_name", read_only=True)
+    next_due = serializers.CharField(read_only=True)
 
     class Meta:
         model = ReadingReminder
@@ -260,10 +261,11 @@ class ReadingReminderSerializer(serializers.ModelSerializer):
             "frequency",
             "time_of_day",
             "is_active",
+            "next_due",
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("id", "child_name", "created_at", "updated_at")
+        read_only_fields = ("id", "child_name", "next_due", "created_at", "updated_at")
 
     def validate_child_profile_id(self, value):
         user = self.context["request"].user
@@ -287,6 +289,7 @@ class ReadingSessionSerializer(serializers.ModelSerializer):
     invite_token = serializers.CharField(source="invite.token", read_only=True)
     book_title = serializers.CharField(source="book.title", read_only=True)
     child_name = serializers.CharField(source="child_profile.display_name", read_only=True)
+    reading_duration_seconds = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = ReadingSession
@@ -304,6 +307,9 @@ class ReadingSessionSerializer(serializers.ModelSerializer):
             "timer_remaining_seconds",
             "invite_token",
             "created_at",
+            "started_at",
+            "ended_at",
+            "reading_duration_seconds",
         )
         read_only_fields = fields
 

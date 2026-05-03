@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Baby, CheckCircle, LogOut, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
+import { Baby, Bell, CheckCircle, Clock, LogOut, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
 import { apiRequest } from '@/lib/api';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { usePathname } from 'next/navigation';
 
 interface MeData { id: number; username: string; email: string; first_name: string; last_name: string; }
 interface ChildProfile { id: string; display_name: string; age_band: string; is_active: boolean; }
+interface Reminder { id: string; title: string; frequency: string; time_of_day: string; next_due: string; is_active: boolean; child_name: string; }
 
 const AGE_BANDS = ['0-2', '3-5', '6-8', '9-12'];
 
@@ -27,6 +28,7 @@ export default function SettingsPage() {
   const [newChildName, setNewChildName] = useState('');
   const [newChildAge, setNewChildAge] = useState('3-5');
   const [addingChild, setAddingChild] = useState(false);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
 
   useEffect(() => {
     const token = localStorage.getItem('bb_access_token');
@@ -34,6 +36,7 @@ export default function SettingsPage() {
     Promise.all([
       apiRequest<{ data: MeData }>('/me/').then((r) => { setMe(r.data); setFirstName(r.data.first_name); setLastName(r.data.last_name); }),
       apiRequest<{ data: ChildProfile[] }>('/children/').then((r) => setChildren(r.data)),
+      apiRequest<{ data: Reminder[] }>('/reminders/').then((r) => setReminders(r.data)).catch(() => {}),
     ]).catch(() => router.replace('/login')).finally(() => setLoading(false));
   }, [router]);
 
@@ -190,6 +193,38 @@ export default function SettingsPage() {
               </form>
             )}
           </div>
+
+          {reminders.length > 0 && (
+            <div className="bg-white rounded-2xl p-8 shadow-sm border border-[#eccdca]">
+              <h3 className="font-baloo text-xl font-bold text-[#3d3b62] mb-6 flex items-center gap-2">
+                <Bell className="w-5 h-5 text-[#764f84]" /> Reading Reminders
+              </h3>
+              <div className="space-y-3">
+                {reminders.map((r) => (
+                  <div key={r.id} className="flex items-center justify-between p-4 rounded-xl bg-[#faf7f6] border border-[#eccdca]">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-[#764f84]/10 flex items-center justify-center">
+                        <Bell className="w-4 h-4 text-[#764f84]" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-[#1d1b16] text-sm">{r.title}</p>
+                        <p className="text-xs text-stone-400 capitalize">{r.frequency} · {r.child_name}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="flex items-center gap-1 text-xs text-[#764f84] font-semibold">
+                        <Clock className="w-3 h-3" />
+                        {r.time_of_day?.slice(0, 5)}
+                      </div>
+                      <p className="text-[10px] text-stone-400 mt-0.5">
+                        Next: {r.next_due ? new Date(r.next_due).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—'}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="bg-white rounded-2xl p-8 shadow-sm border border-red-100">
             <h3 className="font-baloo text-xl font-bold text-red-700 mb-4">Sign Out</h3>

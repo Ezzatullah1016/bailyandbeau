@@ -713,6 +713,12 @@ class StripeWebhookView(APIView):
                     {"data": None, "meta": {}, "error": {"code": "invalid_signature", "message": "Webhook signature verification failed."}},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+        elif not django_settings.DEBUG:
+            # In production, reject unsigned webhooks — configure STRIPE_WEBHOOK_SECRET
+            return Response(
+                {"data": None, "meta": {}, "error": {"code": "misconfigured", "message": "Webhook secret not configured."}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         else:
             payload = request.data
 

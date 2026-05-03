@@ -2,7 +2,7 @@
 
 import { Eraser, Highlighter, Pencil, Trash2, Undo2 } from 'lucide-react';
 
-export type AnnotationTool = 'pen' | 'eraser' | 'highlighter' | 'stamp';
+export type AnnotationTool = 'pen' | 'eraser' | 'highlighter';
 
 const COLORS = [
   { value: '#ef4444', cls: 'bg-red-500',    label: 'Red' },
@@ -12,19 +12,18 @@ const COLORS = [
   { value: '#a855f7', cls: 'bg-purple-500', label: 'Purple' },
 ] as const;
 
-const STAMPS = ['⭐', '❤️', '🎉', '👏', '😂', '🐾', '😊', '👍'] as const;
+const REACTIONS = ['⭐', '❤️', '🎉', '👏', '😂', '🐾', '😊', '👍'] as const;
 
 interface AnnotationToolbarProps {
   tool: AnnotationTool;
   color: string;
   brushSize: number;
-  selectedEmoji?: string;
   onToolChange: (t: AnnotationTool) => void;
   onColorChange: (c: string) => void;
   onBrushSizeChange: (s: number) => void;
   onClear: () => void;
   onUndo: () => void;
-  onStampEmoji?: (emoji: string) => void;
+  onReaction?: (emoji: string) => void;
 }
 
 const MIN_BRUSH = 2;
@@ -40,8 +39,8 @@ function Tip({ children }: { children: React.ReactNode }) {
 }
 
 export function AnnotationToolbar({
-  tool, color, brushSize, selectedEmoji = '⭐',
-  onToolChange, onColorChange, onBrushSizeChange, onClear, onUndo, onStampEmoji,
+  tool, color, brushSize,
+  onToolChange, onColorChange, onBrushSizeChange, onClear, onUndo, onReaction,
 }: AnnotationToolbarProps) {
   const brushPct = ((brushSize - MIN_BRUSH) / (MAX_BRUSH - MIN_BRUSH)) * 100;
 
@@ -90,17 +89,18 @@ export function AnnotationToolbar({
 
       <div className="h-6 w-px bg-stone-700" />
 
-      {/* Emoji stamps */}
+      {/* Reactions */}
       <div className="flex items-center gap-1">
-        {STAMPS.map((e) => (
+        <span className="text-[9px] text-stone-500 uppercase tracking-widest font-bold pr-1">React</span>
+        {REACTIONS.map((e) => (
           <div key={e} className="relative group">
             <button
-              onClick={() => { onToolChange('stamp'); onStampEmoji?.(e); }}
-              className={`w-9 h-9 flex items-center justify-center rounded-xl text-lg transition-colors ${tool === 'stamp' && selectedEmoji === e ? 'bg-[#764f84]/40 ring-2 ring-white/40' : 'hover:bg-stone-800/50'}`}
+              onClick={() => onReaction?.(e)}
+              className="w-9 h-9 flex items-center justify-center rounded-xl text-lg hover:bg-stone-800/50 active:scale-90 transition-all"
             >
               {e}
             </button>
-            <Tip>Stamp {e}</Tip>
+            <Tip>{e}</Tip>
           </div>
         ))}
       </div>
