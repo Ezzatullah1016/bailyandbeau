@@ -590,7 +590,7 @@ function RoomContent({
       room.localParticipant.publishData(buildMsg('PAGE_TURN', { page: index }), { reliable: true });
       try { await localParticipant.setMetadata(JSON.stringify({ page: index, role: 'host' })); } catch { /* ok */ }
       const annotationJson = canvasRef.current ? (() => { try { return JSON.parse(canvasRef.current.getJSON()); } catch { return {}; } })() : {};
-      updateSnapshot(sessionId, participantId, index + 1, annotationJson).catch(() => {});
+      updateSnapshot(sessionId, participantId, index + 1, undefined, annotationJson).catch(() => {});
     },
     [role, room, localParticipant, sessionId, participantId],
   );

@@ -343,6 +343,7 @@ export async function updateSnapshot(
   sessionId: string,
   participantId: string,
   pageNumber: number,
+  timerState?: object | number | null,
   annotationState?: object,
   activityState?: object,
 ) {
@@ -351,7 +352,7 @@ export async function updateSnapshot(
     body: JSON.stringify({
       participant_id: participantId,
       current_page: pageNumber,
-      timer_state: {},
+      timer_state: typeof timerState === 'object' && timerState !== null ? timerState : {},
       annotation_state: annotationState ?? {},
       activity_state: activityState ?? {},
     }),
