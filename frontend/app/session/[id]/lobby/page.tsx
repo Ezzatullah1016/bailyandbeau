@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { BookOpen, Clock, Rocket, BookMarked, Sparkles, VideoOff } from 'lucide-react';
+import { BookOpen, Clock, Rocket, BookMarked, Sparkles, VideoOff, Copy, Check } from 'lucide-react';
 import {
   getSession,
   joinViaInvite,
@@ -51,10 +51,10 @@ export default function LobbyPage() {
   const [phase, setPhase] = useState<'check' | 'waiting' | 'starting'>('check');
   const [guestReady, setGuestReady] = useState(false);
   const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  // Raw livekit Room instance — imported dynamically, no static type available
   const livekitRoomRef = useRef<any>(null);
 
   const storedParticipantId =
@@ -113,7 +113,6 @@ export default function LobbyPage() {
 
         if (msg.type === 'PARTICIPANT_READY' && role === 'host') {
           setGuestReady(true);
-          // Auto-start: host broadcasts SESSION_START and navigates
           room.localParticipant
             .publishData(buildMsg('SESSION_START', { initiator: participantId }), { reliable: true })
             .then(() => {
@@ -135,13 +134,10 @@ export default function LobbyPage() {
 
       await room.connect(url, token, { autoSubscribe: true });
 
-      // Announce readiness
       await room.localParticipant.publishData(
         buildMsg('PARTICIPANT_READY', { participantId, role }),
         { reliable: true },
       );
-
-      // If host is alone and no guest yet, they just wait (guestReady stays false)
     },
     [id, router],
   );
@@ -197,7 +193,7 @@ export default function LobbyPage() {
     }
   }
 
-  // ── Host: manual "Start Session" if guest already confirmed ready ─────────
+  // ── Host: manual "Start Session" ─────────────────────────────────────────
   async function handleHostStart() {
     if (!livekitRoomRef.current || !storedParticipantId) return;
     try {
@@ -210,36 +206,49 @@ export default function LobbyPage() {
     router.push(`/session/${id}/reading-room`);
   }
 
+  // ── Copy invite link ──────────────────────────────────────────────────────
+  const inviteUrl = !isGuestMode && sessionData?.invite_token
+    ? `${typeof window !== 'undefined' ? window.location.origin : ''}/session/${id}/lobby?invite=${sessionData.invite_token}`
+    : null;
+
+  function handleCopyInvite() {
+    if (!inviteUrl) return;
+    navigator.clipboard.writeText(inviteUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
   const bookTitle = sessionData?.book_title ?? 'Reading Session';
   const isLoading = phase === 'starting';
 
   return (
     <>
-      <main className="flex h-screen w-full overflow-hidden font-body text-[#1d1b16] antialiased bg-[#fff9ee]">
+      <main className="flex h-screen w-full overflow-hidden font-karla text-[#1d1b16] antialiased">
 
         {/* ── LEFT COLUMN ──────────────────────────────────────────────────── */}
-        <section className="w-1/2 bg-white p-12 flex flex-col justify-between overflow-y-auto">
+        <section className="w-1/2 bg-[#faf7f6] p-12 flex flex-col justify-between overflow-y-auto">
           <div>
             <div className="mb-12">
-              <span className="text-2xl font-bold text-[#2d5016] font-headline italic tracking-tight">
+              <span className="font-baloo text-2xl font-bold text-[#3d3b62] tracking-tight">
                 Bailey &amp; Beau
               </span>
             </div>
 
             <div className="max-w-md mx-auto space-y-8">
-              <h2 className="text-4xl font-headline font-bold text-[#173901] tracking-tight">
+              <h2 className="font-baloo text-4xl font-bold text-[#3d3b62] tracking-tight">
                 Ready to Read Together?
               </h2>
 
-              {/* Session info card */}
-              <div className="bg-[#f3ede3] rounded-xl p-6">
+              {/* Session info / Today's Book card */}
+              <div className="bg-white rounded-xl p-6 border border-[#eccdca] shadow-[0_6px_18px_rgba(0,0,0,0.08)]">
                 <div className="flex flex-col gap-1 mb-4">
-                  <span className="uppercase tracking-widest text-[11px] font-bold text-[#835500]">
+                  <span className="font-karla uppercase tracking-widest text-[11px] font-bold text-[#764f84]">
                     TODAY&apos;S BOOK
                   </span>
-                  <h3 className="text-2xl font-headline font-bold text-[#173901]">{bookTitle}</h3>
+                  <h3 className="font-baloo text-2xl font-bold text-[#3d3b62]">{bookTitle}</h3>
                 </div>
-                <div className="flex items-center gap-4 text-[#43493d] text-sm mb-4">
+                <div className="font-karla flex items-center gap-4 text-[#43493d] text-sm mb-4">
                   <div className="flex items-center gap-1.5">
                     <BookOpen className="w-4 h-4" />
                     <span>Reading Room</span>
@@ -250,28 +259,52 @@ export default function LobbyPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-[#2d5016] flex items-center justify-center text-white font-bold text-sm">
+                  <div className="w-10 h-10 rounded-full bg-[#3d3b62] flex items-center justify-center text-white font-bold text-sm">
                     {isGuestMode ? 'G' : 'H'}
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-sm font-semibold text-[#173901]">
+                    <span className="font-karla text-sm font-semibold text-[#3d3b62]">
                       {isGuestMode ? 'Guest' : 'You (Host)'}
                     </span>
-                    <span className="text-[10px] bg-[#2d5016] text-white w-fit px-2 py-0.5 rounded-full uppercase tracking-tighter">
+                    <span className="font-karla text-[10px] bg-[#3d3b62] text-white w-fit px-2 py-0.5 rounded-full uppercase tracking-tighter">
                       {isGuestMode ? 'Guest' : 'Host'}
                     </span>
                   </div>
                 </div>
               </div>
 
+              {/* Invite link (host only) */}
+              {inviteUrl && (
+                <div className="bg-white rounded-xl p-4 border border-[#eccdca] shadow-[0_6px_18px_rgba(0,0,0,0.08)]">
+                  <span className="font-karla block text-[11px] font-bold uppercase tracking-widest text-[#764f84] mb-2">
+                    Invite Link
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      readOnly
+                      value={inviteUrl}
+                      className="font-karla flex-1 text-xs bg-[#faf7f6] border border-[#eccdca] rounded-lg px-3 py-2 text-[#43493d] truncate outline-none"
+                    />
+                    <button
+                      onClick={handleCopyInvite}
+                      className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg bg-[#3d3b62] hover:bg-[#764f84] text-white transition-colors"
+                      title="Copy invite link"
+                    >
+                      {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="font-karla text-[10px] text-[#43493d]/60 mt-1">Share this link with your reading partner</p>
+                </div>
+              )}
+
               {/* Guest display name input */}
               {isGuestMode && phase === 'check' && (
                 <div className="space-y-2">
-                  <label className="text-sm font-bold uppercase tracking-wider text-[#43493d]">
+                  <label className="font-karla text-sm font-bold uppercase tracking-wider text-[#43493d]">
                     Your name
                   </label>
                   <input
-                    className="w-full px-4 py-3 rounded-xl border border-[#c3c9b9] bg-white text-[#1d1b16] text-sm focus:outline-none focus:ring-2 focus:ring-[#2d5016]"
+                    className="font-karla w-full px-4 py-3 rounded-xl border border-[#eccdca] bg-white text-[#1d1b16] text-sm focus:outline-none focus:ring-2 focus:ring-[#3b85a6] focus:border-[#3b85a6]"
                     placeholder="e.g. Grandma Rose"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
@@ -282,39 +315,39 @@ export default function LobbyPage() {
 
               {/* Tech check */}
               <div className="space-y-4">
-                <h4 className="text-sm font-bold uppercase tracking-wider text-[#43493d]">
+                <h4 className="font-karla text-sm font-bold uppercase tracking-wider text-[#43493d]">
                   Check your camera &amp; microphone
                 </h4>
-                <div className="relative aspect-video bg-[#2d5016] rounded-xl overflow-hidden flex items-center justify-center">
+                <div className="relative aspect-video bg-[#3d3b62] rounded-[12px] overflow-hidden flex items-center justify-center">
                   {camReady ? (
                     <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
                   ) : (
                     <div className="flex flex-col items-center">
                       <VideoOff className="w-10 h-10 text-white mb-2" />
-                      <span className="text-white/70 text-xs font-medium tracking-wide">Camera Preview</span>
+                      <span className="font-karla text-white/70 text-xs font-medium tracking-wide">Camera Preview</span>
                     </div>
                   )}
-                  <div className="absolute bottom-4 right-4 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full text-[10px] text-white">
+                  <div className="absolute bottom-4 right-4 bg-[#c84a71] px-3 py-1 rounded-full text-[10px] text-white font-karla font-bold">
                     LIVE
                   </div>
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${micReady ? 'bg-[#a8d38a]' : 'bg-[#ba1a1a]'}`} />
-                    <span className="text-sm text-[#43493d] font-medium">
+                    <div className={`w-2 h-2 rounded-full ${micReady ? 'bg-[#3b85a6]' : 'bg-[#ba1a1a]'}`} />
+                    <span className="font-karla text-sm text-[#43493d] font-medium">
                       Microphone: {micReady ? 'Ready' : 'Not available'}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${camReady ? 'bg-[#a8d38a]' : 'bg-[#ba1a1a]'}`} />
-                    <span className="text-sm text-[#43493d] font-medium">
+                    <div className={`w-2 h-2 rounded-full ${camReady ? 'bg-[#3b85a6]' : 'bg-[#ba1a1a]'}`} />
+                    <span className="font-karla text-sm text-[#43493d] font-medium">
                       Camera: {camReady ? 'Ready' : 'Not available'}
                     </span>
                   </div>
                 </div>
               </div>
 
-              {error && <p className="text-sm text-[#ba1a1a] font-medium">{error}</p>}
+              {error && <p className="font-karla text-sm text-[#ba1a1a] font-medium">{error}</p>}
 
               {/* CTA */}
               {phase === 'check' && (
@@ -322,11 +355,11 @@ export default function LobbyPage() {
                   <button
                     onClick={isGuestMode ? handleGuestReady : handleHostReady}
                     disabled={isLoading}
-                    className="w-full py-4 bg-[#173901] text-white rounded-lg font-bold text-lg transition-all hover:scale-[1.01] active:scale-95 shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="font-baloo w-full py-4 bg-[#3d3b62] hover:bg-[#764f84] text-white rounded-lg font-bold text-lg transition-all hover:scale-[1.01] active:scale-95 shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {isGuestMode ? "I'm Ready — Join Session" : "I'm Ready — Join Session"}
                   </button>
-                  <p className="text-center text-xs text-[#43493d]/60 italic">
+                  <p className="font-karla text-center text-xs text-[#43493d]/60 italic">
                     Both participants must be ready before the session starts.
                   </p>
                 </>
@@ -334,19 +367,18 @@ export default function LobbyPage() {
 
               {phase === 'waiting' && (
                 <div className="flex flex-col items-center gap-4 py-4">
-                  <div className="w-8 h-8 border-4 border-[#2d5016] border-t-transparent rounded-full animate-spin" />
-                  <p className="text-sm text-[#43493d] font-medium">
+                  <div className="w-8 h-8 border-4 border-[#764f84] border-t-transparent rounded-full animate-spin" />
+                  <p className="font-karla text-sm text-[#43493d] font-medium">
                     {isGuestMode
                       ? 'Waiting for host to start the session…'
                       : guestReady
                       ? 'Starting session…'
                       : 'Waiting for the other participant to join… or start solo below.'}
                   </p>
-                  {/* Host can start once guest is ready, or start solo if no guest joins */}
                   {!isGuestMode && guestReady && (
                     <button
                       onClick={handleHostStart}
-                      className="mt-2 px-8 py-3 bg-[#173901] text-white rounded-lg font-bold text-sm transition-all hover:scale-[1.01] active:scale-95"
+                      className="font-baloo mt-2 px-8 py-3 bg-[#f0c75e] hover:bg-[#e6b84d] text-[#3d3b62] rounded-lg font-bold text-sm transition-all hover:scale-[1.01] active:scale-95"
                     >
                       Start Session
                     </button>
@@ -354,7 +386,7 @@ export default function LobbyPage() {
                   {!isGuestMode && !guestReady && (
                     <button
                       onClick={handleHostStart}
-                      className="mt-2 px-8 py-3 bg-[#173901] text-white rounded-lg font-bold text-sm transition-all hover:scale-[1.01] active:scale-95"
+                      className="font-baloo mt-2 px-8 py-3 bg-[#f0c75e] hover:bg-[#e6b84d] text-[#3d3b62] rounded-lg font-bold text-sm transition-all hover:scale-[1.01] active:scale-95"
                     >
                       Start Solo Session
                     </button>
@@ -364,15 +396,15 @@ export default function LobbyPage() {
 
               {phase === 'starting' && (
                 <div className="flex flex-col items-center gap-3 py-4">
-                  <Rocket className="w-10 h-10 text-[#2d5016] animate-pulse" />
-                  <p className="text-sm text-[#173901] font-bold">Session starting…</p>
+                  <Rocket className="w-10 h-10 text-[#764f84] animate-pulse" />
+                  <p className="font-karla text-sm text-[#3d3b62] font-bold">Session starting…</p>
                 </div>
               )}
             </div>
           </div>
 
           {/* Footer */}
-          <div className="text-[10px] text-[#43493d]/40 flex justify-center gap-4 mt-8">
+          <div className="font-karla text-[10px] text-[#764f84] flex justify-center gap-4 mt-8">
             <span>© 2025 Bailey &amp; Beau</span>
             <span>Privacy Policy</span>
             <span>Help Center</span>
@@ -380,17 +412,17 @@ export default function LobbyPage() {
         </section>
 
         {/* ── RIGHT COLUMN ─────────────────────────────────────────────────── */}
-        <section className="w-1/2 bg-[#2d5016] p-12 relative flex items-center justify-center overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-[#173901] blur-[120px] rounded-full -mr-32 -mt-32" />
-          <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#835500] blur-[120px] opacity-20 rounded-full -ml-32 -mb-32" />
+        <section className="w-1/2 bg-gradient-to-b from-[#3d3b62] to-[#764f84] p-12 relative flex items-center justify-center overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 blur-[120px] rounded-full -mr-32 -mt-32" />
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-white/5 blur-[120px] rounded-full -ml-32 -mb-32" />
 
           <div className="relative z-10 w-full max-w-sm flex flex-col items-center text-center">
-            <div className="w-[240px] h-[320px] bg-white rounded-xl shadow-2xl overflow-hidden mb-10 transform -rotate-2 hover:rotate-0 transition-transform duration-500 cursor-pointer flex items-center justify-center">
-              <BookMarked className="w-20 h-20 text-[#2d5016]" />
+            <div className="w-[240px] h-[320px] bg-white rounded-[8px] overflow-hidden mb-10 transform -rotate-2 hover:rotate-0 transition-transform duration-500 cursor-pointer flex items-center justify-center shadow-[0px_12px_40px_rgba(0,0,0,0.25)]">
+              <BookMarked className="w-20 h-20 text-[#3d3b62]" />
             </div>
 
-            <h3 className="text-3xl font-headline font-bold text-white mb-4">{bookTitle}</h3>
-            <p className="text-white/70 font-body leading-relaxed max-w-xs mb-8">
+            <h3 className="font-baloo text-3xl font-bold text-white mb-4">{bookTitle}</h3>
+            <p className="font-karla text-[#eccdca] leading-relaxed max-w-xs mb-8">
               A story about courage, friendship, and one very big surprise.
             </p>
 
@@ -398,9 +430,9 @@ export default function LobbyPage() {
 
             <div className="flex flex-col items-center gap-4">
               <div className="relative">
-                <div className={`w-4 h-4 rounded-full ${guestReady ? 'bg-[#a8d38a]' : 'bg-[#feae2c] pulse-amber'}`} />
+                <div className={`w-4 h-4 rounded-full ${guestReady ? 'bg-[#3b85a6]' : 'bg-[#f0c75e] pulse-amber'}`} />
               </div>
-              <span className="text-white font-medium tracking-wide text-sm">
+              <span className="font-karla text-white font-medium tracking-wide text-sm">
                 {phase === 'check'
                   ? isGuestMode
                     ? 'Enter your name and click Ready'
@@ -416,7 +448,7 @@ export default function LobbyPage() {
             </div>
           </div>
 
-          <div className="absolute bottom-0 right-0 p-8 opacity-5 select-none pointer-events-none">
+          <div className="absolute bottom-0 right-0 p-8 opacity-[0.12] select-none pointer-events-none">
             <Sparkles className="w-40 h-40 text-white" />
           </div>
         </section>

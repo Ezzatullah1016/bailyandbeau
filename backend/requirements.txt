@@ -9,3 +9,4 @@ django-storages>=1.14.4
 django-cors-headers>=4.4.0
 pdf2image>=1.17.0
 sentry-sdk>=2.0.0
+stripe>=15.0.0

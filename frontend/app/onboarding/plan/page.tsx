@@ -26,9 +26,9 @@ const PLAN_FEATURES: Record<string, string[]> = {
 };
 
 const PLAN_BADGE: Record<string, { label: string; color: string }> = {
-  'monthly-starter': { label: 'Popular',    color: 'bg-[#44664a] text-white' },
-  'monthly-plus':    { label: 'Best Value', color: 'bg-[#7c572d] text-white' },
-  'session-pack-5':  { label: 'Flexible',   color: 'bg-[#524341] text-white' },
+  'monthly-starter': { label: 'Popular',    color: 'bg-[#764f84] text-white' },
+  'monthly-plus':    { label: 'Best Value', color: 'bg-[#c84a71] text-white' },
+  'session-pack-5':  { label: 'Flexible',   color: 'bg-[#3b85a6] text-white' },
 };
 
 export default function ChoosePlanPage() {
@@ -69,18 +69,18 @@ export default function ChoosePlanPage() {
     interval === 'one_off' ? 'one-off' : `/${interval}`;
 
   return (
-    <main className="min-h-screen flex flex-col items-center bg-[#FAF7F2]">
+    <main className="min-h-screen flex flex-col items-center bg-[#faf7f6]">
       <header className="flex justify-center items-center w-full py-8 px-4">
-        <div className="text-2xl font-serif italic text-[#C4847A] tracking-tight">Bailey &amp; Beau</div>
+        <div className="font-baloo text-2xl font-bold text-[#3d3b62] tracking-tight">Bailey &amp; Beau</div>
       </header>
 
       <div className="flex-grow flex items-center justify-center w-full px-4 pb-12">
-        <div className="max-w-[860px] w-full bg-white rounded-2xl p-10 md:p-12 shadow-[0_40px_60px_-15px_rgba(28,28,25,0.05)] border border-[#d7c2bf]/10">
+        <div className="max-w-[860px] w-full bg-white rounded-2xl p-10 md:p-12 shadow-[0_40px_60px_-15px_rgba(61,59,98,0.08)] border border-[#eccdca]">
           <div className="text-center mb-12">
-            <h2 className="font-serif text-5xl md:text-6xl text-[#865047] mb-4 font-medium italic">
+            <h2 className="font-baloo text-5xl md:text-6xl text-[#3d3b62] mb-4 font-bold">
               Choose Your Plan
             </h2>
-            <p className="text-[#524341]/70 text-lg">You can change or cancel at any time.</p>
+            <p className="font-karla text-stone-500 text-lg">You can change or cancel at any time.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
@@ -96,8 +96,8 @@ export default function ChoosePlanPage() {
                   onClick={() => setSelected(plan.code)}
                   className={`relative flex flex-col p-6 rounded-xl text-left transition-all duration-300 focus:outline-none ${
                     isSelected
-                      ? 'border-2 border-[#C4847A] bg-white shadow-[0_20px_40px_rgba(196,132,122,0.1)]'
-                      : 'border border-[#E0D5C8] bg-[#fcf9f4] hover:bg-[#f6f3ee]'
+                      ? 'border-2 border-[#764f84] bg-white shadow-[0_20px_40px_rgba(118,79,132,0.12)]'
+                      : 'border border-[#eccdca] bg-[#faf7f6] hover:bg-white'
                   } ${isFeatured && !isSelected ? 'md:scale-[1.02]' : ''}`}
                 >
                   {badge && (
@@ -109,31 +109,31 @@ export default function ChoosePlanPage() {
                   )}
 
                   <div className={`absolute top-4 right-4 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                    isSelected ? 'border-[#C4847A] bg-[#C4847A]' : 'border-[#d7c2bf]'
+                    isSelected ? 'border-[#764f84] bg-[#764f84]' : 'border-[#eccdca]'
                   }`}>
                     {isSelected && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
                   </div>
 
                   <div className="mb-4 pt-1">
-                    <h3 className="font-bold text-xl text-[#1c1c19] mb-1">{plan.name}</h3>
+                    <h3 className="font-baloo font-bold text-xl text-[#3d3b62] mb-1">{plan.name}</h3>
                     <div className="flex items-baseline gap-1">
-                      <span className="text-3xl font-bold text-[#1c1c19]">£{plan.price_gbp}</span>
-                      <span className="text-[#524341]/60 text-sm">{intervalLabel(plan.interval)}</span>
+                      <span className="font-baloo text-3xl font-bold text-[#3d3b62]">£{plan.price_gbp}</span>
+                      <span className="font-karla text-stone-400 text-sm">{intervalLabel(plan.interval)}</span>
                     </div>
-                    <p className="text-xs text-[#847370] mt-1">{plan.sessions_included} sessions included</p>
+                    <p className="font-karla text-xs text-stone-400 mt-1">{plan.sessions_included} sessions included</p>
                   </div>
 
                   <ul className="flex-grow space-y-3 mb-6">
                     {features.map((f, fi) => (
-                      <li key={fi} className="flex items-start gap-2.5 text-sm text-[#1c1c19]">
-                        <CheckCircle className="w-4 h-4 text-[#44664a] shrink-0 mt-0.5" fill="#44664a" color="white" />
+                      <li key={fi} className="font-karla flex items-start gap-2.5 text-sm text-[#1c1c19]">
+                        <CheckCircle className="w-4 h-4 text-[#764f84] shrink-0 mt-0.5" fill="#764f84" color="white" />
                         <span>{f}</span>
                       </li>
                     ))}
                   </ul>
 
-                  <div className={`text-xs font-semibold text-center py-2 rounded-lg transition-all ${
-                    isSelected ? 'bg-[#C4847A] text-white' : 'bg-[#f0ede9] text-[#524341]'
+                  <div className={`font-baloo text-xs font-semibold text-center py-2 rounded-lg transition-all ${
+                    isSelected ? 'bg-[#764f84] text-white' : 'bg-[#faf7f6] text-stone-500'
                   }`}>
                     {isSelected ? 'Selected' : 'Select'}
                   </div>
@@ -142,23 +142,23 @@ export default function ChoosePlanPage() {
             })}
 
             {plans.length === 0 && [0, 1, 2].map((i) => (
-              <div key={i} className="h-64 rounded-xl bg-[#f0ede9] animate-pulse" />
+              <div key={i} className="h-64 rounded-xl bg-[#eccdca]/30 animate-pulse" />
             ))}
           </div>
 
-          {error && <p className="text-sm text-red-600 font-medium text-center mb-4">{error}</p>}
+          {error && <p className="font-karla text-sm text-red-600 font-medium text-center mb-4">{error}</p>}
 
           <div className="flex flex-col items-center gap-3">
             <button
               onClick={handleContinue}
               disabled={loading || plans.length === 0}
-              className="w-full max-w-sm py-4 bg-[#C4847A] text-white font-semibold rounded-lg hover:brightness-105 active:scale-[0.98] transition-all shadow-lg shadow-[#C4847A]/20 disabled:opacity-60"
+              className="font-baloo w-full max-w-sm py-4 bg-[#c84a71] text-white font-bold rounded-xl hover:bg-[#b43f63] active:scale-[0.98] transition-all shadow-lg shadow-[#c84a71]/20 disabled:opacity-60"
             >
               {loading ? 'Starting checkout…' : 'Continue to Payment'}
             </button>
             <button
               onClick={() => router.push('/onboarding/child')}
-              className="text-sm text-[#847370] hover:text-[#524341] underline underline-offset-4 transition-colors"
+              className="font-karla text-sm text-stone-400 hover:text-[#3d3b62] underline underline-offset-4 transition-colors"
             >
               Skip for now — I&apos;ll choose later
             </button>

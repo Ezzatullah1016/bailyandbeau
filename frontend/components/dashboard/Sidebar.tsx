@@ -38,10 +38,10 @@ export function Sidebar({ me, currentPath }: SidebarProps) {
   ];
 
   return (
-    <aside className="h-screen w-64 fixed left-0 top-0 overflow-y-auto bg-[#2d5016] flex flex-col py-8 z-50 shadow-2xl">
+    <aside className="h-screen w-64 fixed left-0 top-0 overflow-y-auto bg-[#3d3b62] flex flex-col py-8 z-50 shadow-2xl">
       <div className="px-6 mb-10">
-        <h1 className="font-headline text-2xl italic text-white">Bailey &amp; Beau</h1>
-        <p className="text-[10px] uppercase tracking-widest text-white/50 font-bold mt-1">The Living Storybook</p>
+        <h1 className="font-baloo text-2xl font-bold text-white">Bailey &amp; Beau</h1>
+        <p className="font-karla text-[10px] uppercase tracking-widest text-[#eccdca] mt-1">The Living Storybook</p>
       </div>
 
       <nav className="flex-1 space-y-1 px-2">
@@ -51,13 +51,13 @@ export function Sidebar({ me, currentPath }: SidebarProps) {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-karla font-medium transition-all ${
                 active
-                  ? 'bg-white/10 text-white font-bold'
-                  : 'text-white/60 hover:text-white hover:bg-white/5'
+                  ? 'bg-[#764f84] text-white font-bold'
+                  : 'text-white/80 hover:text-white hover:bg-[#764f84]/60'
               }`}
             >
-              <Icon name={item.icon} className={`w-5 h-5 ${active ? 'text-white' : 'text-white/60 group-hover:text-white'}`} />
+              <Icon name={item.icon} className={`w-5 h-5 ${active ? 'text-white' : 'text-white/70 group-hover:text-white'}`} />
               {item.label}
             </Link>
           );
@@ -70,10 +70,10 @@ export function Sidebar({ me, currentPath }: SidebarProps) {
             {initials}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-white text-sm font-medium truncate">{displayName}</p>
+            <p className="font-karla text-white text-sm font-medium truncate">{displayName}</p>
             <button
               onClick={handleSignOut}
-              className="text-xs text-white/40 hover:text-white transition-colors"
+              className="font-karla text-xs text-white/40 hover:text-white transition-colors"
             >
               Sign Out
             </button>

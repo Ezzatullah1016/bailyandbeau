@@ -61,61 +61,61 @@ export default function SessionsPage() {
   }
 
   if (loading) return (
-    <div className="h-screen w-screen flex items-center justify-center bg-[#f0f9f0]">
-      <RefreshCw className="w-10 h-10 text-[#2d5016] animate-spin" />
+    <div className="h-screen w-screen flex items-center justify-center bg-[#faf7f6]">
+      <RefreshCw className="w-10 h-10 text-[#764f84] animate-spin" />
     </div>
   );
 
   return (
     <>
       <Sidebar me={me} currentPath={pathname} />
-      <header className="flex justify-between items-center w-full px-8 h-16 ml-64 sticky top-0 z-40 bg-[#f0f9f0]/80 backdrop-blur-xl shadow-sm border-b border-[#2d5016]/10">
-        <div className="font-headline text-xl font-bold text-[#173901]">Sessions</div>
-        <Link href="/dashboard" className="px-4 py-2 bg-[#173901] text-white text-sm font-bold rounded-lg hover:bg-[#2d5016] transition-all flex items-center gap-2">
+      <header className="flex justify-between items-center w-full px-8 h-16 ml-64 sticky top-0 z-40 bg-[#faf7f6]/80 backdrop-blur-xl shadow-sm border-b border-[#3d3b62]/10">
+        <div className="font-baloo text-xl font-bold text-[#3d3b62]">Sessions</div>
+        <Link href="/dashboard" className="font-baloo px-4 py-2 bg-[#3d3b62] text-white text-sm font-bold rounded-lg hover:bg-[#764f84] transition-all flex items-center gap-2">
           <Plus className="w-4 h-4" /> New Session
         </Link>
       </header>
-      <main className="ml-64 p-8 min-h-screen bg-[#f7faf6] font-body text-[#1d1b16]">
+      <main className="ml-64 p-8 min-h-screen bg-[#faf7f6] font-karla text-[#1d1b16]">
         <div className="mb-8">
-          <h2 className="font-headline text-4xl text-[#173901] font-bold mb-2">Session History</h2>
+          <h2 className="font-baloo text-4xl text-[#3d3b62] font-bold mb-2">Session History</h2>
           <p className="text-stone-500">{sessions.length} session{sessions.length !== 1 ? 's' : ''} total</p>
         </div>
 
         <div className="flex gap-3 mb-8 flex-wrap">
           {['all', 'completed', 'active', 'lobby', 'pending', 'cancelled'].map((f) => (
             <button key={f} onClick={() => setFilter(f)}
-              className={`px-4 py-2 rounded-full text-sm font-bold capitalize transition-all ${filter === f ? 'bg-[#2d5016] text-white' : 'bg-white text-stone-500 hover:bg-[#e8f0df] border border-[#c3c9b9]/40'}`}>
+              className={`px-4 py-2 rounded-full text-sm font-bold capitalize transition-all ${filter === f ? 'bg-[#3d3b62] text-white' : 'bg-white text-stone-500 hover:bg-[#eccdca]/30 border border-[#eccdca]'}`}>
               {f === 'all' ? 'All' : f}
             </button>
           ))}
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-[#c3c9b9]/10 overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm border border-[#eccdca] overflow-hidden">
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center gap-4 py-24 text-stone-400">
               <BookMarked className="w-12 h-12" />
               <p className="font-medium">No sessions found</p>
-              <Link href="/dashboard" className="px-6 py-2 bg-[#173901] text-white rounded-lg text-sm font-bold hover:bg-[#2d5016] transition-all">
+              <Link href="/dashboard" className="font-baloo px-6 py-2 bg-[#3d3b62] text-white rounded-lg text-sm font-bold hover:bg-[#764f84] transition-all">
                 Start a Session
               </Link>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="border-b border-[#f3ede3]">
+                <thead className="border-b border-[#eccdca]/40">
                   <tr>
                     {['Book', 'Child', 'Date', 'Duration', 'Status', 'Actions'].map((h) => (
                       <th key={h} className="px-6 py-4 text-left text-xs font-bold text-stone-400 uppercase tracking-widest">{h}</th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#f3ede3]">
+                <tbody className="divide-y divide-[#eccdca]/30">
                   {filtered.map((s) => (
-                    <tr key={s.id} className="hover:bg-[#f9f3e9] transition-colors">
+                    <tr key={s.id} className="hover:bg-[#faf7f6] transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="h-8 w-6 bg-[#2d5016]/10 rounded flex items-center justify-center shrink-0">
-                            <BookOpen className="w-4 h-4 text-[#2d5016]" />
+                          <div className="h-8 w-6 bg-[#3d3b62]/10 rounded flex items-center justify-center shrink-0">
+                            <BookOpen className="w-4 h-4 text-[#764f84]" />
                           </div>
                           <span className="font-semibold text-[#1d1b16] text-sm truncate max-w-[180px]">{s.book_title}</span>
                         </div>
@@ -131,11 +131,11 @@ export default function SessionsPage() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           {(s.status === 'active' || s.status === 'lobby') && (
-                            <Link href={`/session/${s.id}/lobby`} className="text-xs font-bold text-[#2d5016] hover:underline">Rejoin</Link>
+                            <Link href={`/session/${s.id}/lobby`} className="text-xs font-bold text-[#764f84] hover:underline">Rejoin</Link>
                           )}
                           {(s.status === 'pending' || s.status === 'lobby' || s.status === 'active') && (
                             <button onClick={() => copyInviteLink(s.id)}
-                              className="text-xs font-bold text-[#835500] hover:underline flex items-center gap-1">
+                              className="text-xs font-bold text-[#c84a71] hover:underline flex items-center gap-1">
                               <Link2 className="w-3 h-3" /> Copy Invite
                             </button>
                           )}

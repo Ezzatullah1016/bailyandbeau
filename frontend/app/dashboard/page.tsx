@@ -128,7 +128,7 @@ function StartSessionModal({
     <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="font-headline text-2xl text-[#173901] font-bold">Start a Session</h2>
+          <h2 className="font-baloo text-2xl text-[#3d3b62] font-bold">Start a Session</h2>
           <button onClick={onClose} className="text-stone-400 hover:text-stone-600">
             <X className="w-5 h-5" />
           </button>
@@ -140,7 +140,7 @@ function StartSessionModal({
             <select
               value={bookId}
               onChange={(e) => setBookId(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-[#c3c9b9] bg-white text-[#1d1b16] text-sm focus:outline-none focus:ring-2 focus:ring-[#2d5016]"
+              className="font-karla w-full px-4 py-3 rounded-xl border border-[#eccdca] bg-white text-[#1d1b16] text-sm focus:outline-none focus:ring-2 focus:ring-[#3b85a6]"
             >
               {books.map((b) => (
                 <option key={b.id} value={b.id}>{b.title}</option>
@@ -153,7 +153,7 @@ function StartSessionModal({
             <select
               value={childId}
               onChange={(e) => setChildId(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-[#c3c9b9] bg-white text-[#1d1b16] text-sm focus:outline-none focus:ring-2 focus:ring-[#2d5016]"
+              className="font-karla w-full px-4 py-3 rounded-xl border border-[#eccdca] bg-white text-[#1d1b16] text-sm focus:outline-none focus:ring-2 focus:ring-[#3b85a6]"
             >
               {childProfiles.map((c) => (
                 <option key={c.id} value={c.id}>{c.display_name} (age {c.age_band})</option>
@@ -166,7 +166,7 @@ function StartSessionModal({
           <button
             onClick={handleStart}
             disabled={loading}
-            className="w-full py-4 bg-[#173901] text-white rounded-xl font-bold text-sm transition-all hover:bg-[#2d5016] active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
+            className="font-baloo w-full py-4 bg-[#f0c75e] hover:bg-[#e6b84d] text-[#3d3b62] rounded-xl font-bold text-sm transition-all active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
           >
             <Play className="w-5 h-5" />
             {loading ? 'Creating session…' : 'Start Session'}
@@ -218,10 +218,10 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-[#f0f9f0]">
+      <div className="h-screen w-screen flex items-center justify-center bg-[#faf7f6]">
         <div className="flex flex-col items-center gap-4">
-          <Icon name="sync" className="w-10 h-10 text-[#2d5016] animate-spin" />
-          <p className="text-sm text-[#2d5016] font-medium">Loading dashboard…</p>
+          <Icon name="sync" className="w-10 h-10 text-[#3d3b62] animate-spin" />
+          <p className="font-karla text-sm text-[#3d3b62] font-medium">Loading dashboard…</p>
         </div>
       </div>
     );
@@ -240,24 +240,24 @@ export default function DashboardPage() {
 
       <Sidebar me={me} currentPath={pathname} />
 
-      <header className="flex justify-between items-center w-full px-8 h-16 ml-64 sticky top-0 z-40 bg-[#f0f9f0]/80 backdrop-blur-xl shadow-sm border-b border-[#2d5016]/10">
-        <div className="font-headline text-xl font-bold text-[#173901]">Dashboard</div>
+      <header className="flex justify-between items-center w-full px-8 h-16 ml-64 sticky top-0 z-40 bg-[#faf7f6]/80 backdrop-blur-xl shadow-sm border-b border-[#3d3b62]/10">
+        <div className="font-baloo text-xl font-bold text-[#3d3b62]">Dashboard</div>
         <div className="flex items-center gap-4">
           <button className="relative group">
-            <Bell className="w-5 h-5 text-stone-500 group-hover:text-[#173901] transition-colors" />
+            <Bell className="w-5 h-5 text-stone-500 group-hover:text-[#3d3b62] transition-colors" />
             <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full border-2 border-white" />
           </button>
           <UserCircle className="w-5 h-5 text-stone-500 cursor-pointer" />
         </div>
       </header>
 
-      <main className="ml-64 p-8 min-h-screen bg-[#f7faf6] font-body text-[#1d1b16]">
+      <main className="ml-64 p-8 min-h-screen bg-[#faf7f6] font-karla text-[#1d1b16]">
 
         <section className="mb-10">
-          <h2 className="font-headline text-4xl text-[#173901] font-bold mb-2">
+          <h2 className="font-baloo text-4xl text-[#3d3b62] font-bold mb-2">
             Welcome back, {firstName} 👋
           </h2>
-          <p className="text-stone-500 font-medium">
+          <p className="font-karla text-stone-500 font-medium">
             {dash?.active_sessions_count
               ? `You have ${dash.active_sessions_count} active session${dash.active_sessions_count > 1 ? 's' : ''} right now.`
               : 'Ready to start today\'s reading session?'}
@@ -265,52 +265,52 @@ export default function DashboardPage() {
         </section>
 
         <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-          <div className="bg-white p-6 rounded-xl shadow-sm flex flex-col border border-[#c3c9b9]/10">
-            <span className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-4">Sessions Remaining</span>
+          <div className="bg-white p-6 rounded-xl shadow-[0_6px_18px_rgba(0,0,0,0.08)] flex flex-col border border-[#eccdca]">
+            <span className="font-karla text-xs font-bold uppercase tracking-wider text-stone-400 mb-4">Sessions Remaining</span>
             <div className="flex items-end justify-between">
-              <span className="text-5xl font-headline font-bold text-[#173901]">{sessionsLeft}</span>
-              <CalendarDays className="w-8 h-8 text-[#a8d38a]" />
+              <span className="font-baloo text-5xl font-bold text-[#3d3b62]">{sessionsLeft}</span>
+              <CalendarDays className="w-8 h-8 text-[#764f84]" />
             </div>
             {entitlement?.plan_code && (
-              <span className="mt-3 text-xs text-stone-400 capitalize">{entitlement.plan_code.replace(/-/g, ' ')}</span>
+              <span className="font-karla mt-3 text-xs text-stone-400 capitalize">{entitlement.plan_code.replace(/-/g, ' ')}</span>
             )}
           </div>
 
-          <div className="bg-white p-6 rounded-xl shadow-sm flex flex-col border border-[#c3c9b9]/10">
-            <span className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-4">Sessions Completed</span>
+          <div className="bg-white p-6 rounded-xl shadow-[0_6px_18px_rgba(0,0,0,0.08)] flex flex-col border border-[#eccdca]">
+            <span className="font-karla text-xs font-bold uppercase tracking-wider text-stone-400 mb-4">Sessions Completed</span>
             <div className="flex items-end justify-between">
-              <span className="text-5xl font-headline font-bold text-[#835500]">{dash?.completed_sessions_count ?? 0}</span>
-              <CheckSquare className="w-8 h-8 text-[#feae2c]" />
+              <span className="font-baloo text-5xl font-bold text-[#3d3b62]">{dash?.completed_sessions_count ?? 0}</span>
+              <CheckSquare className="w-8 h-8 text-[#f0c75e]" />
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-xl shadow-sm flex flex-col border border-[#c3c9b9]/10">
-            <span className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-4">Badges Earned</span>
+          <div className="bg-white p-6 rounded-xl shadow-[0_6px_18px_rgba(0,0,0,0.08)] flex flex-col border border-[#eccdca]">
+            <span className="font-karla text-xs font-bold uppercase tracking-wider text-stone-400 mb-4">Badges Earned</span>
             <div className="flex items-end justify-between">
-              <span className="text-5xl font-headline font-bold text-[#5f1700]">{badges.length}</span>
-              <Medal className="w-8 h-8 text-[#ffb59f]" />
+              <span className="font-baloo text-5xl font-bold text-[#3d3b62]">{badges.length}</span>
+              <Medal className="w-8 h-8 text-[#c84a71]" />
             </div>
           </div>
         </section>
 
-        <section className="bg-[#2d5016] rounded-3xl p-8 mb-10 overflow-hidden relative flex flex-col md:flex-row items-center gap-8 shadow-xl shadow-[#173901]/10">
+        <section className="bg-gradient-to-br from-[#3d3b62] to-[#764f84] rounded-3xl p-8 mb-10 overflow-hidden relative flex flex-col md:flex-row items-center gap-8 shadow-xl shadow-[#3d3b62]/20">
           <div className="flex-1 z-10">
-            <span className="inline-block px-4 py-1.5 bg-[#feae2c] text-[#291800] text-xs font-bold rounded-full mb-6">
+            <span className="inline-block px-4 py-1.5 bg-[#f0c75e] text-[#3d3b62] font-karla text-xs font-bold rounded-full mb-6">
               {books.length > 0 ? 'Start Reading' : 'No Books Yet'}
             </span>
-            <h3 className="font-headline text-4xl text-white mb-4">
+            <h3 className="font-baloo text-4xl text-white mb-4">
               {books[0]?.title ?? 'Choose a book'}
             </h3>
-            <p className="text-emerald-100/80 text-lg mb-6">
+            <p className="font-karla text-white/80 text-lg mb-6">
               {books[0]?.description || 'Pick a book from the library and start a session with your child.'}
             </p>
-            <div className="flex items-center gap-4 text-emerald-200/60 text-sm mb-8">
+            <div className="font-karla flex items-center gap-4 text-white/60 text-sm mb-8">
               <span className="flex items-center gap-1">
                 <DoorOpen className="w-4 h-4" /> Reading Room
               </span>
               {books[0]?.age_band && (
                 <>
-                  <span className="h-1 w-1 rounded-full bg-emerald-700" />
+                  <span className="h-1 w-1 rounded-full bg-white/30" />
                   <span>Ages {books[0].age_band}</span>
                 </>
               )}
@@ -319,22 +319,22 @@ export default function DashboardPage() {
               <button
                 onClick={() => setShowModal(true)}
                 disabled={sessionsLeft === 0 || books.length === 0 || children.length === 0}
-                className="px-8 py-3 bg-[#feae2c] hover:bg-amber-400 text-[#291800] font-bold rounded-lg transition-all flex items-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
+                className="font-baloo px-8 py-3 bg-[#f0c75e] hover:bg-[#e6b84d] text-[#3d3b62] font-bold rounded-lg transition-all flex items-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Play className="w-5 h-5 transition-transform group-hover:scale-125" />
                 Start Session
               </button>
               <Link
                 href="/dashboard/library"
-                className="px-8 py-3 border border-white/20 hover:bg-white/10 text-white font-bold rounded-lg transition-all"
+                className="font-baloo px-8 py-3 border border-[#3d3b62] bg-transparent hover:bg-[#eccdca] text-[#3d3b62] font-bold rounded-lg transition-all"
               >
                 Browse Library
               </Link>
             </div>
             {sessionsLeft === 0 && (
-              <p className="mt-4 text-amber-300/80 text-sm">
+              <p className="font-karla mt-4 text-[#f0c75e]/80 text-sm">
                 No sessions remaining.{' '}
-                <Link href="/dashboard/billing" className="underline hover:text-amber-200">Upgrade your plan</Link>
+                <Link href="/dashboard/billing" className="underline hover:text-[#f0c75e]">Upgrade your plan</Link>
               </p>
             )}
           </div>
@@ -344,20 +344,20 @@ export default function DashboardPage() {
               // eslint-disable-next-line @next/next/no-img-element
               <img src={books[0].cover_image} alt={books[0].title} className="w-full h-full object-cover" />
             ) : (
-              <BookOpen className="w-12 h-12 text-[#2d5016]" />
+              <BookOpen className="w-12 h-12 text-[#3d3b62]" />
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
           </div>
 
-          <div className="absolute -bottom-20 -right-20 w-80 h-80 bg-emerald-400/10 rounded-full blur-3xl" />
+          <div className="absolute -bottom-20 -right-20 w-80 h-80 bg-white/5 rounded-full blur-3xl" />
         </section>
 
         <div className="grid grid-cols-1 lg:grid-cols-10 gap-8">
 
-          <div className="lg:col-span-6 bg-white rounded-2xl p-6 shadow-sm border border-[#c3c9b9]/10">
+          <div className="lg:col-span-6 bg-white rounded-2xl p-6 shadow-[0_6px_18px_rgba(0,0,0,0.08)] border border-[#eccdca]">
             <div className="flex justify-between items-center mb-6">
-              <h4 className="font-headline text-2xl text-[#173901] font-bold">Recent Sessions</h4>
-              <button className="text-sm font-bold text-[#835500] hover:underline">View All</button>
+              <h4 className="font-baloo text-2xl text-[#3d3b62] font-bold">Recent Sessions</h4>
+              <button className="font-karla text-sm font-bold text-[#764f84] hover:underline">View All</button>
             </div>
 
             {(!dash?.recent_sessions || dash.recent_sessions.length === 0) ? (
@@ -366,7 +366,7 @@ export default function DashboardPage() {
                 <p className="text-sm font-medium">No sessions yet</p>
                 <button
                   onClick={() => setShowModal(true)}
-                  className="mt-2 px-6 py-2 bg-[#173901] text-white rounded-lg text-sm font-bold hover:bg-[#2d5016] transition-all"
+                  className="font-baloo mt-2 px-6 py-2 bg-[#3d3b62] text-white rounded-lg text-sm font-bold hover:bg-[#764f84] transition-all"
                 >
                   Start your first session
                 </button>
@@ -388,8 +388,8 @@ export default function DashboardPage() {
                       <tr key={s.id} className="group hover:bg-[#f9f3e9] transition-colors">
                         <td className="py-4">
                           <div className="flex items-center gap-3">
-                            <div className="h-8 w-6 bg-[#2d5016]/10 rounded flex items-center justify-center flex-shrink-0">
-                              <BookOpen className="w-4 h-4 text-[#2d5016]" />
+                            <div className="h-8 w-6 bg-[#3d3b62]/10 rounded flex items-center justify-center flex-shrink-0">
+                              <BookOpen className="w-4 h-4 text-[#764f84]" />
                             </div>
                             <span className="font-semibold text-[#1d1b16] text-sm truncate max-w-[160px]">{s.book_title}</span>
                           </div>
@@ -405,12 +405,12 @@ export default function DashboardPage() {
                           {s.status === 'active' || s.status === 'lobby' ? (
                             <Link
                               href={`/session/${s.id}/lobby`}
-                              className="text-xs font-bold text-[#2d5016] hover:underline"
+                              className="text-xs font-bold text-[#764f84] hover:underline"
                             >
                               Rejoin
                             </Link>
                           ) : (
-                            <button className="text-stone-400 hover:text-[#173901] transition-colors">
+                            <button className="text-stone-400 hover:text-[#3d3b62] transition-colors">
                               <MoreHorizontal className="w-4 h-4" />
                             </button>
                           )}
@@ -423,9 +423,9 @@ export default function DashboardPage() {
             )}
           </div>
 
-          <div className="lg:col-span-4 bg-white rounded-2xl p-6 shadow-sm border border-[#c3c9b9]/10">
+          <div className="lg:col-span-4 bg-white rounded-2xl p-6 shadow-[0_6px_18px_rgba(0,0,0,0.08)] border border-[#eccdca]">
             <div className="flex justify-between items-center mb-8">
-              <h4 className="font-headline text-2xl text-[#173901] font-bold">Badge Collection</h4>
+              <h4 className="font-baloo text-2xl text-[#3d3b62] font-bold">Badge Collection</h4>
             </div>
 
             {badges.length === 0 ? (
@@ -437,7 +437,7 @@ export default function DashboardPage() {
               <div className="grid grid-cols-3 gap-y-8 gap-x-4 mb-10">
                 {badges.map((ub) => (
                   <div key={ub.id} className="flex flex-col items-center gap-2">
-                    <div className="h-16 w-16 rounded-full bg-[#ffddb4] flex items-center justify-center text-3xl shadow-lg border-2 border-white ring-2 ring-[#feae2c]/20">
+                    <div className="h-16 w-16 rounded-full bg-[#f0c75e]/30 flex items-center justify-center text-3xl shadow-lg border-2 border-white ring-2 ring-[#f0c75e]/30">
                       {BADGE_ICONS[ub.badge_code] ?? '🏅'}
                     </div>
                     <span className="text-[10px] font-bold text-stone-500 uppercase tracking-tighter text-center leading-tight">
@@ -456,7 +456,7 @@ export default function DashboardPage() {
 
             <Link
               href="/dashboard/badges"
-              className="flex items-center justify-center gap-2 w-full py-4 bg-[#f3ede3] text-[#173901] font-bold rounded-xl hover:bg-[#ede7dd] transition-all text-sm group"
+              className="font-baloo flex items-center justify-center gap-2 w-full py-4 bg-[#eccdca]/30 text-[#3d3b62] font-bold rounded-xl hover:bg-[#eccdca]/50 transition-all text-sm group"
             >
               View All Badges
               <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />

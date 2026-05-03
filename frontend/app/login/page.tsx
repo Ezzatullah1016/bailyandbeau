@@ -68,31 +68,26 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-4 bg-[#FAF7F2]">
-      <div className="fixed -z-10 bottom-0 right-0 w-64 h-64 opacity-20 pointer-events-none">
-        <div className="w-full h-full bg-gradient-to-tl from-[#ffdad4]/20 to-transparent rounded-full blur-3xl" />
-      </div>
-      <div className="fixed -z-10 top-0 left-0 w-80 h-80 opacity-20 pointer-events-none">
-        <div className="w-full h-full bg-gradient-to-br from-[#c3e9c5]/20 to-transparent rounded-full blur-3xl" />
-      </div>
-
+    <main className="min-h-screen flex items-center justify-center p-4 bg-[#eccdca]/25">
       <div className="w-full max-w-[480px] bg-white rounded-2xl p-10 shadow-[0_8px_40px_-12px_rgba(28,28,25,0.08)]">
         <div className="flex flex-col items-center mb-8">
-          <div className="text-2xl font-serif italic text-[#C4847A] mb-6">Bailey &amp; Beau</div>
-          <h1 className="font-headline text-3xl font-bold text-[#1c1c19] text-center mb-2">
+          <div className="text-2xl font-baloo font-bold text-[#3d3b62] mb-1">Bailey &amp; Beau</div>
+          <div className="font-karla text-sm text-[#764f84] mb-6">The Living Storybook</div>
+          <h1 className="font-baloo text-3xl font-bold text-[#1c1c19] text-center mb-2">
             {tab === 'login' ? 'Welcome back' : 'Create Your Account'}
           </h1>
-          <p className="font-jost text-[#8B7355] text-center text-sm">
+          <p className="font-karla text-[#8B7355] text-center text-sm">
             {tab === 'login' ? 'Sign in to continue reading together.' : 'Start reading together in minutes.'}
           </p>
         </div>
 
-        <div className="flex rounded-lg bg-[#f0ede9] p-1 mb-7">
+        <div className="flex rounded-lg bg-[#f3eceb] p-1 mb-7">
           {(['login', 'register'] as const).map((t) => (
             <button
               key={t}
+              type="button"
               onClick={() => { setTab(t); setError(''); }}
-              className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all ${tab === t ? 'bg-white text-[#1c1c19] shadow-sm' : 'text-[#524341] hover:text-[#1c1c19]'}`}
+              className={`flex-1 py-2 text-sm font-baloo font-semibold rounded-md transition-all ${tab === t ? 'bg-white text-[#3d3b62] shadow-sm border-b-2 border-[#3d3b62]' : 'text-[#524341] hover:text-[#3d3b62]'}`}
             >
               {t === 'login' ? 'Sign In' : 'Register'}
             </button>
@@ -102,9 +97,9 @@ export default function LoginPage() {
         {tab === 'login' && (
           <form className="space-y-5" onSubmit={handleLogin}>
             <div className="flex flex-col space-y-1.5">
-              <label className="text-sm font-medium text-[#524341] px-1">Username or email</label>
+              <label className="font-karla text-sm font-medium text-[#524341] px-1">Username or email</label>
               <input
-                className="w-full px-4 py-3 rounded-lg bg-[#ebe8e3] border-none ring-1 ring-inset ring-[#d7c2bf]/30 focus:ring-2 focus:ring-[#C4847A]/40 text-[#1c1c19] placeholder:text-[#847370]/60 transition-all outline-none"
+                className="font-karla w-full px-4 py-3 rounded-lg bg-white border border-[#eccdca] focus:border-[#3b85a6] focus:ring-2 focus:ring-[#3b85a6]/20 text-[#1c1c19] placeholder:text-[#847370]/60 transition-all outline-none"
                 placeholder="Your username"
                 value={loginUsername}
                 onChange={(e) => setLoginUsername(e.target.value)}
@@ -113,10 +108,10 @@ export default function LoginPage() {
               />
             </div>
             <div className="flex flex-col space-y-1.5">
-              <label className="text-sm font-medium text-[#524341] px-1">Password</label>
+              <label className="font-karla text-sm font-medium text-[#524341] px-1">Password</label>
               <div className="relative">
                 <input
-                  className="w-full px-4 py-3 rounded-lg bg-[#ebe8e3] border-none ring-1 ring-inset ring-[#d7c2bf]/30 focus:ring-2 focus:ring-[#C4847A]/40 text-[#1c1c19] placeholder:text-[#847370]/60 transition-all outline-none"
+                  className="font-karla w-full px-4 py-3 rounded-lg bg-white border border-[#eccdca] focus:border-[#3b85a6] focus:ring-2 focus:ring-[#3b85a6]/20 text-[#1c1c19] placeholder:text-[#847370]/60 transition-all outline-none"
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Your password"
                   value={loginPassword}
@@ -133,11 +128,11 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
-            {error && <p className="text-sm text-red-600 font-medium">{error}</p>}
+            {error && <p className="font-karla text-sm text-red-600 font-medium">{error}</p>}
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-4 mt-2 bg-[#C4847A] text-white font-semibold rounded-lg hover:brightness-105 active:scale-[0.98] transition-all shadow-sm disabled:opacity-60"
+              className="font-baloo w-full py-4 mt-2 bg-[#c84a71] hover:bg-[#b43f63] text-white font-semibold rounded-lg active:scale-[0.98] transition-all shadow-sm disabled:opacity-60"
             >
               {loading ? 'Signing in…' : 'Sign In'}
             </button>
@@ -147,9 +142,9 @@ export default function LoginPage() {
         {tab === 'register' && (
           <form className="space-y-5" onSubmit={handleRegister}>
             <div className="flex flex-col space-y-1.5">
-              <label className="text-sm font-medium text-[#524341] px-1">Full Name</label>
+              <label className="font-karla text-sm font-medium text-[#524341] px-1">Full Name</label>
               <input
-                className="w-full px-4 py-3 rounded-lg bg-[#ebe8e3] border-none ring-1 ring-inset ring-[#d7c2bf]/30 focus:ring-2 focus:ring-[#C4847A]/40 text-[#1c1c19] placeholder:text-[#847370]/60 transition-all outline-none"
+                className="font-karla w-full px-4 py-3 rounded-lg bg-white border border-[#eccdca] focus:border-[#3b85a6] focus:ring-2 focus:ring-[#3b85a6]/20 text-[#1c1c19] placeholder:text-[#847370]/60 transition-all outline-none"
                 placeholder="Your name"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
@@ -158,9 +153,9 @@ export default function LoginPage() {
               />
             </div>
             <div className="flex flex-col space-y-1.5">
-              <label className="text-sm font-medium text-[#524341] px-1">Email Address</label>
+              <label className="font-karla text-sm font-medium text-[#524341] px-1">Email Address</label>
               <input
-                className="w-full px-4 py-3 rounded-lg bg-[#ebe8e3] border-none ring-1 ring-inset ring-[#d7c2bf]/30 focus:ring-2 focus:ring-[#C4847A]/40 text-[#1c1c19] placeholder:text-[#847370]/60 transition-all outline-none"
+                className="font-karla w-full px-4 py-3 rounded-lg bg-white border border-[#eccdca] focus:border-[#3b85a6] focus:ring-2 focus:ring-[#3b85a6]/20 text-[#1c1c19] placeholder:text-[#847370]/60 transition-all outline-none"
                 type="email"
                 placeholder="you@email.com"
                 value={email}
@@ -170,10 +165,10 @@ export default function LoginPage() {
               />
             </div>
             <div className="flex flex-col space-y-1.5">
-              <label className="text-sm font-medium text-[#524341] px-1">Password</label>
+              <label className="font-karla text-sm font-medium text-[#524341] px-1">Password</label>
               <div className="relative">
                 <input
-                  className="w-full px-4 py-3 rounded-lg bg-[#ebe8e3] border-none ring-1 ring-inset ring-[#d7c2bf]/30 focus:ring-2 focus:ring-[#C4847A]/40 text-[#1c1c19] placeholder:text-[#847370]/60 transition-all outline-none"
+                  className="font-karla w-full px-4 py-3 rounded-lg bg-white border border-[#eccdca] focus:border-[#3b85a6] focus:ring-2 focus:ring-[#3b85a6]/20 text-[#1c1c19] placeholder:text-[#847370]/60 transition-all outline-none"
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Min. 8 characters"
                   value={regPassword}
@@ -191,29 +186,29 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
-            {error && <p className="text-sm text-red-600 font-medium">{error}</p>}
+            {error && <p className="font-karla text-sm text-red-600 font-medium">{error}</p>}
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-4 mt-2 bg-[#C4847A] text-white font-semibold rounded-lg hover:brightness-105 active:scale-[0.98] transition-all shadow-sm disabled:opacity-60"
+              className="font-baloo w-full py-4 mt-2 bg-[#c84a71] hover:bg-[#b43f63] text-white font-semibold rounded-lg active:scale-[0.98] transition-all shadow-sm disabled:opacity-60"
             >
               {loading ? 'Creating account…' : 'Create Account'}
             </button>
           </form>
         )}
 
-        <div className="mt-8 text-center text-sm text-[#524341]">
+        <div className="mt-8 text-center font-karla text-sm text-[#524341]">
           {tab === 'login' ? (
             <>
               Don&apos;t have an account?{' '}
-              <button onClick={() => { setTab('register'); setError(''); }} className="ml-1 text-[#C4847A] font-semibold hover:underline underline-offset-4">
+              <button type="button" onClick={() => { setTab('register'); setError(''); }} className="ml-1 text-[#c84a71] font-semibold hover:underline underline-offset-4">
                 Sign Up
               </button>
             </>
           ) : (
             <>
               Already have an account?{' '}
-              <button onClick={() => { setTab('login'); setError(''); }} className="ml-1 text-[#C4847A] font-semibold hover:underline underline-offset-4">
+              <button type="button" onClick={() => { setTab('login'); setError(''); }} className="ml-1 text-[#c84a71] font-semibold hover:underline underline-offset-4">
                 Sign In
               </button>
             </>

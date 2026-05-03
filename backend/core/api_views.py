@@ -5,6 +5,8 @@ import secrets
 from datetime import timedelta
 from io import StringIO
 
+import stripe
+
 from asgiref.sync import async_to_sync
 from django.conf import settings as django_settings
 from django.contrib.auth import get_user_model
@@ -696,7 +698,25 @@ class StripeWebhookView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        processed, entitlement = sync_entitlement_from_stripe_event(request.data)
+        webhook_secret = django_settings.STRIPE_WEBHOOK_SECRET
+        sig_header = request.META.get('HTTP_STRIPE_SIGNATURE', '')
+
+        if webhook_secret:
+            stripe.api_key = django_settings.STRIPE_SECRET_KEY
+            try:
+                event = stripe.Webhook.construct_event(
+                    request.body, sig_header, webhook_secret
+                )
+                payload = event
+            except stripe.error.SignatureVerificationError:
+                return Response(
+                    {"data": None, "meta": {}, "error": {"code": "invalid_signature", "message": "Webhook signature verification failed."}},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            payload = request.data
+
+        processed, entitlement = sync_entitlement_from_stripe_event(payload)
         if not processed:
             return Response(
                 {
@@ -739,12 +759,59 @@ class CheckoutSessionView(APIView):
                 {"data": None, "meta": {}, "error": {"code": "invalid_plan", "message": "Selected billing plan does not exist."}},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        stripe_key = django_settings.STRIPE_SECRET_KEY
+        frontend_url = getattr(django_settings, 'FRONTEND_URL', 'http://localhost:3000')
+
+        if not stripe_key:
+            # Dev mode stub — no Stripe key configured
+            return Response(
+                {
+                    "data": {
+                        "plan": plan,
+                        "checkout_url": f"{frontend_url}/dashboard/billing?plan={plan['code']}&stub=1",
+                        "mode": "stub",
+                    },
+                    "meta": {},
+                    "error": None,
+                }
+            )
+
+        stripe.api_key = stripe_key
+        is_subscription = plan.get('interval') != 'one_off'
+
+        try:
+            price_gbp_pence = int(float(plan['price_gbp']) * 100)
+            checkout_session = stripe.checkout.Session.create(
+                payment_method_types=['card'],
+                mode='subscription' if is_subscription else 'payment',
+                line_items=[{
+                    'price_data': {
+                        'currency': 'gbp',
+                        'unit_amount': price_gbp_pence,
+                        'product_data': {'name': plan['name']},
+                        **(({'recurring': {'interval': plan['interval']}} if is_subscription else {})),
+                    },
+                    'quantity': 1,
+                }],
+                customer_email=request.user.email,
+                metadata={'plan_code': plan['code'], 'user_id': str(request.user.id)},
+                success_url=f"{frontend_url}/dashboard/billing?success=1&plan={plan['code']}",
+                cancel_url=f"{frontend_url}/dashboard/billing?cancelled=1",
+            )
+        except stripe.error.StripeError as e:
+            logger.error("Stripe checkout error: %s", e)
+            return Response(
+                {"data": None, "meta": {}, "error": {"code": "stripe_error", "message": str(e)}},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
         return Response(
             {
                 "data": {
                     "plan": plan,
-                    "checkout_url": f"https://checkout.stripe.com/pay/{plan['code']}",
-                    "mode": "stub",
+                    "checkout_url": checkout_session.url,
+                    "mode": "live",
                 },
                 "meta": {},
                 "error": None,

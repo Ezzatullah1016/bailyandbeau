@@ -26,6 +26,23 @@ async function fetchWithFallback(path: string, init?: RequestInit): Promise<Resp
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
+function parseApiErrorBody(text: string, status: number): string {
+  if (!text.trim()) return `Request failed with status ${status}`;
+  try {
+    const j = JSON.parse(text) as Record<string, unknown>;
+    const err = j.error as { message?: string } | null | undefined;
+    if (err?.message) return err.message;
+    if (typeof j.detail === 'string') return j.detail;
+    if (Array.isArray(j.detail) && j.detail.length) return String(j.detail[0]);
+    const nfe = j.non_field_errors;
+    if (Array.isArray(nfe) && nfe.length) return String(nfe[0]);
+    if (typeof j.message === 'string') return j.message;
+  } catch {
+    /* keep raw body */
+  }
+  return text;
+}
+
 /** Read the stored JWT access token (set by login). */
 function getAccessToken(): string | null {
   if (typeof localStorage === 'undefined') return null;
@@ -108,7 +125,7 @@ export async function apiRequest<T extends JsonValue | Record<string, unknown>>(
 
   if (!response.ok) {
     const payload = await response.text();
-    throw new Error(payload || `Request failed with status ${response.status}`);
+    throw new Error(parseApiErrorBody(payload, response.status));
   }
 
   return (await response.json()) as T;
@@ -295,12 +312,29 @@ export async function getBookPages(bookId: string, participantId?: string): Prom
   return res.data;
 }
 
+// ─── Book activities ─────────────────────────────────────────────────────────
+
+export interface ActivityConfigData {
+  id: string;
+  activity_type: 'drawing' | 'drag_drop' | 'quiz' | 'hotspot';
+  title: string;
+  config: Record<string, unknown>;
+  sort_order: number;
+}
+
+export async function getBookActivities(bookId: string): Promise<ActivityConfigData[]> {
+  const res = await apiRequest<{ data: ActivityConfigData[] }>(`/books/${bookId}/activities/`);
+  return res.data;
+}
+
 // ─── Session snapshot ────────────────────────────────────────────────────────
 
 export async function updateSnapshot(
   sessionId: string,
   participantId: string,
   pageNumber: number,
+  annotationState?: object,
+  activityState?: object,
 ) {
   await apiRequest(`/sessions/${sessionId}/snapshot/`, {
     method: 'PUT',
@@ -308,8 +342,8 @@ export async function updateSnapshot(
       participant_id: participantId,
       current_page: pageNumber,
       timer_state: {},
-      annotation_state: {},
-      activity_state: {},
+      annotation_state: annotationState ?? {},
+      activity_state: activityState ?? {},
     }),
   });
 }

@@ -329,6 +329,20 @@ class AuthApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["data"]["email"], "jwtparent@example.com")
 
+    def test_login_accepts_email_in_username_field(self):
+        User.objects.create_user(
+            username="emailuser",
+            email="emailuser@example.com",
+            password="strong-password-123",
+        )
+        login_response = self.client.post(
+            "/api/v1/auth/login/",
+            data={"username": "emailuser@example.com", "password": "strong-password-123"},
+            content_type="application/json",
+        )
+        self.assertEqual(login_response.status_code, 200)
+        self.assertIn("access", login_response.json()["data"]["tokens"])
+
 
 class ReportingApiTests(TestCase):
     def setUp(self):

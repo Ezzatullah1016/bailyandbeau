@@ -21,6 +21,7 @@ import {
   getSession,
   getSnapshot,
   getUserBadges,
+  transferHost,
   updateSnapshot,
   type BookPageData,
   type UserBadgeData,
@@ -188,16 +189,18 @@ function LocalControls() {
 function BookPageImage({ url, pageNumber }: { url: string; pageNumber: number }) {
   const [loaded, setLoaded] = useState(false);
   return (
-    <div className="relative w-full h-full flex items-center justify-center bg-white">
+    <div className="relative w-full h-full bg-white">
       {!loaded && (
-        <Loader2 className="absolute w-12 h-12 text-stone-300 animate-spin" />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <Loader2 className="w-12 h-12 text-stone-300 animate-spin" />
+        </div>
       )}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         key={url}
         src={url}
         alt={`Page ${pageNumber}`}
-        className={`max-w-full max-h-full object-contain transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+        className={`w-full h-full object-contain transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
         onLoad={() => setLoaded(true)}
         onError={() => setLoaded(true)}
       />
@@ -226,13 +229,13 @@ function CompletionOverlay({
   const badge = badges[0] ?? null;
 
   return (
-    <div className="fixed inset-0 z-[200] bg-[#2d5016] flex items-center justify-center p-6 overflow-y-auto">
-      <div className="fixed inset-0 pointer-events-none" style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.15) 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
-      <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#173901] opacity-20 blur-[120px] rounded-full pointer-events-none" />
-      <div className="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-[#835500] opacity-20 blur-[120px] rounded-full pointer-events-none" />
+    <div className="fixed inset-0 z-[200] bg-gradient-to-br from-[#3d3b62] to-[#764f84] flex items-center justify-center p-6 overflow-y-auto">
+      <div className="fixed inset-0 pointer-events-none" style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.12) 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
+      <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] bg-white/5 blur-[120px] rounded-full pointer-events-none" />
+      <div className="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-white/5 blur-[120px] rounded-full pointer-events-none" />
 
       <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-6 py-6 pointer-events-none">
-        <div className="text-2xl font-bold text-white italic font-headline pointer-events-auto">
+        <div className="font-baloo text-2xl font-bold text-white pointer-events-auto">
           Bailey &amp; Beau
         </div>
         <button onClick={onDashboard} className="w-10 h-10 flex items-center justify-center text-white/80 hover:text-white pointer-events-auto transition-colors">
@@ -243,7 +246,7 @@ function CompletionOverlay({
       <main className="relative z-10 w-full max-w-[560px] flex flex-col items-center text-center mt-20">
         <div className="mb-8 flex flex-col items-center">
           <span className="text-[72px] leading-none mb-4" role="img" aria-label="Party Popper">🎉</span>
-          <h1 className="font-headline text-5xl text-white italic tracking-tight mb-3">Amazing Session!</h1>
+          <h1 className="font-baloo text-5xl text-white font-bold tracking-tight mb-3">Amazing Session!</h1>
           <p className="text-white/90 text-lg font-light max-w-[400px]">
             You read together for {mins} {mins === 1 ? 'minute' : 'minutes'}.
           </p>
@@ -251,25 +254,25 @@ function CompletionOverlay({
 
         <div className="w-full bg-white rounded-[2rem] p-10 shadow-[0_32px_64px_-12px_rgba(23,57,1,0.3)] mb-8">
           <div className="flex flex-col items-center">
-            <span className="text-xs font-extrabold uppercase tracking-[0.2em] text-[#835500] mb-10">
+            <span className="font-karla text-xs font-extrabold uppercase tracking-[0.2em] text-[#764f84] mb-10">
               {badge ? 'NEW BADGE EARNED' : 'SESSION COMPLETE'}
             </span>
 
             {badge ? (
               <>
                 <div className="relative flex items-center justify-center mb-8">
-                  <div className="absolute w-[200px] h-[200px] border border-[#835500]/10 rounded-full" />
-                  <div className="absolute w-[160px] h-[160px] border border-[#835500]/30 rounded-full" />
-                  <div className="relative w-[120px] h-[120px] bg-[#feae2c] rounded-full flex items-center justify-center shadow-lg">
+                  <div className="absolute w-[200px] h-[200px] border border-[#eccdca]/30 rounded-full" />
+                  <div className="absolute w-[160px] h-[160px] border border-[#eccdca]/60 rounded-full" />
+                  <div className="relative w-[120px] h-[120px] bg-[#f0c75e] rounded-full flex items-center justify-center shadow-lg">
                     <Star className="w-12 h-12 text-white fill-white" />
                   </div>
                 </div>
-                <h2 className="font-headline text-[32px] text-[#173901] italic mb-2">{badge.badge_name}</h2>
-                <p className="text-[#43493d] text-base mb-8">{badge.badge_description}</p>
+                <h2 className="font-baloo text-[32px] text-[#3d3b62] font-bold mb-2">{badge.badge_name}</h2>
+                <p className="font-karla text-stone-500 text-base mb-8">{badge.badge_description}</p>
               </>
             ) : (
-              <div className="flex items-center justify-center w-[120px] h-[120px] rounded-full bg-[#f3ede3] mb-8">
-                <BookMarked className="w-14 h-14 text-[#2d5016]" />
+              <div className="flex items-center justify-center w-[120px] h-[120px] rounded-full bg-[#eccdca]/30 mb-8">
+                <BookMarked className="w-14 h-14 text-[#764f84]" />
               </div>
             )}
 
@@ -277,31 +280,31 @@ function CompletionOverlay({
 
             <div className="grid grid-cols-2 gap-y-6 gap-x-4 w-full text-left">
               <div className="flex items-start gap-3">
-                <BookOpen className="w-5 h-5 text-[#173901] mt-0.5 shrink-0" />
+                <BookOpen className="w-5 h-5 text-[#3d3b62] mt-0.5 shrink-0" />
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-bold text-[#43493d] uppercase tracking-wider">Book</span>
-                  <span className="text-sm font-semibold text-[#173901]">{bookTitle}</span>
+                  <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Book</span>
+                  <span className="text-sm font-semibold text-[#3d3b62]">{bookTitle}</span>
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <Clock className="w-5 h-5 text-[#173901] mt-0.5 shrink-0" />
+                <Clock className="w-5 h-5 text-[#3d3b62] mt-0.5 shrink-0" />
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-bold text-[#43493d] uppercase tracking-wider">Duration</span>
-                  <span className="text-sm font-semibold text-[#173901]">{mins} minutes</span>
+                  <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Duration</span>
+                  <span className="text-sm font-semibold text-[#3d3b62]">{mins} minutes</span>
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <FileText className="w-5 h-5 text-[#173901] mt-0.5 shrink-0" />
+                <FileText className="w-5 h-5 text-[#3d3b62] mt-0.5 shrink-0" />
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-bold text-[#43493d] uppercase tracking-wider">Pages Read</span>
-                  <span className="text-sm font-semibold text-[#173901]">{pagesRead} of {pageCount}</span>
+                  <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Pages Read</span>
+                  <span className="text-sm font-semibold text-[#3d3b62]">{pagesRead} of {pageCount}</span>
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <Trophy className="w-5 h-5 text-[#173901] mt-0.5 shrink-0" />
+                <Trophy className="w-5 h-5 text-[#3d3b62] mt-0.5 shrink-0" />
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-bold text-[#43493d] uppercase tracking-wider">Badges</span>
-                  <span className="text-sm font-semibold text-[#173901]">{badges.length} earned</span>
+                  <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Badges</span>
+                  <span className="text-sm font-semibold text-[#3d3b62]">{badges.length} earned</span>
                 </div>
               </div>
             </div>
@@ -311,7 +314,7 @@ function CompletionOverlay({
         <div className="flex flex-col sm:flex-row items-center gap-4 w-full mb-10">
           <button
             onClick={onDashboard}
-            className="w-full sm:flex-1 bg-gradient-to-br from-[#feae2c] to-[#835500] text-[#6b4500] font-bold py-4 px-8 rounded-xl shadow-lg hover:brightness-105 active:scale-95 transition-all text-sm uppercase tracking-widest"
+            className="font-baloo w-full sm:flex-1 bg-gradient-to-br from-[#f0c75e] to-[#c84a71] text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:brightness-105 active:scale-95 transition-all text-sm uppercase tracking-widest"
           >
             Go to Dashboard
           </button>
@@ -365,6 +368,7 @@ function RoomContent({
 }) {
   const room = useRoomContext();
   const { localParticipant } = useLocalParticipant();
+  const router = useRouter();
 
   // ── Pages ─────────────────────────────────────────────────────────────────
   const [backendPages, setBackendPages] = useState<BookPageData[]>([]);
@@ -385,7 +389,12 @@ function RoomContent({
   const [annTool, setAnnTool] = useState<AnnotationTool>('pen');
   const [annColor, setAnnColor] = useState('#ef4444');
   const [annBrush, setAnnBrush] = useState(8);
+  const [annStampEmoji, setAnnStampEmoji] = useState('⭐');
   const canvasRef = useRef<AnnotationCanvasHandle>(null);
+
+  // ── Host transfer ─────────────────────────────────────────────────────────
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferring, setTransferring] = useState(false);
 
   // ── Completion ────────────────────────────────────────────────────────────
   const [showComplete, setShowComplete] = useState(false);
@@ -451,6 +460,7 @@ function RoomContent({
         case 'PAGE_TURN':
           if (role === 'guest' && typeof msg.payload.page === 'number') {
             setCurrentPage(msg.payload.page);
+            canvasRef.current?.clearCanvas(false);
           }
           break;
 
@@ -492,7 +502,8 @@ function RoomContent({
       if (role !== 'host') return;
       room.localParticipant.publishData(buildMsg('PAGE_TURN', { page: index }), { reliable: true });
       try { await localParticipant.setMetadata(JSON.stringify({ page: index, role: 'host' })); } catch { /* ok */ }
-      updateSnapshot(sessionId, participantId, index + 1).catch(() => {});
+      const annotationJson = canvasRef.current ? (() => { try { return JSON.parse(canvasRef.current.getJSON()); } catch { return {}; } })() : {};
+      updateSnapshot(sessionId, participantId, index + 1, annotationJson).catch(() => {});
     },
     [role, room, localParticipant, sessionId, participantId],
   );
@@ -548,7 +559,8 @@ function RoomContent({
       const earned = await getUserBadges();
       setBadges(earned);
     } catch { /* ok */ }
-    setShowComplete(true);
+    // Navigate to the dedicated completion screen
+    router.push(`/session/${sessionId}/complete`);
   }
 
   async function handleEndSession(fromTimer = false) {
@@ -572,6 +584,23 @@ function RoomContent({
     room.disconnect();
     onEnd();
   };
+
+  // ── Host transfer ─────────────────────────────────────────────────────────
+  const participants = useParticipants();
+
+  async function handleTransferHost(newParticipantId: string) {
+    setTransferring(true);
+    try {
+      await transferHost(sessionId, participantId, newParticipantId);
+      room.localParticipant.publishData(
+        buildMsg('HOST_TRANSFERRED', { new_host_participant_id: newParticipantId }),
+        { reliable: true },
+      );
+      setShowTransferModal(false);
+    } catch { /* ignore */ } finally {
+      setTransferring(false);
+    }
+  }
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const pageCount = pages.length || 1;
@@ -600,14 +629,14 @@ function RoomContent({
         />
       )}
 
-      <div className="h-screen w-screen flex flex-col bg-[#131313] text-[#e5e2e1] overflow-hidden">
+      <div className="h-screen w-screen flex flex-col bg-gradient-to-br from-[#3d3b62] to-[#764f84] text-[#e5e2e1] overflow-hidden">
 
         {/* ── Top nav ──────────────────────────────────────────────────────── */}
-        <header className="fixed top-0 w-full z-50 flex justify-between items-center px-6 h-14 bg-stone-950/60 backdrop-blur-xl shadow-2xl shadow-stone-950/50">
+        <header className="fixed top-0 w-full z-50 flex justify-between items-center px-6 h-14 bg-[#3d3b62]/90 backdrop-blur-xl shadow-2xl shadow-[#3d3b62]/50">
           <div className="flex items-center gap-6">
-            <span className="text-2xl font-headline italic text-lime-200">Bailey &amp; Beau</span>
+            <span className="font-baloo text-2xl font-bold text-white">Bailey &amp; Beau</span>
             <div className="h-6 w-[1px] bg-white/10" />
-            <h1 className="font-headline text-xl tracking-tight text-[#e5e2e1] max-w-[280px] truncate">{bookTitle}</h1>
+            <h1 className="font-baloo text-xl tracking-tight text-[#e5e2e1] max-w-[280px] truncate">{bookTitle}</h1>
           </div>
           <div className="flex items-center gap-4">
             {/* Timer display */}
@@ -624,14 +653,20 @@ function RoomContent({
               )}
             </div>
 
-            <span className={`px-3 py-0.5 text-xs font-bold rounded-full uppercase tracking-tighter ${role === 'host' ? 'bg-[#3c4b30] text-[#a9bb99]' : 'bg-stone-800 text-stone-300'}`}>
+            <span className={`font-karla px-3 py-0.5 text-xs font-bold rounded-full uppercase tracking-tighter ${role === 'host' ? 'bg-[#764f84] text-white' : 'bg-stone-800 text-stone-300'}`}>
               {role}
             </span>
 
             <div className="flex items-center gap-2 ml-4">
-              <button className="w-8 h-8 flex items-center justify-center text-stone-400 hover:text-stone-100 transition-colors">
-                <Settings className="w-5 h-5" />
-              </button>
+              {role === 'host' && (
+                <button
+                  onClick={() => setShowTransferModal(true)}
+                  aria-label="Transfer host"
+                  className="w-8 h-8 flex items-center justify-center text-stone-400 hover:text-stone-100 transition-colors"
+                >
+                  <Settings className="w-5 h-5" />
+                </button>
+              )}
               {role === 'host' ? (
                 <button
                   onClick={() => handleEndSession(false)}
@@ -684,7 +719,7 @@ function RoomContent({
               {role === 'host' && (
                 <button
                   onClick={() => handleEndSession(false)}
-                  className="w-full py-3 bg-gradient-to-br from-[#a8d38a] to-[#2d5016] text-[#163801] font-bold rounded-full text-sm shadow-xl active:scale-95 transition-all"
+                  className="font-baloo w-full py-3 bg-gradient-to-br from-[#3d3b62] to-[#764f84] text-white font-bold rounded-full text-sm shadow-xl active:scale-95 transition-all"
                 >
                   End Session
                 </button>
@@ -723,7 +758,7 @@ function RoomContent({
                         <BookPageImage url={pages[currentPage].image_url} pageNumber={currentPage + 1} />
                       )}
                       <div className="absolute bottom-4 left-4 pointer-events-none z-20">
-                        <span className="font-headline text-stone-400 text-[10px] italic">
+                        <span className="font-karla text-stone-400 text-[10px]">
                           Page {currentPage + 1}
                         </span>
                       </div>
@@ -736,7 +771,7 @@ function RoomContent({
                       )}
                       {pages[currentPage + 1] && (
                         <div className="absolute bottom-4 right-4 pointer-events-none z-20 text-right">
-                          <span className="font-headline text-stone-400 text-[10px] italic">
+                          <span className="font-karla text-stone-400 text-[10px]">
                             Page {currentPage + 2}
                           </span>
                         </div>
@@ -749,6 +784,7 @@ function RoomContent({
                       tool={annTool}
                       color={annColor}
                       brushSize={annBrush}
+                      stampEmoji={annStampEmoji}
                       onSync={handleCanvasSync}
                     />
                   </div>
@@ -763,10 +799,13 @@ function RoomContent({
                 tool={annTool}
                 color={annColor}
                 brushSize={annBrush}
+                selectedEmoji={annStampEmoji}
                 onToolChange={setAnnTool}
                 onColorChange={setAnnColor}
                 onBrushSizeChange={setAnnBrush}
                 onClear={handleClearCanvas}
+                onUndo={() => canvasRef.current?.undo()}
+                onStampEmoji={setAnnStampEmoji}
               />
             </div>
 
@@ -800,7 +839,10 @@ function RoomContent({
                       <ChevronRight className="w-5 h-5" />
                     </button>
                   </div>
-                  <button className="ml-4 px-6 py-2.5 bg-[#ffb955] text-[#291800] font-extrabold rounded-full text-sm flex items-center gap-2 hover:opacity-90 transition-all active:scale-95 shadow-xl shadow-[#ffb955]/10">
+                  <button
+                    onClick={() => router.push(`/session/${sessionId}/activity?bookId=${bookId}`)}
+                    className="ml-4 px-6 py-2.5 bg-[#ffb955] text-[#291800] font-extrabold rounded-full text-sm flex items-center gap-2 hover:opacity-90 transition-all active:scale-95 shadow-xl shadow-[#ffb955]/10"
+                  >
                     <Rocket className="w-5 h-5" />
                     Start Activity
                   </button>
@@ -817,6 +859,42 @@ function RoomContent({
             style={{ width: `${progressPct}%` }}
           />
         </div>
+
+        {/* Host transfer modal */}
+        {showTransferModal && (
+          <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4" onClick={() => setShowTransferModal(false)}>
+            <div className="bg-[#20201f] rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="font-baloo text-[#e5e2e1] text-xl">Transfer Host</h3>
+                <button onClick={() => setShowTransferModal(false)} aria-label="Close" className="text-[#c3c9b9] hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-[#c3c9b9] text-sm mb-5">Select a participant to give host controls to:</p>
+              <div className="flex flex-col gap-3">
+                {participants
+                  .filter((p) => p.identity !== String(participantId))
+                  .map((p) => (
+                    <button
+                      key={p.identity}
+                      onClick={() => handleTransferHost(p.identity)}
+                      disabled={transferring}
+                      className="flex items-center gap-3 p-3 rounded-xl bg-[#2a2a2a] hover:bg-[#764f84] text-[#e5e2e1] hover:text-white transition-all disabled:opacity-50"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-[#353535] flex items-center justify-center text-sm font-bold">
+                        {p.name?.[0]?.toUpperCase() ?? '?'}
+                      </div>
+                      <span className="font-medium">{p.name ?? p.identity}</span>
+                      <Users className="w-4 h-4 ml-auto opacity-50" />
+                    </button>
+                  ))}
+                {participants.filter((p) => p.identity !== String(participantId)).length === 0 && (
+                  <p className="text-[#c3c9b9]/60 text-sm text-center py-4">No other participants in session.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

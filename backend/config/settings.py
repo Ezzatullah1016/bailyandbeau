@@ -206,6 +206,7 @@ SUPPORT_EMAIL = os.getenv('SUPPORT_EMAIL', 'support@baileyandbeau.local')
 
 STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY', '')
 STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET', '')
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 LIVEKIT_API_KEY = os.getenv('LIVEKIT_API_KEY', '')
 LIVEKIT_API_SECRET = os.getenv('LIVEKIT_API_SECRET', '')
 LIVEKIT_URL = os.getenv('LIVEKIT_URL', '')

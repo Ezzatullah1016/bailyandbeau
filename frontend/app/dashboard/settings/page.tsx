@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Baby, CheckCircle, LogOut, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
 import { apiRequest } from '@/lib/api';
@@ -70,52 +69,52 @@ export default function SettingsPage() {
   }
 
   if (loading) return (
-    <div className="h-screen w-screen flex items-center justify-center bg-[#f0f9f0]">
-      <RefreshCw className="w-10 h-10 text-[#2d5016] animate-spin" />
+    <div className="h-screen w-screen flex items-center justify-center bg-[#faf7f6]">
+      <RefreshCw className="w-10 h-10 text-[#764f84] animate-spin" />
     </div>
   );
 
   return (
     <>
       <Sidebar me={me} currentPath={pathname} />
-      <header className="flex items-center w-full px-8 h-16 ml-64 sticky top-0 z-40 bg-[#f0f9f0]/80 backdrop-blur-xl shadow-sm border-b border-[#2d5016]/10">
-        <div className="font-headline text-xl font-bold text-[#173901]">Settings</div>
+      <header className="flex items-center w-full px-8 h-16 ml-64 sticky top-0 z-40 bg-[#faf7f6]/80 backdrop-blur-xl shadow-sm border-b border-[#3d3b62]/10">
+        <div className="font-baloo text-xl font-bold text-[#3d3b62]">Settings</div>
       </header>
-      <main className="ml-64 p-8 min-h-screen bg-[#f7faf6] font-body text-[#1d1b16]">
+      <main className="ml-64 p-8 min-h-screen bg-[#faf7f6] font-karla text-[#1d1b16]">
         <div className="mb-8">
-          <h2 className="font-headline text-4xl text-[#173901] font-bold mb-2">Account Settings</h2>
+          <h2 className="font-baloo text-4xl text-[#3d3b62] font-bold mb-2">Account Settings</h2>
           <p className="text-stone-500">Manage your profile and child profiles</p>
         </div>
 
         <div className="max-w-2xl space-y-8">
-          <div className="bg-white rounded-2xl p-8 shadow-sm border border-[#c3c9b9]/10">
-            <h3 className="font-headline text-xl font-bold text-[#173901] mb-6">Profile</h3>
+          <div className="bg-white rounded-2xl p-8 shadow-sm border border-[#eccdca]">
+            <h3 className="font-baloo text-xl font-bold text-[#3d3b62] mb-6">Profile</h3>
             <form onSubmit={saveProfile} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#43493d] mb-2">First Name</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#3d3b62] mb-2">First Name</label>
                   <input value={firstName} onChange={(e) => setFirstName(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-[#c3c9b9] bg-white text-[#1d1b16] text-sm focus:outline-none focus:ring-2 focus:ring-[#2d5016]" />
+                    className="w-full px-4 py-3 rounded-xl border border-[#eccdca] bg-white text-[#1d1b16] text-sm focus:outline-none focus:ring-2 focus:ring-[#3b85a6]" />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#43493d] mb-2">Last Name</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#3d3b62] mb-2">Last Name</label>
                   <input value={lastName} onChange={(e) => setLastName(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-[#c3c9b9] bg-white text-[#1d1b16] text-sm focus:outline-none focus:ring-2 focus:ring-[#2d5016]" />
+                    className="w-full px-4 py-3 rounded-xl border border-[#eccdca] bg-white text-[#1d1b16] text-sm focus:outline-none focus:ring-2 focus:ring-[#3b85a6]" />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#43493d] mb-2">Username</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#3d3b62] mb-2">Username</label>
                 <input value={me?.username ?? ''} disabled
-                  className="w-full px-4 py-3 rounded-xl border border-[#c3c9b9] bg-stone-50 text-stone-400 text-sm cursor-not-allowed" />
+                  className="w-full px-4 py-3 rounded-xl border border-[#eccdca] bg-stone-50 text-stone-400 text-sm cursor-not-allowed" />
               </div>
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#43493d] mb-2">Email</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#3d3b62] mb-2">Email</label>
                 <input value={me?.email ?? ''} disabled
-                  className="w-full px-4 py-3 rounded-xl border border-[#c3c9b9] bg-stone-50 text-stone-400 text-sm cursor-not-allowed" />
+                  className="w-full px-4 py-3 rounded-xl border border-[#eccdca] bg-stone-50 text-stone-400 text-sm cursor-not-allowed" />
               </div>
               <div className="flex items-center gap-4 pt-2">
                 <button type="submit" disabled={saving}
-                  className="px-6 py-3 bg-[#173901] text-white font-bold text-sm rounded-xl hover:bg-[#2d5016] transition-all disabled:opacity-60 flex items-center gap-2">
+                  className="font-baloo px-6 py-3 bg-[#3d3b62] text-white font-bold text-sm rounded-xl hover:bg-[#764f84] transition-all disabled:opacity-60 flex items-center gap-2">
                   {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   {saving ? 'Saving…' : 'Save Changes'}
                 </button>
@@ -128,11 +127,11 @@ export default function SettingsPage() {
             </form>
           </div>
 
-          <div className="bg-white rounded-2xl p-8 shadow-sm border border-[#c3c9b9]/10">
+          <div className="bg-white rounded-2xl p-8 shadow-sm border border-[#eccdca]">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="font-headline text-xl font-bold text-[#173901]">Child Profiles</h3>
+              <h3 className="font-baloo text-xl font-bold text-[#3d3b62]">Child Profiles</h3>
               <button onClick={() => setShowAddChild(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-[#173901] text-white text-sm font-bold rounded-xl hover:bg-[#2d5016] transition-all">
+                className="font-baloo flex items-center gap-2 px-4 py-2 bg-[#3d3b62] text-white text-sm font-bold rounded-xl hover:bg-[#764f84] transition-all">
                 <Plus className="w-4 h-4" /> Add Child
               </button>
             </div>
@@ -146,9 +145,9 @@ export default function SettingsPage() {
 
             <div className="space-y-3">
               {children.map((child) => (
-                <div key={child.id} className="flex items-center justify-between p-4 rounded-xl bg-[#f0f9f0] border border-[#2d5016]/10">
+                <div key={child.id} className="flex items-center justify-between p-4 rounded-xl bg-[#faf7f6] border border-[#eccdca]">
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-[#feae2c] flex items-center justify-center text-[#2d5016] font-bold text-sm">
+                    <div className="h-10 w-10 rounded-full bg-[#f0c75e] flex items-center justify-center text-[#3d3b62] font-bold text-sm">
                       {child.display_name[0].toUpperCase()}
                     </div>
                     <div>
@@ -164,26 +163,26 @@ export default function SettingsPage() {
             </div>
 
             {showAddChild && (
-              <form onSubmit={addChild} className="mt-4 p-4 rounded-xl border-2 border-dashed border-[#a8d38a] bg-[#f0f7e8] space-y-3">
+              <form onSubmit={addChild} className="mt-4 p-4 rounded-xl border-2 border-dashed border-[#eccdca] bg-[#faf7f6] space-y-3">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#43493d] mb-2">Child&apos;s Name</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#3d3b62] mb-2">Child&apos;s Name</label>
                   <input value={newChildName} onChange={(e) => setNewChildName(e.target.value)} placeholder="e.g. Lily"
-                    className="w-full px-4 py-3 rounded-xl border border-[#c3c9b9] bg-white text-[#1d1b16] text-sm focus:outline-none focus:ring-2 focus:ring-[#2d5016]" />
+                    className="w-full px-4 py-3 rounded-xl border border-[#eccdca] bg-white text-[#1d1b16] text-sm focus:outline-none focus:ring-2 focus:ring-[#3b85a6]" />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#43493d] mb-2">Age Band</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#3d3b62] mb-2">Age Band</label>
                   <select value={newChildAge} onChange={(e) => setNewChildAge(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-[#c3c9b9] bg-white text-[#1d1b16] text-sm focus:outline-none focus:ring-2 focus:ring-[#2d5016]">
+                    className="w-full px-4 py-3 rounded-xl border border-[#eccdca] bg-white text-[#1d1b16] text-sm focus:outline-none focus:ring-2 focus:ring-[#3b85a6]">
                     {AGE_BANDS.map((a) => <option key={a} value={a}>{a} years</option>)}
                   </select>
                 </div>
                 <div className="flex gap-3">
                   <button type="submit" disabled={addingChild || !newChildName.trim()}
-                    className="px-5 py-2 bg-[#173901] text-white font-bold text-sm rounded-xl hover:bg-[#2d5016] transition-all disabled:opacity-60">
+                    className="font-baloo px-5 py-2 bg-[#3d3b62] text-white font-bold text-sm rounded-xl hover:bg-[#764f84] transition-all disabled:opacity-60">
                     {addingChild ? 'Adding…' : 'Add'}
                   </button>
                   <button type="button" onClick={() => { setShowAddChild(false); setNewChildName(''); }}
-                    className="px-5 py-2 bg-white text-stone-500 font-bold text-sm rounded-xl border border-[#c3c9b9] hover:bg-stone-50 transition-all">
+                    className="px-5 py-2 bg-white text-stone-500 font-bold text-sm rounded-xl border border-[#eccdca] hover:bg-stone-50 transition-all">
                     Cancel
                   </button>
                 </div>
@@ -192,10 +191,10 @@ export default function SettingsPage() {
           </div>
 
           <div className="bg-white rounded-2xl p-8 shadow-sm border border-red-100">
-            <h3 className="font-headline text-xl font-bold text-red-700 mb-4">Sign Out</h3>
+            <h3 className="font-baloo text-xl font-bold text-red-700 mb-4">Sign Out</h3>
             <p className="text-stone-500 text-sm mb-4">Sign out of your Bailey &amp; Beau account on this device.</p>
             <button onClick={() => { localStorage.removeItem('bb_access_token'); localStorage.removeItem('bb_refresh_token'); window.location.href = '/login'; }}
-              className="px-6 py-3 bg-red-50 text-red-700 font-bold text-sm rounded-xl hover:bg-red-100 border border-red-200 transition-all flex items-center gap-2">
+              className="font-baloo px-6 py-3 bg-red-50 text-red-700 font-bold text-sm rounded-xl hover:bg-red-100 border border-red-200 transition-all flex items-center gap-2">
               <LogOut className="w-4 h-4" /> Sign Out
             </button>
           </div>

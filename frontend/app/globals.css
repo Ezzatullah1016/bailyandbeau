@@ -1,10 +1,10 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Nunito:ital,wght@0,200..1000;1,200..1000&display=swap');
+@import "tailwindcss";
 
 /* ─── Reading room body reset (applied via JS class on mount) ────────────── */
 body.reading-room {
   overflow: hidden;
-  background: #131313;
+  background: linear-gradient(135deg, #3d3b62 0%, #764f84 100%);
 }
 
 /* ─── Lobby pulse animation ──────────────────────────────────────────────── */
@@ -23,7 +23,12 @@ body.reading-room {
   --font-serif:    var(--font-cormorant), serif;
   --font-body:     var(--font-jakarta), sans-serif;
   --font-jost:     var(--font-jost), sans-serif;
+  --font-baloo:    var(--font-baloo), sans-serif;
+  --font-karla:    var(--font-karla), sans-serif;
 }
+
+.font-baloo { font-family: var(--font-baloo); }
+.font-karla { font-family: var(--font-karla); }
 
 :root {
   color-scheme: light;
