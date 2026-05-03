@@ -114,6 +114,9 @@ class ActivityConfig(TimeStampedModel):
         QUIZ = "quiz", "Quiz"
         HOTSPOT = "hotspot", "Hotspot"
 
+    SCHEMA_VERSION = "1.0"
+    QUIZ_REVEAL_MODES = frozenset({"host_controlled", "instant"})
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name="activity_configs")
     title = models.CharField(max_length=255)
@@ -125,18 +128,126 @@ class ActivityConfig(TimeStampedModel):
     class Meta:
         ordering = ["sort_order", "title"]
 
+    @staticmethod
+    def _is_non_empty_list(value):
+        return isinstance(value, list) and len(value) > 0
+
+    def _validate_drawing_payload(self, payload):
+        errors = []
+        pal = payload.get("palette")
+        if not self._is_non_empty_list(pal) or not all(isinstance(c, str) and c.strip() for c in pal):
+            errors.append("drawing payload requires palette (non-empty list of color strings).")
+        brushes = payload.get("brush_sizes")
+        if not self._is_non_empty_list(brushes) or not all(
+            isinstance(x, (int, float)) and x > 0 for x in brushes
+        ):
+            errors.append("drawing payload requires brush_sizes (non-empty list of positive numbers).")
+        if "allow_eraser" not in payload:
+            errors.append("drawing payload requires allow_eraser (boolean).")
+        elif not isinstance(payload.get("allow_eraser"), bool):
+            errors.append("allow_eraser must be a boolean.")
+        return errors
+
+    def _validate_drag_drop_payload(self, payload):
+        errors = []
+        if not self._is_non_empty_list(payload.get("items")):
+            errors.append("drag_drop payload requires items (non-empty list).")
+        if not self._is_non_empty_list(payload.get("drop_zones")):
+            errors.append("drag_drop payload requires drop_zones (non-empty list).")
+        return errors
+
+    def _validate_quiz_payload(self, payload):
+        errors = []
+        q = payload.get("question")
+        if not q or not isinstance(q, str):
+            errors.append("quiz payload requires question (string).")
+        opts = payload.get("options")
+        if not isinstance(opts, list) or not (2 <= len(opts) <= 4):
+            errors.append("quiz payload requires options (list of 2 to 4 entries).")
+        ci = payload.get("correct_index")
+        if not isinstance(ci, int) or ci < 0:
+            errors.append("quiz payload requires correct_index (non-negative int).")
+        elif isinstance(opts, list) and ci >= len(opts):
+            errors.append("correct_index must be within options length.")
+        rm = payload.get("reveal_mode")
+        if rm not in self.QUIZ_REVEAL_MODES:
+            errors.append("quiz payload requires reveal_mode (host_controlled or instant).")
+        return errors
+
+    def _validate_hotspot_payload(self, payload):
+        errors = []
+        url = payload.get("image_url")
+        if not url or not isinstance(url, str):
+            errors.append("hotspot payload requires image_url (string).")
+        hs = payload.get("hotspots")
+        if not isinstance(hs, list) or len(hs) < 1:
+            errors.append("hotspot payload requires hotspots (non-empty list).")
+            return errors
+        for i, h in enumerate(hs):
+            if not isinstance(h, dict):
+                errors.append(f"hotspots[{i}] must be an object.")
+                continue
+            for key in ("id", "x", "y", "w", "h", "content"):
+                if key not in h:
+                    errors.append(f"hotspots[{i}] missing required field {key}.")
+                    break
+            else:
+                if not isinstance(h["id"], str) or not isinstance(h["content"], str):
+                    errors.append(f"hotspots[{i}] id and content must be strings.")
+                for coord in ("x", "y", "w", "h"):
+                    if not isinstance(h[coord], (int, float)):
+                        errors.append(f"hotspots[{i}] {coord} must be a number.")
+                        break
+        return errors
+
     def clean(self):
         super().clean()
         config = self.config or {}
-        required_keys = {
-            self.ActivityType.DRAWING: ["colors"],
-            self.ActivityType.DRAG_DROP: ["items", "zones"],
-            self.ActivityType.QUIZ: ["question", "options", "correct_index"],
-            self.ActivityType.HOTSPOT: ["image", "hotspots"],
-        }
-        missing = [key for key in required_keys.get(self.activity_type, []) if key not in config]
-        if missing:
-            raise ValidationError({"config": f"Missing required config keys: {', '.join(missing)}"})
+        if not isinstance(config, dict):
+            raise ValidationError({"config": "Config must be a JSON object."})
+
+        schema_version = config.get("schema_version")
+        if schema_version != self.SCHEMA_VERSION:
+            raise ValidationError({"config": f'config.schema_version must be "{self.SCHEMA_VERSION}".'})
+
+        config_activity_type = config.get("activity_type")
+        if not config_activity_type:
+            raise ValidationError({"config": "config.activity_type is required."})
+        if config_activity_type != self.activity_type:
+            raise ValidationError({"config": "config.activity_type must match activity_type."})
+
+        config_book_id = config.get("book_id")
+        if config_book_id and str(config_book_id) != str(self.book_id):
+            raise ValidationError({"config": "config.book_id must match book."})
+
+        ui = config.get("ui")
+        if not isinstance(ui, dict):
+            raise ValidationError({"config": "config.ui must be an object with title and instructions."})
+        if not isinstance(ui.get("title"), str):
+            raise ValidationError({"config": "config.ui.title must be a string."})
+        if not isinstance(ui.get("instructions"), str):
+            raise ValidationError({"config": "config.ui.instructions must be a string (may be empty)."})
+
+        payload = config.get("payload")
+        if not isinstance(payload, dict):
+            raise ValidationError({"config": "config.payload must be an object."})
+
+        errors = []
+        if self.activity_type == self.ActivityType.DRAWING:
+            errors.extend(self._validate_drawing_payload(payload))
+        elif self.activity_type == self.ActivityType.DRAG_DROP:
+            errors.extend(self._validate_drag_drop_payload(payload))
+        elif self.activity_type == self.ActivityType.QUIZ:
+            errors.extend(self._validate_quiz_payload(payload))
+        elif self.activity_type == self.ActivityType.HOTSPOT:
+            errors.extend(self._validate_hotspot_payload(payload))
+
+        if errors:
+            raise ValidationError({"config": " ".join(errors)})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.title} ({self.activity_type})"

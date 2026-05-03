@@ -11,7 +11,7 @@ const karla = Karla({ subsets: ['latin'], weight: ['300', '400', '500', '600', '
 
 export const metadata: Metadata = {
   title: 'Bailey & Beau',
-  description: 'Foundation frontend scaffold for the Bailey & Beau reading platform.',
+  description: 'Bailey & Beau reading platform.',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Icon } from '@/components/ui/Icon';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 
 interface MeData {
   id: number;

@@ -4,6 +4,7 @@ import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff } from 'lucide-react';
 import { apiRequest, storeTokens } from '@/lib/api';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 
 type AuthResponse = {
   data: {
@@ -34,7 +35,7 @@ export default function LoginPage() {
     try {
       const res = await apiRequest<AuthResponse>('/auth/login/', {
         method: 'POST',
-        body: JSON.stringify({ username: loginUsername, password: loginPassword }),
+        body: JSON.stringify({ username: loginUsername.trim(), password: loginPassword }),
       });
       storeTokens(res.data.tokens.access, res.data.tokens.refresh);
       router.push('/dashboard');

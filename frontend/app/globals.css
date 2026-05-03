@@ -49,16 +49,16 @@ body.reading-room {
 }
 
 html {
-  font-family: 'Nunito', sans-serif;
+  font-family: var(--font-karla), "Karla", system-ui, sans-serif;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
   background:
-    radial-gradient(circle at top left, rgba(242, 198, 109, 0.35), transparent 28%),
-    radial-gradient(circle at 85% 20%, rgba(202, 107, 44, 0.2), transparent 22%),
-    linear-gradient(180deg, #fbf6ed 0%, #f1e5d1 100%);
+    radial-gradient(circle at top left, rgba(236, 205, 202, 0.45), transparent 32%),
+    radial-gradient(circle at 85% 15%, rgba(59, 133, 166, 0.18), transparent 26%),
+    linear-gradient(180deg, #faf7f9 0%, #ece6ee 100%);
   color: var(--text);
 }
 
@@ -99,8 +99,8 @@ a {
   gap: 0.5rem;
   padding: 0.45rem 0.8rem;
   border-radius: 999px;
-  background: rgba(202, 107, 44, 0.1);
-  color: var(--accent-deep);
+  background: rgba(118, 79, 132, 0.14);
+  color: var(--bb-purple);
   font-size: 0.82rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -167,8 +167,8 @@ a {
   padding: 0.8rem 1.1rem;
   border: 0;
   border-radius: 999px;
-  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
-  color: #fffaf4;
+  background: linear-gradient(135deg, var(--bb-purple) 0%, var(--bb-navy) 100%);
+  color: var(--bb-light-pink);
   font: inherit;
   font-weight: 700;
   cursor: pointer;

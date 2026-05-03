@@ -982,7 +982,12 @@ class BookDetailView(APIView):
 
 
 class BookActivityListView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    """
+    GET /api/v1/books/{book_id}/activities/
+    Auth: JWT user, or guest ?participant_id= belonging to a session for this book.
+    """
+
+    permission_classes = [permissions.AllowAny]
 
     def get(self, request, book_id):
         book = Book.objects.filter(pk=book_id, published=True).first()
@@ -991,6 +996,30 @@ class BookActivityListView(APIView):
                 {"data": None, "meta": {}, "error": {"code": "not_found", "message": "Book not found."}},
                 status=status.HTTP_404_NOT_FOUND,
             )
+
+        is_authenticated = bool(request.user and request.user.is_authenticated)
+        participant_id = request.query_params.get("participant_id")
+
+        if not is_authenticated and not participant_id:
+            return Response(
+                {"data": None, "meta": {}, "error": {"code": "unauthenticated", "message": "Authentication required."}},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        if participant_id and not is_authenticated:
+            participant = (
+                SessionParticipant.objects.filter(
+                    id=participant_id,
+                    participant_type=SessionParticipant.ParticipantType.GUEST,
+                )
+                .select_related("session")
+                .first()
+            )
+            if not participant or str(participant.session.book_id) != str(book_id):
+                return Response(
+                    {"data": None, "meta": {}, "error": {"code": "permission_denied", "message": "Invalid participant."}},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
         activities = book.activity_configs.filter(is_active=True).order_by("sort_order", "title")
         serializer = ActivityConfigSerializer(activities, many=True)

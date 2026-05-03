@@ -1,6 +1,8 @@
+import json
 from io import StringIO
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.core import mail
 from django.core.management import call_command
 from django.test import TestCase, override_settings
@@ -247,7 +249,21 @@ class AdminPortalPageTests(TestCase):
                 "activity_type": ActivityConfig.ActivityType.QUIZ,
                 "sort_order": 1,
                 "is_active": "on",
-                "config_json": '{"question": "What color is the door?", "options": ["Red", "Blue"], "correct_index": 0}',
+                "config_json": json.dumps(
+                    {
+                        "schema_version": "1.0",
+                        "activity_type": "quiz",
+                        "book_id": str(self.book.id),
+                        "ui": {"title": "Forest Quiz", "instructions": "", "theme": "default"},
+                        "payload": {
+                            "question": "What color is the door?",
+                            "options": ["Red", "Blue"],
+                            "correct_index": 0,
+                            "reveal_mode": "instant",
+                        },
+                        "validation": {},
+                    }
+                ),
             },
             follow=True,
         )
@@ -1195,12 +1211,37 @@ class ActivityConfigApiTests(TestCase):
             published=True,
         )
 
+    def _quiz_cfg(self, question="Pick the moon", sort_title=True):
+        return {
+            "schema_version": "1.0",
+            "activity_type": "quiz",
+            "book_id": str(self.book.id),
+            "ui": {"title": "Quiz", "instructions": "", "theme": "default"},
+            "payload": {
+                "question": question,
+                "options": ["Moon", "Sun"],
+                "correct_index": 0,
+                "reveal_mode": "instant",
+            },
+            "validation": {},
+        }
+
+    def _drawing_cfg(self):
+        return {
+            "schema_version": "1.0",
+            "activity_type": "drawing",
+            "book_id": str(self.book.id),
+            "ui": {"title": "Draw", "instructions": "", "theme": "default"},
+            "payload": {"palette": ["#000000", "#ff0000"], "brush_sizes": [4, 8], "allow_eraser": True},
+            "validation": {},
+        }
+
     def test_book_activity_list_returns_active_configs_in_order(self):
         ActivityConfig.objects.create(
             book=self.book,
             title="Second Quiz",
             activity_type=ActivityConfig.ActivityType.QUIZ,
-            config={"question": "Pick the moon", "options": ["Moon", "Sun"], "correct_index": 0},
+            config=self._quiz_cfg(),
             sort_order=2,
             is_active=True,
         )
@@ -1208,7 +1249,7 @@ class ActivityConfigApiTests(TestCase):
             book=self.book,
             title="Hidden Drawing",
             activity_type=ActivityConfig.ActivityType.DRAWING,
-            config={"colors": ["blue"]},
+            config=self._drawing_cfg(),
             sort_order=1,
             is_active=False,
         )
@@ -1216,7 +1257,7 @@ class ActivityConfigApiTests(TestCase):
             book=self.book,
             title="First Drawing",
             activity_type=ActivityConfig.ActivityType.DRAWING,
-            config={"colors": ["red", "green"]},
+            config=self._drawing_cfg(),
             sort_order=0,
             is_active=True,
         )
@@ -1228,6 +1269,9 @@ class ActivityConfigApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["meta"]["count"], 2)
         self.assertEqual([item["title"] for item in payload["data"]], ["First Drawing", "Second Quiz"])
+        for item in payload["data"]:
+            self.assertEqual(item["config"]["schema_version"], "1.0")
+            self.assertEqual(item["config"]["activity_type"], item["activity_type"])
 
     def test_admin_can_create_activity_config_with_valid_payload(self):
         self.client.force_login(self.admin_user)
@@ -1238,7 +1282,14 @@ class ActivityConfigApiTests(TestCase):
                 "book": str(self.book.id),
                 "title": "Sort the Stars",
                 "activity_type": "drag_drop",
-                "config": {"items": ["star"], "zones": ["sky"]},
+                "config": {
+                    "schema_version": "1.0",
+                    "activity_type": "drag_drop",
+                    "book_id": str(self.book.id),
+                    "ui": {"title": "Sort", "instructions": "", "theme": "default"},
+                    "payload": {"items": ["star"], "drop_zones": ["sky"]},
+                    "validation": {},
+                },
                 "sort_order": 3,
                 "is_active": True,
             },
@@ -1268,27 +1319,80 @@ class ActivityConfigApiTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("config", response.json())
 
+    def test_admin_create_rejects_missing_schema_version(self):
+        self.client.force_login(self.admin_user)
+
+        response = self.client.post(
+            "/api/v1/admin/activities/",
+            data={
+                "book": str(self.book.id),
+                "title": "No Schema",
+                "activity_type": "quiz",
+                "config": {
+                    "activity_type": "quiz",
+                    "book_id": str(self.book.id),
+                    "ui": {"title": "x", "instructions": "", "theme": "default"},
+                    "payload": {
+                        "question": "Q?",
+                        "options": ["A", "B"],
+                        "correct_index": 0,
+                        "reveal_mode": "instant",
+                    },
+                },
+                "sort_order": 1,
+                "is_active": True,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("config", response.json())
+
+    def test_model_save_rejects_invalid_config(self):
+        with self.assertRaises(ValidationError):
+            ActivityConfig.objects.create(
+                book=self.book,
+                title="Bad",
+                activity_type=ActivityConfig.ActivityType.QUIZ,
+                config={
+                    "schema_version": "1.0",
+                    "activity_type": "quiz",
+                    "book_id": str(self.book.id),
+                    "ui": {"title": "x", "instructions": "", "theme": "default"},
+                    "payload": {"question": "Incomplete"},
+                },
+                sort_order=0,
+                is_active=True,
+            )
+
     def test_admin_can_update_and_delete_activity_config(self):
         activity = ActivityConfig.objects.create(
             book=self.book,
             title="Old Name",
             activity_type=ActivityConfig.ActivityType.DRAWING,
-            config={"colors": ["yellow"]},
+            config=self._drawing_cfg(),
             sort_order=1,
             is_active=True,
         )
         self.client.force_login(self.admin_user)
 
+        new_cfg = self._drawing_cfg()
+        new_cfg["payload"] = {
+            "palette": ["#111111", "#eeeeee"],
+            "brush_sizes": [2, 6],
+            "allow_eraser": False,
+        }
+
         update_response = self.client.patch(
             f"/api/v1/admin/activities/{activity.id}/",
-            data={"title": "Updated Name", "config": {"colors": ["yellow", "purple"]}},
+            data={"title": "Updated Name", "config": new_cfg},
             content_type="application/json",
         )
 
         self.assertEqual(update_response.status_code, 200)
         activity.refresh_from_db()
         self.assertEqual(activity.title, "Updated Name")
-        self.assertEqual(activity.config["colors"], ["yellow", "purple"])
+        self.assertEqual(activity.config["payload"]["palette"], ["#111111", "#eeeeee"])
 
         delete_response = self.client.delete(f"/api/v1/admin/activities/{activity.id}/")
 

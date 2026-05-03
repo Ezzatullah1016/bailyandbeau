@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowRight, Bell, BookOpen, BookMarked, CalendarDays, CheckSquare,
   CreditCard, DoorOpen, Lock, Medal, MoreHorizontal, Play, Settings,
@@ -96,11 +96,13 @@ const BADGE_ICONS: Record<string, string> = {
 function StartSessionModal({
   books,
   childProfiles,
+  initialBookId,
   onClose,
   onStart,
 }: {
   books: Book[];
   childProfiles: ChildProfile[];
+  initialBookId?: string | null;
   onClose: () => void;
   onStart: (sessionId: string, participantId: string) => void;
 }) {
@@ -108,6 +110,13 @@ function StartSessionModal({
   const [childId, setChildId] = useState(childProfiles[0]?.id ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!initialBookId || books.length === 0) return;
+    if (books.some((b) => b.id === initialBookId)) {
+      setBookId(initialBookId);
+    }
+  }, [initialBookId, books]);
 
   async function handleStart() {
     if (!bookId || !childId) { setError('Select a book and child profile.'); return; }
@@ -149,7 +158,7 @@ function StartSessionModal({
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-[#43493d] mb-2">Reading with</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-[#764f84] mb-2">Reading with</label>
             <select
               value={childId}
               onChange={(e) => setChildId(e.target.value)}
@@ -179,9 +188,11 @@ function StartSessionModal({
 
 // ─── Dashboard Page ───────────────────────────────────────────────────────────
 
-export default function DashboardPage() {
+function DashboardInner() {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const startBook = searchParams.get('startBook');
 
   const [me, setMe] = useState<MeData | null>(null);
   const [dash, setDash] = useState<DashboardData | null>(null);
@@ -208,6 +219,13 @@ export default function DashboardPage() {
       .finally(() => setLoading(false));
   }, [router]);
 
+  useEffect(() => {
+    if (!startBook || books.length === 0) return;
+    if (books.some((b) => b.id === startBook)) {
+      setShowModal(true);
+    }
+  }, [startBook, books]);
+
   function handleSessionStarted(sessionId: string) {
     setShowModal(false);
     router.push(`/session/${sessionId}/lobby`);
@@ -233,6 +251,7 @@ export default function DashboardPage() {
         <StartSessionModal
           books={books}
           childProfiles={children}
+          initialBookId={startBook}
           onClose={() => setShowModal(false)}
           onStart={handleSessionStarted}
         />
@@ -465,5 +484,22 @@ export default function DashboardPage() {
         </div>
       </main>
     </>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense
+      fallback={(
+        <div className="h-screen w-screen flex items-center justify-center bg-[#ece6ee]">
+          <div className="flex flex-col items-center gap-4">
+            <Icon name="sync" className="w-10 h-10 text-[#3d3b62] animate-spin" />
+            <p className="text-sm text-[#764f84] font-medium">Loading dashboard…</p>
+          </div>
+        </div>
+      )}
+    >
+      <DashboardInner />
+    </Suspense>
   );
 }

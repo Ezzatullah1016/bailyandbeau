@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 56" fill="none">
+  <rect width="280" height="56" rx="12" fill="#3d3b62"/>
+  <text x="140" y="38" text-anchor="middle" font-family="system-ui,Segoe UI,sans-serif" font-size="22" font-weight="800" fill="#eccdca">Bailey &amp; Beau</text>
+  <circle cx="34" cy="28" r="10" fill="#f0c75e"/>
+  <circle cx="46" cy="28" r="10" fill="#c84a71" opacity="0.9"/>
+</svg>

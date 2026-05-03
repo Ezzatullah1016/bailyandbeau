@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { BookOpen, Heart, RefreshCw } from 'lucide-react';
+import { BookOpen, Heart, Info, RefreshCw } from 'lucide-react';
 import { apiRequest } from '@/lib/api';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { usePathname } from 'next/navigation';
