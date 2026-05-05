@@ -1,6 +1,6 @@
 import json
 import secrets
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlencode, urlparse
 
 from django.conf import settings as django_settings
 from django.contrib import messages
@@ -487,70 +487,12 @@ def admin_session_monitor(request):
 
 @staff_member_required
 def admin_book_library(request):
-    selected_book = None
-    book_errors = None
-
-    if request.method == "POST":
-        action = request.POST.get("action")
-
-        if action == "save":
-            book_id = request.POST.get("book_id")
-            selected_book = Book.objects.filter(pk=book_id).first() if book_id else None
-            publish_state = request.POST.get("publish_state", "").strip()
-            payload = {
-                "title": request.POST.get("title", "").strip(),
-                "slug": (request.POST.get("slug", "").strip() or slugify(request.POST.get("title", ""))),
-                "description": request.POST.get("description", "").strip(),
-                "room_type": request.POST.get("room_type", Book.RoomType.READING),
-                "age_band": request.POST.get("age_band", Book.AgeBand.AGE_3_5),
-                "cover_image": _normalize_cover_image_url(request.POST.get("cover_image", "")),
-                "published": publish_state == "published" if publish_state in {"draft", "published"} else request.POST.get("published") == "on",
-                "page_count": request.POST.get("page_count") or 1,
-            }
-            serializer = BookSerializer(selected_book, data=payload, partial=bool(selected_book))
-            if serializer.is_valid():
-                saved_book = serializer.save()
-                messages.success(request, f"Book '{saved_book.title}' saved successfully.")
-                return redirect(f"{reverse('admin_book_library')}?selected={saved_book.id}")
-            book_errors = serializer.errors
-        elif action == "toggle_publish":
-            book = get_object_or_404(Book, pk=request.POST.get("book_id"))
-            book.published = not book.published
-            book.save(update_fields=["published", "updated_at"])
-            messages.success(request, f"Updated publish status for '{book.title}'.")
-            return redirect(reverse("admin_book_library"))
-        elif action == "delete":
-            book = get_object_or_404(Book, pk=request.POST.get("book_id"))
-            title = book.title
-            book.delete()
-            messages.success(request, f"Deleted '{title}' from the library.")
-            return redirect(reverse("admin_book_library"))
-        elif action == "add_page":
-            book = get_object_or_404(Book, pk=request.POST.get("book_id"))
-            page_number = request.POST.get("page_number", "").strip()
-            image_url = request.POST.get("image_url", "").strip()
-            if page_number and image_url:
-                BookPage.objects.update_or_create(
-                    book=book, page_number=int(page_number),
-                    defaults={"image_url": image_url},
-                )
-                book.page_count = book.pages.count()
-                book.save(update_fields=["page_count", "updated_at"])
-                messages.success(request, f"Page {page_number} saved for '{book.title}'.")
-            return redirect(f"{reverse('admin_book_library')}?selected={book.pk}")
-        elif action == "delete_page":
-            page = get_object_or_404(BookPage, pk=request.POST.get("page_id"))
-            book = page.book
-            page.delete()
-            book.page_count = book.pages.count()
-            book.save(update_fields=["page_count", "updated_at"])
-            messages.success(request, "Page deleted.")
-            return redirect(f"{reverse('admin_book_library')}?selected={book.pk}")
-
-    if not selected_book:
-        selected_id = request.GET.get("selected")
-        if selected_id:
-            selected_book = Book.objects.filter(pk=selected_id).first()
+    if request.method == "POST" and request.POST.get("action") == "toggle_publish":
+        book = get_object_or_404(Book, pk=request.POST.get("book_id"))
+        book.published = not book.published
+        book.save(update_fields=["published", "updated_at"])
+        messages.success(request, f"Updated publish status for '{book.title}'.")
+        return redirect(reverse("admin_book_library"))
 
     books = Book.objects.annotate(activity_total=Count("activity_configs")).order_by("title")
     query = request.GET.get("q", "").strip()
@@ -569,14 +511,9 @@ def admin_book_library(request):
     elif status_filter == "draft":
         books = books.filter(published=False)
 
-    selected_pages = selected_book.pages.all() if selected_book else []
-
     context = {
         "active_nav": "books",
         "books": books[:100],
-        "selected_book": selected_book,
-        "selected_pages": selected_pages,
-        "book_errors": book_errors,
         "query": query,
         "room_type_filter": room_type,
         "age_band_filter": age_band,
@@ -591,6 +528,168 @@ def admin_book_library(request):
         "age_band_choices": Book.AgeBand.choices,
     }
     return render(request, "core/admin_book_library.html", context)
+
+
+def _book_payload_from_request(request):
+    publish_state = request.POST.get("publish_state", "").strip()
+    return {
+        "title": request.POST.get("title", "").strip(),
+        "slug": (request.POST.get("slug", "").strip() or slugify(request.POST.get("title", ""))),
+        "description": request.POST.get("description", "").strip(),
+        "room_type": request.POST.get("room_type", Book.RoomType.READING),
+        "age_band": request.POST.get("age_band", Book.AgeBand.AGE_3_5),
+        "cover_image": _normalize_cover_image_url(request.POST.get("cover_image", "")),
+        "published": (
+            publish_state == "published"
+            if publish_state in {"draft", "published"}
+            else request.POST.get("published") == "on"
+        ),
+        "page_count": request.POST.get("page_count") or 1,
+    }
+
+
+def _book_relation_context(book):
+    activities = book.activity_configs.all().order_by("sort_order", "title")
+    recent_sessions = (
+        book.sessions.select_related("child_profile", "created_by").order_by("-created_at")[:8]
+    )
+    return {
+        "book_activity_rows": [
+            {
+                "id": str(activity.id),
+                "title": activity.title,
+                "activity_type": activity.get_activity_type_display(),
+                "activity_type_key": activity.activity_type,
+                "sort_order": activity.sort_order,
+                "is_active": activity.is_active,
+                "summary": (
+                    f"{len((activity.config or {}).keys())} config keys"
+                    if isinstance(activity.config, dict)
+                    else "Config unavailable"
+                ),
+            }
+            for activity in activities
+        ],
+        "book_recent_sessions": recent_sessions,
+        "book_relations": {
+            "activity_total": activities.count(),
+            "page_total": book.pages.count(),
+            "session_total": book.sessions.count(),
+            "favorite_total": book.saved_by_users.count(),
+        },
+        "selected_pages": book.pages.all(),
+    }
+
+
+def _safe_local_path_or_default(request, value, fallback):
+    candidate = (value or "").strip()
+    if candidate and url_has_allowed_host_and_scheme(
+        candidate,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return candidate
+    return fallback
+
+
+@staff_member_required
+def admin_book_create(request):
+    book_errors = None
+    selected_book = None
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "save":
+            payload = _book_payload_from_request(request)
+            serializer = BookSerializer(data=payload)
+            if serializer.is_valid():
+                created = serializer.save()
+                messages.success(request, f"Book '{created.title}' created successfully.")
+                return redirect(reverse("admin_book_detail", args=[created.id]))
+            book_errors = serializer.errors
+
+    context = {
+        "active_nav": "books",
+        "selected_book": selected_book,
+        "book_errors": book_errors,
+        "room_type_choices": Book.RoomType.choices,
+        "age_band_choices": Book.AgeBand.choices,
+        "book_activity_rows": [],
+        "book_relations": {"activity_total": 0, "page_total": 0, "session_total": 0, "favorite_total": 0},
+        "selected_pages": [],
+        "book_recent_sessions": [],
+        "create_activity_url": None,
+    }
+    return render(request, "core/admin_book_detail.html", context)
+
+
+@staff_member_required
+def admin_book_detail(request, book_id):
+    selected_book = get_object_or_404(Book, pk=book_id)
+    book_errors = None
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+
+        if action == "save":
+            payload = _book_payload_from_request(request)
+            serializer = BookSerializer(selected_book, data=payload, partial=True)
+            if serializer.is_valid():
+                selected_book = serializer.save()
+                messages.success(request, f"Book '{selected_book.title}' saved successfully.")
+                return redirect(reverse("admin_book_detail", args=[selected_book.id]))
+            book_errors = serializer.errors
+        elif action == "delete":
+            title = selected_book.title
+            selected_book.delete()
+            messages.success(request, f"Deleted '{title}' from the library.")
+            return redirect(reverse("admin_book_library"))
+        elif action == "toggle_publish":
+            selected_book.published = not selected_book.published
+            selected_book.save(update_fields=["published", "updated_at"])
+            messages.success(request, f"Updated publish status for '{selected_book.title}'.")
+            return redirect(reverse("admin_book_detail", args=[selected_book.id]))
+        elif action == "add_page":
+            page_number = (request.POST.get("page_number") or "").strip()
+            image_url = (request.POST.get("image_url") or "").strip()
+            if not page_number or not image_url:
+                messages.error(request, "Page number and image URL are required.")
+            else:
+                try:
+                    BookPage.objects.update_or_create(
+                        book=selected_book,
+                        page_number=int(page_number),
+                        defaults={"image_url": image_url},
+                    )
+                except ValueError:
+                    messages.error(request, "Page number must be a valid integer.")
+                else:
+                    selected_book.page_count = selected_book.pages.count()
+                    selected_book.save(update_fields=["page_count", "updated_at"])
+                    messages.success(request, f"Page {page_number} saved for '{selected_book.title}'.")
+            return redirect(reverse("admin_book_detail", args=[selected_book.id]))
+        elif action == "delete_page":
+            page = get_object_or_404(BookPage, pk=request.POST.get("page_id"), book=selected_book)
+            page.delete()
+            selected_book.page_count = selected_book.pages.count()
+            selected_book.save(update_fields=["page_count", "updated_at"])
+            messages.success(request, "Page deleted.")
+            return redirect(reverse("admin_book_detail", args=[selected_book.id]))
+
+    relation_context = _book_relation_context(selected_book)
+    return_to = reverse("admin_book_detail", args=[selected_book.id])
+    create_activity_query = urlencode(
+        {"book": str(selected_book.id), "create": "1", "return_to": return_to}
+    )
+    context = {
+        "active_nav": "books",
+        "selected_book": selected_book,
+        "book_errors": book_errors,
+        "room_type_choices": Book.RoomType.choices,
+        "age_band_choices": Book.AgeBand.choices,
+        "create_activity_url": f"{reverse('admin_activity_config')}?{create_activity_query}",
+        **relation_context,
+    }
+    return render(request, "core/admin_book_detail.html", context)
 
 
 @staff_member_required
@@ -692,6 +791,9 @@ def admin_activity_config(request):
     activity_errors = None
     selected_activity_json = "{}"
     selected_activity_config = {}
+    selected_book_id = request.GET.get("book", "").strip()
+    return_to = _safe_local_path_or_default(request, request.GET.get("return_to", ""), reverse("admin_activity_config"))
+    create_mode = request.GET.get("create") == "1"
 
     if request.method == "POST":
         action = request.POST.get("action")
@@ -723,6 +825,9 @@ def admin_activity_config(request):
             if serializer.is_valid():
                 saved_activity = serializer.save()
                 messages.success(request, f"Activity config '{saved_activity.title}' saved successfully.")
+                posted_return_to = _safe_local_path_or_default(request, request.POST.get("return_to", ""), "")
+                if posted_return_to:
+                    return redirect(posted_return_to)
                 return redirect(f"{reverse('admin_activity_config')}?selected={saved_activity.id}")
             activity_errors = serializer.errors
             selected_activity_json = json.dumps(parsed_config or {}, indent=2)
@@ -768,6 +873,9 @@ def admin_activity_config(request):
             "drag_drop": ActivityConfig.objects.filter(activity_type=ActivityConfig.ActivityType.DRAG_DROP).count(),
             "quiz": ActivityConfig.objects.filter(activity_type=ActivityConfig.ActivityType.QUIZ).count(),
         },
+        "selected_book_id": selected_book_id,
+        "return_to": return_to if return_to != reverse("admin_activity_config") else "",
+        "create_mode": create_mode,
     }
     return render(request, "core/admin_activity_config.html", context)
 

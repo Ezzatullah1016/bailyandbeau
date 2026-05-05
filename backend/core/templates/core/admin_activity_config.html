@@ -62,7 +62,7 @@
     </section>
 
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h3 class="text-lg font-semibold text-slate-900">{% if selected_activity %}Edit config{% else %}New config{% endif %}</h3>
+        <h3 class="text-lg font-semibold text-slate-900">{% if selected_activity %}Edit config{% else %}{% if create_mode %}Create config{% else %}New config{% endif %}{% endif %}</h3>
         <p class="mt-1 text-sm text-slate-500">Validation comes from the existing `ActivityConfigSerializer` and model `clean()` rules.</p>
 
         {% if activity_errors %}
@@ -73,6 +73,7 @@
             {% csrf_token %}
             <input type="hidden" name="action" value="save">
             <input type="hidden" name="activity_id" value="{{ selected_activity.id|default:'' }}">
+            <input type="hidden" name="return_to" value="{{ return_to }}">
             <div data-form-errors class="hidden rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"></div>
             <div>
                 <label class="mb-1 block text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Config name</label>
@@ -82,7 +83,7 @@
                 <label class="mb-1 block text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Linked book</label>
                 <select name="book" required data-required-message="Select a book to link this config." class="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm">
                     {% for book in books %}
-                    <option value="{{ book.id }}" {% if selected_activity.book_id == book.id %}selected{% endif %}>{{ book.title }}</option>
+                    <option value="{{ book.id }}" {% if selected_activity.book_id == book.id or selected_book_id == book.id|stringformat:'s' %}selected{% endif %}>{{ book.title }}</option>
                     {% endfor %}
                 </select>
             </div>

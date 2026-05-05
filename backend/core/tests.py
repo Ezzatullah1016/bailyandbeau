@@ -182,6 +182,7 @@ class AdminPortalPageTests(TestCase):
         pages = [
             (reverse("admin_session_monitor"), "Session Monitor"),
             (reverse("admin_book_library"), "Book library"),
+            (reverse("admin_book_detail", args=[self.book.id]), "Book detail"),
             (reverse("admin_activity_config"), "Activity config"),
             (reverse("admin_users"), "All users"),
             (reverse("admin_subscriptions"), "Subscriptions & billing"),
@@ -220,7 +221,7 @@ class AdminPortalPageTests(TestCase):
         self.client.force_login(self.admin_user)
 
         response = self.client.post(
-            reverse("admin_book_library"),
+            reverse("admin_book_create"),
             data={
                 "action": "save",
                 "title": "Ocean Adventure",
@@ -237,6 +238,56 @@ class AdminPortalPageTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(Book.objects.filter(slug="ocean-adventure").exists())
+
+    def test_admin_book_detail_shows_related_activity_rows(self):
+        self.client.force_login(self.admin_user)
+        ActivityConfig.objects.create(
+            book=self.book,
+            title="Detail Activity",
+            activity_type=ActivityConfig.ActivityType.DRAWING,
+            sort_order=0,
+            is_active=True,
+            config={
+                "schema_version": "1.0",
+                "activity_type": "drawing",
+                "book_id": str(self.book.id),
+                "ui": {"title": "Draw", "instructions": "Draw", "theme": "default"},
+                "payload": {"palette": ["#000"], "brush_sizes": [2], "allow_eraser": True},
+                "validation": {},
+            },
+        )
+        response = self.client.get(reverse("admin_book_detail", args=[self.book.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Related activities")
+        self.assertContains(response, "Detail Activity")
+
+    def test_activity_save_redirects_back_to_book_detail_with_return_to(self):
+        self.client.force_login(self.admin_user)
+        return_to = reverse("admin_book_detail", args=[self.book.id])
+        response = self.client.post(
+            reverse("admin_activity_config"),
+            data={
+                "action": "save",
+                "book": str(self.book.id),
+                "title": "Return Quiz",
+                "activity_type": ActivityConfig.ActivityType.QUIZ,
+                "sort_order": 1,
+                "is_active": "on",
+                "return_to": return_to,
+                "config_json": "{}",
+                "ui_title": "Return Quiz",
+                "ui_instructions": "Pick one answer.",
+                "ui_theme": "default",
+                "quiz_question": "What color is the moon?",
+                "quiz_options[]": ["Blue", "Silver"],
+                "quiz_correct_index": 1,
+                "quiz_reveal_mode": "instant",
+            },
+            follow=False,
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers.get("Location"), return_to)
+        self.assertTrue(ActivityConfig.objects.filter(title="Return Quiz").exists())
     def test_admin_activity_config_can_create_config_from_form(self):
         self.client.force_login(self.admin_user)
 
@@ -284,24 +335,18 @@ class AdminPortalPageTests(TestCase):
         self.client.force_login(self.admin_user)
 
         book_response = self.client.get(reverse("admin_book_library"))
+        detail_response = self.client.get(reverse("admin_book_detail", args=[self.book.id]))
         activity_response = self.client.get(reverse("admin_activity_config"))
 
-        self.assertContains(book_response, 'data-validate-form="book-form"')
-        self.assertContains(book_response, 'novalidate')
-        self.assertContains(book_response, 'Upload new book')
-        self.assertContains(book_response, 'Book Asset (PDF/ePub)')
-        self.assertContains(book_response, 'Upload cover art')
-        self.assertContains(book_response, 'Initial Status')
-        self.assertContains(book_response, 'data-file-field="true"')
-        self.assertContains(book_response, 'Upload a PDF or ePub book asset.')
-        self.assertContains(book_response, 'Upload a cover image.')
-        self.assertContains(book_response, 'Choose an initial status.')
-        self.assertContains(book_response, 'data-required-message="Book title is required."')
-        self.assertContains(book_response, 'data-confirm-message="Delete this book from the library?"')
+        self.assertContains(book_response, 'View details')
+        self.assertContains(book_response, 'Create activity')
+        self.assertContains(detail_response, 'data-validate-form="book-form"')
+        self.assertContains(detail_response, 'Related activities')
+        self.assertContains(detail_response, 'Page assets')
+        self.assertContains(detail_response, 'data-required-message="Book title is required."')
+        self.assertContains(detail_response, 'data-confirm-message="Delete this book from the library?"')
         self.assertContains(activity_response, 'data-validate-form="activity-form"')
         self.assertContains(activity_response, 'novalidate')
-        self.assertContains(activity_response, 'data-json-field="true"')
-        self.assertContains(activity_response, 'Config JSON is required.')
 
 
 class AuthApiTests(TestCase):

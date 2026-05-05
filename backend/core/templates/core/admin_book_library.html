@@ -2,337 +2,118 @@
 
 {% block title %}Bailey & Beau | Book library{% endblock %}
 {% block page_title %}Book library{% endblock %}
-{% block page_subtitle %}Manage published books, page assets, and activity links.{% endblock %}
+{% block page_subtitle %}Manage books with a cleaner list view and open details for full CRUD and relations.{% endblock %}
 
 {% block page_actions %}
-<a href="{% url 'admin_book_library' %}?add=1" class="flex items-center gap-2 rounded-xl bg-brand-dark px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
-    <span class="material-symbols-outlined" style="font-size:18px">add</span> Add Book
+<a href="{% url 'admin_book_create' %}" class="flex items-center gap-2 rounded-xl bg-brand-dark px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
+    <span class="material-symbols-outlined" style="font-size:18px">add</span> New Book
 </a>
 <a href="{% url 'admin_activity_config' %}" class="rounded-xl border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-stone-50">Activity Config</a>
 {% endblock %}
 
 {% block content %}
-<div class="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_380px]">
-    <div class="space-y-6">
-        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500">Total Books</p>
-                <p class="mt-3 text-3xl font-extrabold text-slate-900">{{ book_stats.total }}</p>
-            </article>
-            <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500">Published</p>
-                <p class="mt-3 text-3xl font-extrabold text-emerald-600">{{ book_stats.published }}</p>
-            </article>
-            <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500">Drafts</p>
-                <p class="mt-3 text-3xl font-extrabold text-amber-600">{{ book_stats.drafts }}</p>
-            </article>
-            <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500">Activity Configs</p>
-                <p class="mt-3 text-3xl font-extrabold text-slate-900">{{ book_stats.activities }}</p>
-            </article>
-        </div>
-
-        <form method="get" class="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4">
-            {% if request.GET.add %}<input type="hidden" name="add" value="1">{% endif %}
-            <span class="material-symbols-outlined text-slate-400">filter_list</span>
-            <input type="text" name="q" value="{{ query }}" placeholder="Search books…"
-                   class="min-w-[200px] flex-1 rounded-xl border border-stone-200 bg-cream px-4 py-2 text-sm focus:border-brand-dark focus:outline-none">
-            <select name="room_type" class="rounded-xl border border-stone-200 bg-cream px-4 py-2 text-sm focus:border-brand-dark focus:outline-none">
-                <option value="">All Room Types</option>
-                {% for value, label in room_type_choices %}
-                <option value="{{ value }}" {% if room_type_filter == value %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-            </select>
-            <select name="age_band" class="rounded-xl border border-stone-200 bg-cream px-4 py-2 text-sm focus:border-brand-dark focus:outline-none">
-                <option value="">All Ages</option>
-                {% for value, label in age_band_choices %}
-                <option value="{{ value }}" {% if age_band_filter == value %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-            </select>
-            <select name="status" class="rounded-xl border border-stone-200 bg-cream px-4 py-2 text-sm focus:border-brand-dark focus:outline-none">
-                <option value="">All Statuses</option>
-                <option value="published" {% if status_filter == 'published' %}selected{% endif %}>Published</option>
-                <option value="draft" {% if status_filter == 'draft' %}selected{% endif %}>Draft</option>
-            </select>
-            <button type="submit" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Apply</button>
-            <a href="{% url 'admin_book_library' %}" class="text-sm font-semibold text-brand-dark hover:underline">Reset</a>
-        </form>
-
-        <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div class="overflow-x-auto">
-                <table class="table-hover min-w-full text-left text-sm">
-                    <thead class="bg-slate-50 text-xs text-slate-500">
-                        <tr>
-                            <th class="px-5 py-3 font-semibold">Cover</th>
-                            <th class="px-5 py-3 font-semibold">Title</th>
-                            <th class="px-5 py-3 font-semibold">Room Type</th>
-                            <th class="px-5 py-3 font-semibold">Age</th>
-                            <th class="px-5 py-3 font-semibold">Pages</th>
-                            <th class="px-5 py-3 font-semibold">Activities</th>
-                            <th class="px-5 py-3 font-semibold">Status</th>
-                            <th class="px-5 py-3 font-semibold">Updated</th>
-                            <th class="px-5 py-3 text-right font-semibold">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        {% for book in books %}
-                        <tr class="hover:bg-slate-50">
-                            <td class="px-5 py-4">
-                                {% if book.cover_image %}
-                                    {% if ".pdf" in book.cover_image|lower %}
-                                        <a href="{{ book.cover_image }}" target="_blank" rel="noopener noreferrer" class="flex h-10 w-8 items-center justify-center rounded bg-red-100 hover:bg-red-200">
-                                            <span class="material-symbols-outlined" style="font-size:28px;color:#b91c1c">picture_as_pdf</span>
-                                        </a>
-                                    {% else %}
-                                        <a href="{{ book.cover_image }}" target="_blank" rel="noopener noreferrer" class="block h-10 w-8 overflow-hidden rounded bg-brand/20">
-                                            <img src="{{ book.cover_image }}" alt="{{ book.title }} cover" class="h-full w-full object-cover" loading="lazy" referrerpolicy="no-referrer"
-                                                 onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden');">
-                                            <div class="hidden h-full w-full items-center justify-center text-[9px] font-bold text-brand-dark">BB</div>
-                                        </a>
-                                    {% endif %}
-                                {% else %}
-                                    <div class="h-10 w-8 overflow-hidden rounded bg-brand/20">
-                                        <div class="flex h-full w-full items-center justify-center text-[9px] font-bold text-brand-dark">BB</div>
-                                    </div>
-                                {% endif %}
-                            </td>
-                            <td class="px-5 py-4">
-                                {% if book.cover_image %}
-                                    {% if ".pdf" in book.cover_image|lower %}
-                                        <a href="{{ book.cover_image }}" target="_blank" rel="noopener noreferrer" class="font-semibold text-red-700 hover:text-red-900 hover:underline flex items-center gap-1">
-                                            <span class="material-symbols-outlined" style="font-size:18px;vertical-align:middle">picture_as_pdf</span>
-                                            Open PDF
-                                        </a>
-                                    {% else %}
-                                        <a href="{{ book.cover_image }}" target="_blank" rel="noopener noreferrer" class="font-semibold text-slate-900 hover:text-brand-dark hover:underline">{{ book.title }}</a>
-                                    {% endif %}
-                                {% else %}
-                                    <p class="font-semibold text-slate-900">{{ book.title }}</p>
-                                {% endif %}
-                                <p class="text-xs text-slate-400">{{ book.slug }}</p>
-                            </td>
-                            <td class="px-5 py-4 text-slate-600">{{ book.get_room_type_display }}</td>
-                            <td class="px-5 py-4 text-slate-600">{{ book.get_age_band_display }}</td>
-                            <td class="px-5 py-4 font-medium text-slate-700">{{ book.page_count }}</td>
-                            <td class="px-5 py-4 font-medium text-slate-700">{{ book.activity_total }}</td>
-                            <td class="px-5 py-4">
-                                <span class="rounded-full px-2.5 py-1 text-xs font-semibold {% if book.published %}bg-emerald-100 text-emerald-700{% else %}bg-amber-100 text-amber-700{% endif %}">
-                                    {% if book.published %}Published{% else %}Draft{% endif %}
-                                </span>
-                            </td>
-                            <td class="px-5 py-4 text-xs text-slate-400">{{ book.updated_at|date:"d M Y" }}</td>
-                            <td class="px-5 py-4 text-right">
-                                <div class="flex justify-end gap-3 text-xs font-semibold">
-                                    {% if book.cover_image %}
-                                        {% if ".pdf" in book.cover_image|lower %}
-                                            <a href="{{ book.cover_image }}" target="_blank" rel="noopener noreferrer" class="text-red-700 hover:text-red-900 flex items-center gap-1">
-                                                <span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle">picture_as_pdf</span>
-                                                Open PDF
-                                            </a>
-                                        {% else %}
-                                            <a href="{{ book.cover_image }}" target="_blank" rel="noopener noreferrer" class="text-slate-500 hover:text-slate-900">Open</a>
-                                        {% endif %}
-                                    {% endif %}
-                                    <a href="?selected={{ book.id }}" class="text-brand-dark hover:underline">Edit</a>
-                                    <form method="post" class="inline" onsubmit="return confirm('{% if book.published %}Unpublish{% else %}Publish{% endif %} {{ book.title }}?')">
-                                        {% csrf_token %}
-                                        <input type="hidden" name="action" value="toggle_publish">
-                                        <input type="hidden" name="book_id" value="{{ book.id }}">
-                                        <button type="submit" class="text-slate-500 hover:text-slate-900">{% if book.published %}Unpublish{% else %}Publish{% endif %}</button>
-                                    </form>
-                                </div>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="9" class="px-5 py-10 text-center text-slate-400">No books matched the current filters.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            <div class="border-t border-slate-100 px-5 py-3 text-xs text-slate-400">
-                Showing {{ books|length }} of {{ book_stats.total }} books
-            </div>
-        </section>
-
-        {% if selected_book %}
-        <section class="rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-sm">
-            <h4 class="mb-4 font-semibold text-slate-900">Page Assets
-                <span class="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">{{ selected_pages|length }}</span>
-            </h4>
-            {% if selected_pages %}
-            <div class="mb-4 overflow-hidden rounded-xl border border-slate-200">
-                <table class="table-hover min-w-full text-left text-sm">
-                    <thead class="bg-slate-50 text-xs text-slate-500">
-                        <tr>
-                            <th class="px-4 py-3 font-semibold">Page</th>
-                            <th class="px-4 py-3 font-semibold">Image URL</th>
-                            <th class="px-4 py-3 text-right font-semibold">Remove</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        {% for page in selected_pages %}
-                        <tr>
-                            <td class="px-4 py-3 font-semibold text-slate-900">{{ page.page_number }}</td>
-                            <td class="px-4 py-3 max-w-sm truncate text-slate-600">{{ page.image_url }}</td>
-                            <td class="px-4 py-3 text-right">
-                                <form method="post" class="inline">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="action" value="delete_page">
-                                    <input type="hidden" name="page_id" value="{{ page.id }}">
-                                    <button type="submit" class="text-xs font-semibold text-rose-500 hover:text-rose-700">Remove</button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% endif %}
-            <form method="post" class="flex flex-wrap items-end gap-3">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="add_page">
-                <input type="hidden" name="book_id" value="{{ selected_book.id }}">
-                <div class="space-y-1">
-                    <label class="text-xs font-semibold text-slate-500">Page #</label>
-                    <input type="number" name="page_number" min="1" max="999" placeholder="1"
-                           class="w-20 rounded-xl border border-stone-200 px-3 py-2 text-sm focus:border-brand-dark focus:outline-none" required>
-                </div>
-                <div class="flex-1 min-w-[240px] space-y-1">
-                    <label class="text-xs font-semibold text-slate-500">Image URL</label>
-                    <input type="url" name="image_url" placeholder="https://…"
-                           class="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm focus:border-brand-dark focus:outline-none" required>
-                </div>
-                <button type="submit" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Add Page</button>
-            </form>
-        </section>
-        {% endif %}
+<div class="space-y-6">
+    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500">Total Books</p>
+            <p class="mt-3 text-3xl font-extrabold text-slate-900">{{ book_stats.total }}</p>
+        </article>
+        <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500">Published</p>
+            <p class="mt-3 text-3xl font-extrabold text-emerald-600">{{ book_stats.published }}</p>
+        </article>
+        <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500">Drafts</p>
+            <p class="mt-3 text-3xl font-extrabold text-amber-600">{{ book_stats.drafts }}</p>
+        </article>
+        <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500">Activity Configs</p>
+            <p class="mt-3 text-3xl font-extrabold text-slate-900">{{ book_stats.activities }}</p>
+        </article>
     </div>
 
-    <aside class="rounded-2xl border border-slate-200 bg-white shadow-sm xl:sticky xl:top-24">
-        <div class="border-b border-slate-200 px-5 py-4">
-            <p class="text-xs font-semibold uppercase tracking-[0.3em] text-brand-dark">Library tools</p>
-            <h3 class="mt-2 font-editorial text-2xl font-semibold text-slate-900">{% if selected_book %}Update book{% else %}Upload new book{% endif %}</h3>
-            <p class="mt-1 text-sm text-slate-500">Prepare the file package, cover art, and publishing state in one place.</p>
+    <form method="get" class="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+        <span class="material-symbols-outlined text-slate-400">filter_list</span>
+        <input type="text" name="q" value="{{ query }}" placeholder="Search books…"
+               class="min-w-[200px] flex-1 rounded-xl border border-stone-200 bg-cream px-4 py-2 text-sm focus:border-brand-dark focus:outline-none">
+        <select name="room_type" class="rounded-xl border border-stone-200 bg-cream px-4 py-2 text-sm focus:border-brand-dark focus:outline-none">
+            <option value="">All Room Types</option>
+            {% for value, label in room_type_choices %}
+            <option value="{{ value }}" {% if room_type_filter == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <select name="age_band" class="rounded-xl border border-stone-200 bg-cream px-4 py-2 text-sm focus:border-brand-dark focus:outline-none">
+            <option value="">All Ages</option>
+            {% for value, label in age_band_choices %}
+            <option value="{{ value }}" {% if age_band_filter == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <select name="status" class="rounded-xl border border-stone-200 bg-cream px-4 py-2 text-sm focus:border-brand-dark focus:outline-none">
+            <option value="">All Statuses</option>
+            <option value="published" {% if status_filter == 'published' %}selected{% endif %}>Published</option>
+            <option value="draft" {% if status_filter == 'draft' %}selected{% endif %}>Draft</option>
+        </select>
+        <button type="submit" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Apply</button>
+        <a href="{% url 'admin_book_library' %}" class="text-sm font-semibold text-brand-dark hover:underline">Reset</a>
+    </form>
+
+    <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div class="overflow-x-auto">
+            <table class="table-hover min-w-full text-left text-sm">
+                <thead class="bg-slate-50 text-xs text-slate-500">
+                    <tr>
+                        <th class="px-5 py-3 font-semibold">Title</th>
+                        <th class="px-5 py-3 font-semibold">Room Type</th>
+                        <th class="px-5 py-3 font-semibold">Age</th>
+                        <th class="px-5 py-3 font-semibold">Pages</th>
+                        <th class="px-5 py-3 font-semibold">Activities</th>
+                        <th class="px-5 py-3 font-semibold">Status</th>
+                        <th class="px-5 py-3 font-semibold">Updated</th>
+                        <th class="px-5 py-3 text-right font-semibold">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for book in books %}
+                    <tr>
+                        <td class="px-5 py-4">
+                            <p class="font-semibold text-slate-900">{{ book.title }}</p>
+                            <p class="text-xs text-slate-400">{{ book.slug }}</p>
+                        </td>
+                        <td class="px-5 py-4 text-slate-600">{{ book.get_room_type_display }}</td>
+                        <td class="px-5 py-4 text-slate-600">{{ book.get_age_band_display }}</td>
+                        <td class="px-5 py-4 font-medium text-slate-700">{{ book.page_count }}</td>
+                        <td class="px-5 py-4 font-medium text-slate-700">{{ book.activity_total }}</td>
+                        <td class="px-5 py-4">
+                            <span class="rounded-full px-2.5 py-1 text-xs font-semibold {% if book.published %}bg-emerald-100 text-emerald-700{% else %}bg-amber-100 text-amber-700{% endif %}">
+                                {% if book.published %}Published{% else %}Draft{% endif %}
+                            </span>
+                        </td>
+                        <td class="px-5 py-4 text-xs text-slate-400">{{ book.updated_at|date:"d M Y" }}</td>
+                        <td class="px-5 py-4 text-right">
+                            <div class="flex justify-end gap-3 text-xs font-semibold">
+                                <a href="{% url 'admin_book_detail' book.id %}" class="text-brand-dark hover:underline">View details</a>
+                                <a href="{% url 'admin_book_detail' book.id %}" class="text-slate-500 hover:text-slate-900">Edit</a>
+                                <a href="{% url 'admin_activity_config' %}?book={{ book.id }}&create=1&return_to={% url 'admin_book_detail' book.id %}" class="text-violet-700 hover:underline">Create activity</a>
+                                <form method="post" class="inline" data-confirm-message="{% if book.published %}Unpublish{% else %}Publish{% endif %} {{ book.title }}?">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="toggle_publish">
+                                    <input type="hidden" name="book_id" value="{{ book.id }}">
+                                    <button type="submit" class="text-slate-500 hover:text-slate-900">{% if book.published %}Unpublish{% else %}Publish{% endif %}</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="px-5 py-10 text-center text-slate-400">No books matched the current filters.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
-
-        <form method="post" class="space-y-5 p-5" data-validate-form="book-form" novalidate>
-            {% csrf_token %}
-            <input type="hidden" name="action" value="save">
-            <input type="hidden" name="book_id" value="{{ selected_book.id|default:'' }}">
-
-            <div data-form-errors class="hidden rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"></div>
-            {% if book_errors %}
-            <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{{ book_errors }}</div>
-            {% endif %}
-
-            <div class="space-y-1.5">
-                <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Book title</label>
-                <input type="text" name="title" value="{{ selected_book.title|default:'' }}" placeholder="e.g. The Curious Caterpillar" required data-required-message="Book title is required."
-                       class="w-full rounded-xl border border-stone-200 bg-cream px-4 py-2.5 text-sm focus:border-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-dark/10">
-            </div>
-
-            <div class="space-y-1.5">
-                <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Slug</label>
-                <input type="text" name="slug" value="{{ selected_book.slug|default:'' }}" placeholder="the-curious-caterpillar" required data-slug-field="true" data-required-message="Book slug is required."
-                       title="Use lowercase letters, numbers, and hyphens only."
-                       class="w-full rounded-xl border border-stone-200 bg-cream px-4 py-2.5 text-sm focus:border-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-dark/10">
-            </div>
-
-            <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-                <div class="space-y-1.5">
-                    <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Room Type</label>
-                    <select name="room_type" class="w-full rounded-xl border border-stone-200 bg-cream px-4 py-2.5 text-sm focus:border-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-dark/10">
-                        {% for value, label in room_type_choices %}
-                        <option value="{{ value }}" {% if selected_book.room_type == value %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="space-y-1.5">
-                    <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Age Range</label>
-                    <select name="age_band" class="w-full rounded-xl border border-stone-200 bg-cream px-4 py-2.5 text-sm focus:border-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-dark/10">
-                        {% for value, label in age_band_choices %}
-                        <option value="{{ value }}" {% if selected_book.age_band == value %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-
-            <div class="space-y-1.5">
-                <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Description</label>
-                <textarea name="description" rows="3" placeholder="Add a short summary for parents and readers." required data-required-message="Book description is required."
-                          class="w-full rounded-xl border border-stone-200 bg-cream px-4 py-2.5 text-sm focus:border-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-dark/10">{{ selected_book.description|default:'' }}</textarea>
-            </div>
-
-            <div class="space-y-1.5">
-                <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Cover image URL</label>
-                <input type="url" name="cover_image" value="{{ selected_book.cover_image|default:'' }}" placeholder="https://example.com/cover.jpg" data-url-field="true" data-url-message="Enter a valid cover image URL."
-                       class="w-full rounded-xl border border-stone-200 bg-cream px-4 py-2.5 text-sm focus:border-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-dark/10">
-            </div>
-
-            <div class="space-y-1.5">
-                <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Page count</label>
-                <input type="number" name="page_count" min="1" max="999" value="{{ selected_book.page_count|default:'12' }}"
-                       class="w-full rounded-xl border border-stone-200 bg-cream px-4 py-2.5 text-sm focus:border-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-dark/10">
-            </div>
-
-            <div class="space-y-2">
-                <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Book Asset (PDF/ePub)</label>
-                <label id="book-asset-zone" for="id_book_asset" class="flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-stone-300 bg-cream px-4 py-5 text-center transition hover:border-brand-dark hover:bg-[#fff8f6]">
-                    <span class="material-symbols-outlined text-brand-dark">upload_file</span>
-                    <span class="mt-2 text-sm font-semibold text-slate-800">Click to upload or drag &amp; drop</span>
-                    <span id="book-asset-name" class="mt-1 text-xs text-slate-500">PDF or ePub asset</span>
-                </label>
-                <input id="id_book_asset" type="file" name="book_asset" accept=".pdf,.epub,application/pdf,application/epub+zip" {% if not selected_book %}required{% endif %} data-file-field="true" data-upload-zone-id="book-asset-zone" data-file-name-target="book-asset-name" data-required-message="Upload a PDF or ePub book asset." data-file-message="Choose a PDF or ePub file."
-                       class="sr-only">
-                <p class="text-xs text-slate-500">Upload a PDF or ePub book asset.</p>
-            </div>
-
-            <div class="space-y-2">
-                <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Upload cover art</label>
-                <label id="cover-art-zone" for="id_cover_art" class="flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-stone-300 bg-cream px-4 py-5 text-center transition hover:border-brand-dark hover:bg-[#fff8f6]">
-                    <span class="material-symbols-outlined text-brand-dark">image</span>
-                    <span class="mt-2 text-sm font-semibold text-slate-800">Add a square JPG, PNG, or WebP cover</span>
-                    <span id="cover-art-name" class="mt-1 text-xs text-slate-500">Cover art file</span>
-                </label>
-                <input id="id_cover_art" type="file" name="cover_art" accept="image/*,.png,.jpg,.jpeg,.webp" {% if not selected_book %}required{% endif %} data-file-field="true" data-upload-zone-id="cover-art-zone" data-file-name-target="cover-art-name" data-required-message="Upload a cover image." data-file-message="Choose a JPG, PNG, or WebP image."
-                       class="sr-only">
-                <p class="text-xs text-slate-500">Upload a cover image.</p>
-            </div>
-
-            <div class="space-y-2">
-                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Initial Status</p>
-                <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-                    <label class="flex items-center gap-3 rounded-xl border border-stone-200 px-3 py-2 text-sm text-slate-700">
-                        <input type="radio" name="publish_state" value="draft" {% if not selected_book or not selected_book.published %}checked{% endif %} required data-required-message="Choose an initial status.">
-                        <span>Draft</span>
-                    </label>
-                    <label class="flex items-center gap-3 rounded-xl border border-stone-200 px-3 py-2 text-sm text-slate-700">
-                        <input type="radio" name="publish_state" value="published" {% if selected_book and selected_book.published %}checked{% endif %} required data-required-message="Choose an initial status.">
-                        <span>Published</span>
-                    </label>
-                </div>
-                <p class="text-xs text-slate-500">Choose an initial status.</p>
-            </div>
-
-            <div class="flex flex-wrap items-center gap-3 pt-1">
-                <button type="submit" class="rounded-xl bg-brand-dark px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90">
-                    {% if selected_book %}Save Changes{% else %}Upload Book{% endif %}
-                </button>
-                <a href="{% url 'admin_book_library' %}" class="text-sm font-medium text-slate-500 hover:text-slate-900">Clear</a>
-            </div>
-        </form>
-
-        <div class="border-t border-slate-200 px-5 py-4">
-            <form method="post" data-confirm-message="Delete this book from the library?">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="delete">
-                <input type="hidden" name="book_id" value="{{ selected_book.id|default:'' }}">
-                <button type="submit" class="w-full rounded-xl border border-rose-200 px-4 py-2.5 text-sm font-semibold text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50" {% if not selected_book %}disabled{% endif %}>Delete Book</button>
-            </form>
+        <div class="border-t border-slate-100 px-5 py-3 text-xs text-slate-400">
+            Showing {{ books|length }} of {{ book_stats.total }} books
         </div>
-    </aside>
+    </section>
 </div>
 {% endblock %}
