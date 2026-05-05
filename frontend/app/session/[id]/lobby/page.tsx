@@ -33,6 +33,15 @@ function parseMsg(data: Uint8Array): LobbyMsg | null {
   }
 }
 
+function isValidLiveKitUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'ws:' || parsed.protocol === 'wss:';
+  } catch {
+    return false;
+  }
+}
+
 // ─── Lobby page ────────────────────────────────────────────────────────────────
 
 export default function LobbyPage() {
@@ -159,6 +168,14 @@ export default function LobbyPage() {
         livekitUrl: data.livekit_url,
         participantId: storedParticipantId,
       });
+      const canUseLiveKit = isValidLiveKitUrl(data.livekit_url);
+      if (!canUseLiveKit) {
+        // Local fallback: allow development flow to continue without realtime transport.
+        setPhase('starting');
+        router.push(`/session/${id}/reading-room`);
+        return;
+      }
+
       setPhase('waiting');
       await connectToLobby(data.realtime_token, data.livekit_url, storedParticipantId, 'host');
     } catch (e) {
@@ -185,6 +202,14 @@ export default function LobbyPage() {
         livekitUrl: data.livekit_url,
         participantId: data.participant.id,
       });
+      const canUseLiveKit = isValidLiveKitUrl(data.livekit_url);
+      if (!canUseLiveKit) {
+        // Local fallback: allow development flow to continue without realtime transport.
+        setPhase('starting');
+        router.push(`/session/${data.session_id}/reading-room`);
+        return;
+      }
+
       setPhase('waiting');
       await connectToLobby(data.realtime_token, data.livekit_url, data.participant.id, 'guest');
     } catch (e) {

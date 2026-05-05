@@ -1,4 +1,5 @@
 import json
+import secrets
 from urllib.parse import parse_qs, unquote, urlparse
 
 from django.conf import settings as django_settings
@@ -594,9 +595,103 @@ def admin_book_library(request):
 
 @staff_member_required
 def admin_activity_config(request):
+    def _to_int(value, default=0):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    def _to_float(value):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _build_config_from_post(post_data, activity_type, book_id, title_value):
+        ui_title = (post_data.get("ui_title") or title_value or "Activity").strip()
+        ui_instructions = (post_data.get("ui_instructions") or "Complete the activity.").strip()
+        ui_theme = (post_data.get("ui_theme") or "default").strip() or "default"
+        payload = {}
+
+        if activity_type == ActivityConfig.ActivityType.DRAWING:
+            palette = [item.strip() for item in (post_data.get("drawing_palette") or "").split(",") if item.strip()]
+            brush_sizes = [
+                _to_float(item.strip())
+                for item in (post_data.get("drawing_brush_sizes") or "").split(",")
+                if item.strip()
+            ]
+            payload = {
+                "palette": palette or ["#1f2937", "#e11d48"],
+                "brush_sizes": [size for size in brush_sizes if isinstance(size, (int, float)) and size > 0] or [4, 8],
+                "allow_eraser": post_data.get("drawing_allow_eraser") == "on",
+            }
+        elif activity_type == ActivityConfig.ActivityType.QUIZ:
+            options = [item.strip() for item in post_data.getlist("quiz_options[]") if item.strip()]
+            payload = {
+                "question": (post_data.get("quiz_question") or "").strip(),
+                "options": options,
+                "correct_index": _to_int(post_data.get("quiz_correct_index"), 0),
+                "reveal_mode": (post_data.get("quiz_reveal_mode") or "host_controlled").strip(),
+            }
+        elif activity_type == ActivityConfig.ActivityType.DRAG_DROP:
+            payload = {
+                "items": [item.strip() for item in post_data.getlist("drag_items[]") if item.strip()],
+                "drop_zones": [item.strip() for item in post_data.getlist("drag_zones[]") if item.strip()],
+            }
+        elif activity_type == ActivityConfig.ActivityType.HOTSPOT:
+            hotspot_ids = post_data.getlist("hotspot_id[]")
+            hotspot_x = post_data.getlist("hotspot_x[]")
+            hotspot_y = post_data.getlist("hotspot_y[]")
+            hotspot_w = post_data.getlist("hotspot_w[]")
+            hotspot_h = post_data.getlist("hotspot_h[]")
+            hotspot_content = post_data.getlist("hotspot_content[]")
+            max_len = max(
+                len(hotspot_ids),
+                len(hotspot_x),
+                len(hotspot_y),
+                len(hotspot_w),
+                len(hotspot_h),
+                len(hotspot_content),
+                default=0,
+            )
+            hotspots = []
+            for idx in range(max_len):
+                row = {
+                    "id": (hotspot_ids[idx] if idx < len(hotspot_ids) else "").strip(),
+                    "x": _to_float(hotspot_x[idx] if idx < len(hotspot_x) else 0),
+                    "y": _to_float(hotspot_y[idx] if idx < len(hotspot_y) else 0),
+                    "w": _to_float(hotspot_w[idx] if idx < len(hotspot_w) else 0),
+                    "h": _to_float(hotspot_h[idx] if idx < len(hotspot_h) else 0),
+                    "content": (hotspot_content[idx] if idx < len(hotspot_content) else "").strip(),
+                }
+                if row["id"] or row["content"]:
+                    row["x"] = row["x"] if row["x"] is not None else 0
+                    row["y"] = row["y"] if row["y"] is not None else 0
+                    row["w"] = row["w"] if row["w"] is not None else 0
+                    row["h"] = row["h"] if row["h"] is not None else 0
+                    hotspots.append(row)
+            payload = {
+                "image_url": (post_data.get("hotspot_image_url") or "").strip(),
+                "hotspots": hotspots,
+            }
+
+        return {
+            "schema_version": ActivityConfig.SCHEMA_VERSION,
+            "activity_type": activity_type,
+            "book_id": str(book_id),
+            "ui": {
+                "title": ui_title,
+                "instructions": ui_instructions,
+                "theme": ui_theme,
+            },
+            "payload": payload,
+            "validation": {},
+        }
+
     selected_activity = None
     activity_errors = None
     selected_activity_json = "{}"
+    selected_activity_config = {}
 
     if request.method == "POST":
         action = request.POST.get("action")
@@ -605,27 +700,32 @@ def admin_activity_config(request):
             activity_id = request.POST.get("activity_id")
             selected_activity = ActivityConfig.objects.filter(pk=activity_id).first() if activity_id else None
             raw_json = request.POST.get("config_json", "{}").strip() or "{}"
+            activity_type = request.POST.get("activity_type", ActivityConfig.ActivityType.DRAWING)
+            book_id = request.POST.get("book")
+            title_value = request.POST.get("title", "").strip()
             try:
                 parsed_config = json.loads(raw_json)
             except json.JSONDecodeError:
-                activity_errors = {"config": ["Configuration JSON is invalid."]}
-                selected_activity_json = raw_json
-            else:
-                payload = {
-                    "book": request.POST.get("book"),
-                    "title": request.POST.get("title", "").strip(),
-                    "activity_type": request.POST.get("activity_type", ActivityConfig.ActivityType.DRAWING),
-                    "config": parsed_config,
-                    "sort_order": request.POST.get("sort_order") or 0,
-                    "is_active": request.POST.get("is_active") == "on",
-                }
-                serializer = ActivityConfigSerializer(selected_activity, data=payload, partial=bool(selected_activity))
-                if serializer.is_valid():
-                    saved_activity = serializer.save()
-                    messages.success(request, f"Activity config '{saved_activity.title}' saved successfully.")
-                    return redirect(f"{reverse('admin_activity_config')}?selected={saved_activity.id}")
-                activity_errors = serializer.errors
-                selected_activity_json = raw_json
+                parsed_config = None
+
+            if not isinstance(parsed_config, dict) or not parsed_config or parsed_config.get("schema_version") != ActivityConfig.SCHEMA_VERSION:
+                parsed_config = _build_config_from_post(request.POST, activity_type, book_id, title_value)
+
+            payload = {
+                "book": book_id,
+                "title": title_value,
+                "activity_type": activity_type,
+                "config": parsed_config,
+                "sort_order": request.POST.get("sort_order") or 0,
+                "is_active": request.POST.get("is_active") == "on",
+            }
+            serializer = ActivityConfigSerializer(selected_activity, data=payload, partial=bool(selected_activity))
+            if serializer.is_valid():
+                saved_activity = serializer.save()
+                messages.success(request, f"Activity config '{saved_activity.title}' saved successfully.")
+                return redirect(f"{reverse('admin_activity_config')}?selected={saved_activity.id}")
+            activity_errors = serializer.errors
+            selected_activity_json = json.dumps(parsed_config or {}, indent=2)
         elif action == "delete":
             activity = get_object_or_404(ActivityConfig, pk=request.POST.get("activity_id"))
             title = activity.title
@@ -639,6 +739,9 @@ def admin_activity_config(request):
             selected_activity = ActivityConfig.objects.filter(pk=selected_id).select_related("book").first()
             if selected_activity:
                 selected_activity_json = json.dumps(selected_activity.config, indent=2)
+                selected_activity_config = selected_activity.config or {}
+    elif selected_activity and not selected_activity_config:
+        selected_activity_config = selected_activity.config or {}
 
     activities = ActivityConfig.objects.select_related("book").order_by("book__title", "sort_order", "title")
     query = request.GET.get("q", "").strip()
@@ -653,6 +756,7 @@ def admin_activity_config(request):
         "activities": activities[:100],
         "selected_activity": selected_activity,
         "selected_activity_json": selected_activity_json,
+        "selected_activity_config": selected_activity_config,
         "activity_errors": activity_errors,
         "query": query,
         "type_filter": type_filter,
@@ -1032,7 +1136,58 @@ def admin_session_detail(request, session_id):
 
 @staff_member_required
 def admin_settings(request):
-    """Read-only operational settings snapshot using Django settings and staff users."""
+    """Operational settings snapshot + admin invite flow."""
+    if request.method == "POST" and request.POST.get("action") == "invite_admin":
+        invite_name = (request.POST.get("invite_name") or "").strip()
+        invite_email = (request.POST.get("invite_email") or "").strip().lower()
+
+        if not invite_name or not invite_email:
+            messages.error(request, "Name and email are required to invite an admin.")
+            return redirect(reverse("admin_settings"))
+
+        if "@" not in invite_email:
+            messages.error(request, "Enter a valid email address for the admin invite.")
+            return redirect(reverse("admin_settings"))
+
+        first_name, _, last_name = invite_name.partition(" ")
+        username_base = invite_email.split("@")[0].strip() or "admin"
+        username_candidate = username_base
+        suffix = 1
+        while User.objects.filter(username__iexact=username_candidate).exclude(email__iexact=invite_email).exists():
+            suffix += 1
+            username_candidate = f"{username_base}{suffix}"
+
+        user = User.objects.filter(email__iexact=invite_email).first()
+        generated_password = secrets.token_urlsafe(10)
+        if user:
+            user.is_staff = True
+            if first_name:
+                user.first_name = first_name
+            if last_name:
+                user.last_name = last_name
+            if not user.username:
+                user.username = username_candidate
+            user.set_password(generated_password)
+            user.save(update_fields=["is_staff", "first_name", "last_name", "username", "password"])
+            messages.success(
+                request,
+                f"Admin access granted to {invite_email}. Temporary password: {generated_password}",
+            )
+        else:
+            user = User.objects.create_user(
+                username=username_candidate,
+                email=invite_email,
+                first_name=first_name,
+                last_name=last_name,
+                password=generated_password,
+                is_staff=True,
+            )
+            messages.success(
+                request,
+                f"Admin account created for {invite_email}. Temporary password: {generated_password}",
+            )
+        return redirect(reverse("admin_settings"))
+
     admin_accounts = User.objects.filter(is_staff=True).order_by("first_name", "username")
     storage_used = round((Book.objects.count() * 0.12) + (ActivityConfig.objects.count() * 0.04), 1)
     storage_total = 50

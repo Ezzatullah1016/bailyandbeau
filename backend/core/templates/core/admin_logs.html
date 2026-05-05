@@ -135,7 +135,18 @@
             {% if selected_event.payload %}
             <div>
                 <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Payload</p>
-                <div class="rounded-xl bg-slate-950 p-4 font-mono text-xs text-slate-100 overflow-x-auto">{{ selected_event.payload }}</div>
+                {% if selected_event.payload.items %}
+                <div class="space-y-2 rounded-xl border border-stone-200 bg-stone-50 p-3">
+                    {% for key, value in selected_event.payload.items %}
+                    <div class="grid grid-cols-[0.42fr_0.58fr] gap-3 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm">
+                        <span class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{{ key }}</span>
+                        <span class="font-medium text-slate-900 break-all">{{ value }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="rounded-xl border border-stone-200 bg-stone-50 p-3 text-sm text-slate-700">{{ selected_event.payload }}</div>
+                {% endif %}
             </div>
             {% endif %}
         </div>
