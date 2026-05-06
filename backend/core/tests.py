@@ -331,12 +331,83 @@ class AdminPortalPageTests(TestCase):
         self.assertGreaterEqual(response.json()["meta"]["count"], 1)
         self.assertIn("plan_code", response.json()["data"][0])
 
+    def test_admin_can_create_update_and_delete_user_from_detail_page(self):
+        self.client.force_login(self.admin_user)
+        create_response = self.client.post(
+            reverse("admin_user_create"),
+            data={
+                "action": "save",
+                "first_name": "New",
+                "last_name": "Parent",
+                "username": "newparentweb",
+                "email": "newparentweb@example.com",
+                "password": "StrongPass123!",
+                "is_active": "on",
+            },
+            follow=False,
+        )
+        self.assertEqual(create_response.status_code, 302)
+        created_user = User.objects.get(username="newparentweb")
+
+        update_response = self.client.post(
+            reverse("admin_user_detail", args=[created_user.id]),
+            data={
+                "action": "save",
+                "first_name": "Updated",
+                "last_name": "Parent",
+                "username": "newparentweb",
+                "email": "updatedparent@example.com",
+                "is_active": "on",
+            },
+            follow=True,
+        )
+        self.assertEqual(update_response.status_code, 200)
+        created_user.refresh_from_db()
+        self.assertEqual(created_user.first_name, "Updated")
+        self.assertEqual(created_user.email, "updatedparent@example.com")
+
+        delete_response = self.client.post(
+            reverse("admin_user_detail", args=[created_user.id]),
+            data={"action": "delete"},
+            follow=False,
+        )
+        self.assertEqual(delete_response.status_code, 302)
+        self.assertFalse(User.objects.filter(id=created_user.id).exists())
+
+    def test_admin_settings_can_toggle_and_revoke_staff_account(self):
+        self.client.force_login(self.admin_user)
+        staff_user = User.objects.create_user(
+            username="staffops",
+            email="staffops@example.com",
+            password="strong-password-123",
+            is_staff=True,
+            is_active=True,
+        )
+        toggle_response = self.client.post(
+            reverse("admin_settings"),
+            data={"action": "toggle_admin_active", "admin_id": staff_user.id},
+            follow=False,
+        )
+        self.assertEqual(toggle_response.status_code, 302)
+        staff_user.refresh_from_db()
+        self.assertFalse(staff_user.is_active)
+
+        revoke_response = self.client.post(
+            reverse("admin_settings"),
+            data={"action": "revoke_admin", "admin_id": staff_user.id},
+            follow=False,
+        )
+        self.assertEqual(revoke_response.status_code, 302)
+        staff_user.refresh_from_db()
+        self.assertFalse(staff_user.is_staff)
+
     def test_admin_crud_forms_include_client_validation_hooks(self):
         self.client.force_login(self.admin_user)
 
         book_response = self.client.get(reverse("admin_book_library"))
         detail_response = self.client.get(reverse("admin_book_detail", args=[self.book.id]))
         activity_response = self.client.get(reverse("admin_activity_config"))
+        user_detail_response = self.client.get(reverse("admin_user_detail", args=[self.parent_user.id]))
 
         self.assertContains(book_response, 'View details')
         self.assertContains(book_response, 'Create activity')
@@ -347,6 +418,7 @@ class AdminPortalPageTests(TestCase):
         self.assertContains(detail_response, 'data-confirm-message="Delete this book from the library?"')
         self.assertContains(activity_response, 'data-validate-form="activity-form"')
         self.assertContains(activity_response, 'novalidate')
+        self.assertContains(user_detail_response, "User activity snapshot")
 
 
 class AuthApiTests(TestCase):

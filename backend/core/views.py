@@ -936,8 +936,124 @@ def admin_users(request):
             "avg_sessions": round(sum(row["session_count"] for row in user_rows) / len(user_rows), 1) if user_rows else 0,
         },
         "plan_choices": [plan for plan in Entitlement.objects.exclude(plan_code="").values_list("plan_code", flat=True).distinct()],
+        "create_user_url": reverse("admin_user_create"),
     }
     return render(request, "core/admin_users.html", context)
+
+
+def _user_payload_from_request(request):
+    return {
+        "first_name": (request.POST.get("first_name") or "").strip(),
+        "last_name": (request.POST.get("last_name") or "").strip(),
+        "username": (request.POST.get("username") or "").strip(),
+        "email": (request.POST.get("email") or "").strip().lower(),
+        "is_active": request.POST.get("is_active") == "on",
+    }
+
+
+def _validate_user_payload(payload, existing_user=None):
+    errors = {}
+    if not payload["username"]:
+        errors["username"] = "Username is required."
+    if not payload["email"] or "@" not in payload["email"]:
+        errors["email"] = "A valid email is required."
+
+    username_qs = User.objects.filter(username__iexact=payload["username"])
+    email_qs = User.objects.filter(email__iexact=payload["email"])
+    if existing_user:
+        username_qs = username_qs.exclude(pk=existing_user.pk)
+        email_qs = email_qs.exclude(pk=existing_user.pk)
+
+    if username_qs.exists():
+        errors["username"] = "This username is already in use."
+    if email_qs.exists():
+        errors["email"] = "This email is already in use."
+    return errors
+
+
+def _user_detail_context(user):
+    entitlement = getattr(user, "entitlement", None)
+    return {
+        "selected_user": user,
+        "selected_entitlement": entitlement,
+        "selected_children": user.child_profiles.filter(is_active=True).order_by("display_name"),
+        "selected_recent_sessions": user.created_sessions.select_related("book", "child_profile").order_by("-created_at")[:8],
+        "selected_badges": UserBadge.objects.filter(child_profile__user=user).select_related("badge").order_by("-created_at")[:8],
+    }
+
+
+@staff_member_required
+def admin_user_create(request):
+    user_errors = {}
+    selected_user = None
+    if request.method == "POST" and request.POST.get("action") == "save":
+        payload = _user_payload_from_request(request)
+        user_errors = _validate_user_payload(payload)
+        password = (request.POST.get("password") or "").strip()
+        if not password:
+            user_errors["password"] = "Password is required when creating a user."
+        if not user_errors:
+            selected_user = User.objects.create_user(
+                username=payload["username"],
+                email=payload["email"],
+                first_name=payload["first_name"],
+                last_name=payload["last_name"],
+                password=password,
+                is_active=payload["is_active"],
+            )
+            Entitlement.objects.get_or_create(user=selected_user)
+            messages.success(request, f"User '{selected_user.username}' created successfully.")
+            return redirect(reverse("admin_user_detail", args=[selected_user.id]))
+
+    context = {
+        "active_nav": "users",
+        "user_errors": user_errors,
+        "create_mode": True,
+        "selected_user": selected_user,
+        "selected_entitlement": None,
+        "selected_children": [],
+        "selected_recent_sessions": [],
+        "selected_badges": [],
+    }
+    return render(request, "core/admin_user_detail.html", context)
+
+
+@staff_member_required
+def admin_user_detail(request, user_id):
+    selected_user = get_object_or_404(User, pk=user_id, is_staff=False)
+    user_errors = {}
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "save":
+            payload = _user_payload_from_request(request)
+            user_errors = _validate_user_payload(payload, existing_user=selected_user)
+            if not user_errors:
+                selected_user.first_name = payload["first_name"]
+                selected_user.last_name = payload["last_name"]
+                selected_user.username = payload["username"]
+                selected_user.email = payload["email"]
+                selected_user.is_active = payload["is_active"]
+                selected_user.save(update_fields=["first_name", "last_name", "username", "email", "is_active"])
+                messages.success(request, f"User '{selected_user.username}' saved successfully.")
+                return redirect(reverse("admin_user_detail", args=[selected_user.id]))
+        elif action == "toggle_active":
+            selected_user.is_active = not selected_user.is_active
+            selected_user.save(update_fields=["is_active"])
+            messages.success(request, f"User '{selected_user.username}' status updated.")
+            return redirect(reverse("admin_user_detail", args=[selected_user.id]))
+        elif action == "delete":
+            username = selected_user.username
+            selected_user.delete()
+            messages.success(request, f"User '{username}' deleted.")
+            return redirect(reverse("admin_users"))
+
+    context = {
+        "active_nav": "users",
+        "user_errors": user_errors,
+        "create_mode": False,
+        **_user_detail_context(selected_user),
+    }
+    return render(request, "core/admin_user_detail.html", context)
 
 
 @staff_member_required
@@ -1245,56 +1361,78 @@ def admin_session_detail(request, session_id):
 @staff_member_required
 def admin_settings(request):
     """Operational settings snapshot + admin invite flow."""
-    if request.method == "POST" and request.POST.get("action") == "invite_admin":
-        invite_name = (request.POST.get("invite_name") or "").strip()
-        invite_email = (request.POST.get("invite_email") or "").strip().lower()
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "invite_admin":
+            invite_name = (request.POST.get("invite_name") or "").strip()
+            invite_email = (request.POST.get("invite_email") or "").strip().lower()
 
-        if not invite_name or not invite_email:
-            messages.error(request, "Name and email are required to invite an admin.")
+            if not invite_name or not invite_email:
+                messages.error(request, "Name and email are required to invite an admin.")
+                return redirect(reverse("admin_settings"))
+
+            if "@" not in invite_email:
+                messages.error(request, "Enter a valid email address for the admin invite.")
+                return redirect(reverse("admin_settings"))
+
+            first_name, _, last_name = invite_name.partition(" ")
+            username_base = invite_email.split("@")[0].strip() or "admin"
+            username_candidate = username_base
+            suffix = 1
+            while User.objects.filter(username__iexact=username_candidate).exclude(email__iexact=invite_email).exists():
+                suffix += 1
+                username_candidate = f"{username_base}{suffix}"
+
+            user = User.objects.filter(email__iexact=invite_email).first()
+            generated_password = secrets.token_urlsafe(10)
+            if user:
+                user.is_staff = True
+                if first_name:
+                    user.first_name = first_name
+                if last_name:
+                    user.last_name = last_name
+                if not user.username:
+                    user.username = username_candidate
+                user.set_password(generated_password)
+                user.save(update_fields=["is_staff", "first_name", "last_name", "username", "password"])
+                messages.success(
+                    request,
+                    f"Admin access granted to {invite_email}. Temporary password: {generated_password}",
+                )
+            else:
+                user = User.objects.create_user(
+                    username=username_candidate,
+                    email=invite_email,
+                    first_name=first_name,
+                    last_name=last_name,
+                    password=generated_password,
+                    is_staff=True,
+                )
+                messages.success(
+                    request,
+                    f"Admin account created for {invite_email}. Temporary password: {generated_password}",
+                )
             return redirect(reverse("admin_settings"))
-
-        if "@" not in invite_email:
-            messages.error(request, "Enter a valid email address for the admin invite.")
+        if action == "toggle_admin_active":
+            admin_id = request.POST.get("admin_id")
+            account = get_object_or_404(User, pk=admin_id, is_staff=True)
+            if account.pk == request.user.pk:
+                messages.error(request, "You cannot deactivate your own admin account.")
+                return redirect(reverse("admin_settings"))
+            account.is_active = not account.is_active
+            account.save(update_fields=["is_active"])
+            messages.success(request, f"Updated active status for {account.email or account.username}.")
             return redirect(reverse("admin_settings"))
-
-        first_name, _, last_name = invite_name.partition(" ")
-        username_base = invite_email.split("@")[0].strip() or "admin"
-        username_candidate = username_base
-        suffix = 1
-        while User.objects.filter(username__iexact=username_candidate).exclude(email__iexact=invite_email).exists():
-            suffix += 1
-            username_candidate = f"{username_base}{suffix}"
-
-        user = User.objects.filter(email__iexact=invite_email).first()
-        generated_password = secrets.token_urlsafe(10)
-        if user:
-            user.is_staff = True
-            if first_name:
-                user.first_name = first_name
-            if last_name:
-                user.last_name = last_name
-            if not user.username:
-                user.username = username_candidate
-            user.set_password(generated_password)
-            user.save(update_fields=["is_staff", "first_name", "last_name", "username", "password"])
-            messages.success(
-                request,
-                f"Admin access granted to {invite_email}. Temporary password: {generated_password}",
-            )
-        else:
-            user = User.objects.create_user(
-                username=username_candidate,
-                email=invite_email,
-                first_name=first_name,
-                last_name=last_name,
-                password=generated_password,
-                is_staff=True,
-            )
-            messages.success(
-                request,
-                f"Admin account created for {invite_email}. Temporary password: {generated_password}",
-            )
-        return redirect(reverse("admin_settings"))
+        if action == "revoke_admin":
+            admin_id = request.POST.get("admin_id")
+            account = get_object_or_404(User, pk=admin_id, is_staff=True)
+            if account.pk == request.user.pk:
+                messages.error(request, "You cannot revoke your own admin access.")
+                return redirect(reverse("admin_settings"))
+            account.is_staff = False
+            account.save(update_fields=["is_staff"])
+            messages.success(request, f"Revoked admin access for {account.email or account.username}.")
+            return redirect(reverse("admin_settings"))
 
     admin_accounts = User.objects.filter(is_staff=True).order_by("first_name", "username")
     storage_used = round((Book.objects.count() * 0.12) + (ActivityConfig.objects.count() * 0.04), 1)

@@ -1,0 +1,101 @@
+{% extends 'core/admin_base.html' %}
+
+{% block title %}Bailey & Beau | User Detail{% endblock %}
+{% block page_title %}{% if selected_user %}User detail{% else %}Create user{% endif %}{% endblock %}
+{% block page_subtitle %}Manage profile, account state, and related reading activity from one place.{% endblock %}
+{% block page_actions %}
+<a href="{% url 'admin_users' %}" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Back to users</a>
+{% endblock %}
+
+{% block content %}
+<div class="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+    <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h3 class="text-lg font-semibold text-slate-900">{% if create_mode %}Create user{% else %}Profile{% endif %}</h3>
+        <form method="post" class="mt-4 space-y-4">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="save">
+            <div class="grid gap-4 md:grid-cols-2">
+                <div>
+                    <label class="mb-1 block text-xs font-bold uppercase tracking-[0.2em] text-slate-500">First name</label>
+                    <input type="text" name="first_name" value="{{ selected_user.first_name|default:'' }}" class="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="mb-1 block text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Last name</label>
+                    <input type="text" name="last_name" value="{{ selected_user.last_name|default:'' }}" class="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="mb-1 block text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Username</label>
+                    <input type="text" name="username" value="{{ selected_user.username|default:'' }}" required class="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm">
+                    {% if user_errors.username %}<p class="mt-1 text-xs text-rose-600">{{ user_errors.username }}</p>{% endif %}
+                </div>
+                <div>
+                    <label class="mb-1 block text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Email</label>
+                    <input type="email" name="email" value="{{ selected_user.email|default:'' }}" required class="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm">
+                    {% if user_errors.email %}<p class="mt-1 text-xs text-rose-600">{{ user_errors.email }}</p>{% endif %}
+                </div>
+                {% if create_mode %}
+                <div class="md:col-span-2">
+                    <label class="mb-1 block text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Password</label>
+                    <input type="password" name="password" required class="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm">
+                    {% if user_errors.password %}<p class="mt-1 text-xs text-rose-600">{{ user_errors.password }}</p>{% endif %}
+                </div>
+                {% endif %}
+            </div>
+            <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+                <input type="checkbox" name="is_active" {% if create_mode or selected_user.is_active %}checked{% endif %} class="h-4 w-4 rounded border-slate-300">
+                Account active
+            </label>
+            <button type="submit" class="rounded-xl bg-brand-dark px-4 py-2 text-sm font-semibold text-white hover:opacity-90">{% if create_mode %}Create user{% else %}Save changes{% endif %}</button>
+        </form>
+
+        {% if selected_user and not create_mode %}
+        <div class="mt-6 flex flex-wrap gap-2 border-t border-slate-200 pt-4">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="toggle_active">
+                <button type="submit" class="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                    {% if selected_user.is_active %}Deactivate{% else %}Activate{% endif %} user
+                </button>
+            </form>
+            <form method="post" onsubmit="return confirm('Delete this user and all linked records? This cannot be undone.');">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="delete">
+                <button type="submit" class="rounded-xl border border-rose-300 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50">Delete user</button>
+            </form>
+        </div>
+        {% endif %}
+    </section>
+
+    <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        {% if selected_user and not create_mode %}
+        <h3 class="text-lg font-semibold text-slate-900">User activity snapshot</h3>
+        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+            <div class="rounded-xl bg-slate-50 p-3"><p class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Plan</p><p class="mt-1 text-sm font-semibold text-slate-900">{% if selected_entitlement %}{{ selected_entitlement.plan_code|default:'Unassigned' }}{% else %}Free{% endif %}</p></div>
+            <div class="rounded-xl bg-slate-50 p-3"><p class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Sessions Left</p><p class="mt-1 text-sm font-semibold text-slate-900">{% if selected_entitlement %}{{ selected_entitlement.sessions_remaining|add:selected_entitlement.pack_sessions_remaining }}{% else %}0{% endif %}</p></div>
+        </div>
+        <div class="mt-5">
+            <h4 class="text-sm font-semibold text-slate-900">Child profiles</h4>
+            <div class="mt-2 space-y-2">
+                {% for child in selected_children %}
+                <div class="rounded-xl bg-slate-50 px-3 py-2"><p class="font-medium text-slate-900">{{ child.display_name }}</p><p class="text-xs text-slate-500">{{ child.get_age_band_display }}</p></div>
+                {% empty %}
+                <p class="text-sm text-slate-500">No child profiles yet.</p>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="mt-5">
+            <h4 class="text-sm font-semibold text-slate-900">Recent sessions</h4>
+            <div class="mt-2 space-y-2">
+                {% for session in selected_recent_sessions %}
+                <div class="rounded-xl bg-slate-50 px-3 py-2"><p class="font-medium text-slate-900">{{ session.book.title }}</p><p class="text-xs text-slate-500">{{ session.child_profile.display_name }} · {{ session.get_status_display }}</p></div>
+                {% empty %}
+                <p class="text-sm text-slate-500">No sessions recorded yet.</p>
+                {% endfor %}
+            </div>
+        </div>
+        {% else %}
+        <p class="text-sm text-slate-500">User activity will appear after account creation.</p>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

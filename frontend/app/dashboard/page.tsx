@@ -149,8 +149,10 @@ function StartSessionModal({
             <select
               value={bookId}
               onChange={(e) => setBookId(e.target.value)}
+              disabled={books.length === 0}
               className="font-karla w-full px-4 py-3 rounded-xl border border-[#eccdca] bg-white text-[#1d1b16] text-sm focus:outline-none focus:ring-2 focus:ring-[#3b85a6]"
             >
+              {books.length === 0 && <option value="">No books available</option>}
               {books.map((b) => (
                 <option key={b.id} value={b.id}>{b.title}</option>
               ))}
@@ -162,19 +164,29 @@ function StartSessionModal({
             <select
               value={childId}
               onChange={(e) => setChildId(e.target.value)}
+              disabled={childProfiles.length === 0}
               className="font-karla w-full px-4 py-3 rounded-xl border border-[#eccdca] bg-white text-[#1d1b16] text-sm focus:outline-none focus:ring-2 focus:ring-[#3b85a6]"
             >
+              {childProfiles.length === 0 && <option value="">No child profiles found</option>}
               {childProfiles.map((c) => (
                 <option key={c.id} value={c.id}>{c.display_name} (age {c.age_band})</option>
               ))}
             </select>
+            {childProfiles.length === 0 && (
+              <p className="mt-2 text-xs text-[#764f84]">
+                Add a child profile first to start a reading session.{' '}
+                <Link href="/onboarding/child" className="font-semibold underline">
+                  Create child profile
+                </Link>
+              </p>
+            )}
           </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           <button
             onClick={handleStart}
-            disabled={loading}
+            disabled={loading || books.length === 0 || childProfiles.length === 0}
             className="font-baloo w-full py-4 bg-[#f0c75e] hover:bg-[#e6b84d] text-[#3d3b62] rounded-xl font-bold text-sm transition-all active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
           >
             <Play className="w-5 h-5" />
@@ -220,11 +232,11 @@ function DashboardInner() {
   }, [router]);
 
   useEffect(() => {
-    if (!startBook || books.length === 0) return;
+    if (!startBook || books.length === 0 || children.length === 0) return;
     if (books.some((b) => b.id === startBook)) {
       setShowModal(true);
     }
-  }, [startBook, books]);
+  }, [startBook, books, children]);
 
   function handleSessionStarted(sessionId: string) {
     setShowModal(false);
@@ -387,9 +399,15 @@ function DashboardInner() {
                 <button
                   onClick={() => setShowModal(true)}
                   className="font-baloo mt-2 px-6 py-2 bg-[#3d3b62] text-white rounded-lg text-sm font-bold hover:bg-[#764f84] transition-all"
+                  disabled={books.length === 0 || children.length === 0}
                 >
                   Start your first session
                 </button>
+                {children.length === 0 && (
+                  <Link href="/onboarding/child" className="text-xs font-semibold text-[#764f84] underline">
+                    Add child profile to continue
+                  </Link>
+                )}
               </div>
             ) : (
               <div className="overflow-x-auto">
