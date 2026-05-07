@@ -125,7 +125,7 @@ urlpatterns = [
     path("billing/checkout-session/", CheckoutSessionView.as_view(), name="billing-checkout-session"),
     path("webhooks/stripe/", StripeWebhookView.as_view(), name="stripe-webhook"),
 
-    # Public books & badges
+    # Authenticated library, books, and customer badge catalog (earned awards: /me/badges/)
     path("books/", BookListView.as_view(), name="book-list"),
     path("badges/", BadgeListView.as_view(), name="badge-list"),
     path("books/<uuid:pk>/", BookDetailView.as_view(), name="book-detail"),

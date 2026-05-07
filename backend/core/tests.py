@@ -203,6 +203,83 @@ class AdminPortalPageTests(TestCase):
         self.assertContains(session_response, "View Logged Issues")
         self.assertContains(session_response, "portaladmin")
 
+    def test_admin_user_detail_rejects_invalid_profile_picture(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from core.models import UserProfile
+
+        self.client.force_login(self.admin_user)
+        bad = SimpleUploadedFile("bad.exe", b"not-an-image", content_type="application/octet-stream")
+        response = self.client.post(
+            reverse("admin_user_detail", args=[self.parent_user.id]),
+            {
+                "action": "save",
+                "first_name": self.parent_user.first_name,
+                "last_name": self.parent_user.last_name,
+                "username": self.parent_user.username,
+                "email": self.parent_user.email,
+                "is_active": "on",
+                "avatar_file": bad,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Profile picture must be an image")
+        profile = UserProfile.objects.filter(user=self.parent_user).first()
+        self.assertIsNotNone(profile)
+        self.assertEqual(profile.avatar_url, "")
+
+    def test_admin_settings_save_platform_persists_portal_settings(self):
+        self.client.force_login(self.admin_user)
+        url = reverse("admin_settings")
+        response = self.client.post(
+            url,
+            {
+                "action": "save_platform",
+                "platform_name": "Bailey QA Portal",
+                "support_email": "support-qa@example.com",
+                "default_from_email": "noreply-qa@example.com",
+                "public_base_url": "",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        from core.models import PortalSettings
+
+        portal = PortalSettings.get_solo()
+        self.assertEqual(portal.platform_name, "Bailey QA Portal")
+        self.assertEqual(portal.support_email, "support-qa@example.com")
+
+    def test_admin_badges_manual_grant_creates_user_badge(self):
+        self.client.force_login(self.admin_user)
+        badge = Badge.objects.create(
+            code="manual-test-badge",
+            name="Manual Test Badge",
+            description="For portal grant tests.",
+            trigger_type="session_completed",
+            trigger_config={"milestone": 1},
+            is_active=True,
+        )
+        url = reverse("admin_badges")
+        response = self.client.post(
+            url,
+            {
+                "action": "grant_award",
+                "badge_id": str(badge.id),
+                "child_profile_id": str(self.child.id),
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(UserBadge.objects.filter(child_profile=self.child, badge=badge).exists())
+
+        self.client.post(
+            url,
+            {
+                "action": "grant_award",
+                "badge_id": str(badge.id),
+                "child_profile_id": str(self.child.id),
+            },
+        )
+        self.assertEqual(UserBadge.objects.filter(child_profile=self.child, badge=badge).count(), 1)
+
     def test_admin_sign_out_posts_to_logout(self):
         self.client.force_login(self.admin_user)
 
@@ -239,7 +316,7 @@ class AdminPortalPageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(Book.objects.filter(slug="ocean-adventure").exists())
 
-    def test_admin_book_detail_shows_related_activity_rows(self):
+    def test_activity_for_book_appears_on_activity_config_page(self):
         self.client.force_login(self.admin_user)
         ActivityConfig.objects.create(
             book=self.book,
@@ -256,10 +333,10 @@ class AdminPortalPageTests(TestCase):
                 "validation": {},
             },
         )
-        response = self.client.get(reverse("admin_book_detail", args=[self.book.id]))
+        response = self.client.get(reverse("admin_activity_config"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Related activities")
         self.assertContains(response, "Detail Activity")
+        self.assertContains(response, self.book.title)
 
     def test_activity_save_redirects_back_to_book_detail_with_return_to(self):
         self.client.force_login(self.admin_user)
@@ -412,8 +489,8 @@ class AdminPortalPageTests(TestCase):
         self.assertContains(book_response, 'View details')
         self.assertContains(book_response, 'Create activity')
         self.assertContains(detail_response, 'data-validate-form="book-form"')
-        self.assertContains(detail_response, 'Related activities')
-        self.assertContains(detail_response, 'Page assets')
+        self.assertContains(detail_response, 'Book profile')
+        self.assertContains(detail_response, 'cover_image_file')
         self.assertContains(detail_response, 'data-required-message="Book title is required."')
         self.assertContains(detail_response, 'data-confirm-message="Delete this book from the library?"')
         self.assertContains(activity_response, 'data-validate-form="activity-form"')
@@ -461,6 +538,8 @@ class AuthApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["data"]["email"], "jwtparent@example.com")
+        self.assertIn("avatar_url", response.json()["data"])
+        self.assertEqual(response.json()["data"]["avatar_url"], "")
 
     def test_login_accepts_email_in_username_field(self):
         User.objects.create_user(
@@ -1581,6 +1660,7 @@ class ProgressApiTests(TestCase):
         self.assertEqual(payload["active_sessions_count"], 1)
         self.assertEqual(payload["badges_count"], 1)
         self.assertEqual(len(payload["recent_sessions"]), 2)
+        self.assertEqual(response["Cache-Control"], "private, no-store")
 
     def test_child_progress_endpoint_returns_history_and_badges(self):
         completed_session = ReadingSession.objects.create(
@@ -1614,6 +1694,7 @@ class ProgressApiTests(TestCase):
         self.assertEqual(payload["completed_sessions_count"], 1)
         self.assertEqual(payload["badges"][0]["code"], "first-progress")
         self.assertEqual(payload["recent_sessions"][0]["book_title"], "Progress Story")
+        self.assertEqual(response["Cache-Control"], "private, no-store")
 
     def test_child_progress_requires_child_ownership(self):
         response = self.client.get(f"/api/v1/children/{self.other_child.id}/progress/")
@@ -1847,6 +1928,49 @@ class BadgeApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["meta"]["count"], 1)
         self.assertEqual(response.json()["data"][0]["code"], "star-reader")
+        row = response.json()["data"][0]
+        self.assertNotIn("trigger_config", row)
+        self.assertNotIn("trigger_type", row)
+        self.assertNotIn("is_active", row)
+        self.assertIn("description", row)
+
+    def test_me_badges_only_includes_own_children_awards(self):
+        user_a = User.objects.create_user(username="parenta", email="a@example.com", password="strong-password-123")
+        user_b = User.objects.create_user(username="parentb", email="b@example.com", password="strong-password-123")
+        child_b = ChildProfile.objects.create(user=user_b, display_name="KidB", age_band=ChildProfile.AgeBand.AGE_3_5)
+        book = Book.objects.create(
+            title="Shared Book",
+            slug="shared-book-badges",
+            room_type=Book.RoomType.READING,
+            age_band=Book.AgeBand.AGE_3_5,
+            published=True,
+        )
+        sess = ReadingSession.objects.create(
+            book=book,
+            child_profile=child_b,
+            created_by=user_b,
+            status=ReadingSession.Status.COMPLETED,
+            room_type=ReadingSession.RoomType.READING,
+        )
+        badge = Badge.objects.create(
+            code="other-family",
+            name="Other",
+            trigger_type="session_completed",
+            trigger_config={"milestone": 1},
+            is_active=True,
+        )
+        UserBadge.objects.create(child_profile=child_b, badge=badge, session=sess)
+
+        self.client.force_login(user_a)
+        r = self.client.get("/api/v1/me/badges/")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["meta"]["count"], 0)
+        self.assertEqual(r["Cache-Control"], "private, no-store")
+
+        self.client.force_login(user_b)
+        r2 = self.client.get("/api/v1/me/badges/")
+        self.assertEqual(r2.json()["meta"]["count"], 1)
+        self.assertEqual(r2["Cache-Control"], "private, no-store")
 
     def test_admin_can_create_update_and_delete_badge(self):
         self.client.force_login(self.admin_user)

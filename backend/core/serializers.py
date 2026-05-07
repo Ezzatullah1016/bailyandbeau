@@ -23,6 +23,7 @@ from .models import (
     SessionInvite,
     SessionParticipant,
     UserBadge,
+    UserProfile,
 )
 
 
@@ -102,9 +103,15 @@ class BookSerializer(serializers.ModelSerializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
+    avatar_url = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ("id", "username", "email", "first_name", "last_name")
+        fields = ("id", "username", "email", "first_name", "last_name", "avatar_url")
+
+    def get_avatar_url(self, obj):
+        profile = UserProfile.objects.filter(user_id=obj.pk).first()
+        return (profile.avatar_url or "").strip() if profile else ""
 
 
 class BadgeSerializer(serializers.ModelSerializer):
@@ -123,6 +130,15 @@ class BadgeSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = ("id", "created_at", "updated_at")
+
+
+class BadgeCatalogSerializer(serializers.ModelSerializer):
+    """Customer-facing badge definitions only (no trigger rules, draft flags, or admin metadata)."""
+
+    class Meta:
+        model = Badge
+        fields = ("id", "code", "name", "description", "icon")
+        read_only_fields = fields
 
 
 class FavoriteBookSerializer(serializers.ModelSerializer):
@@ -468,12 +484,17 @@ class SessionCreateSerializer(serializers.Serializer):
         return attrs
 
     def create(self, validated_data):
+        from core.portal_settings import effective_session_timer_seconds
+
         user = self.context["request"].user
+        timer_seconds = effective_session_timer_seconds()
         session = ReadingSession.objects.create(
             book=validated_data["book"],
             child_profile=validated_data["child_profile"],
             created_by=user,
             room_type=validated_data["room_type"],
+            timer_total_seconds=timer_seconds,
+            timer_remaining_seconds=timer_seconds,
         )
         SessionParticipant.objects.create(
             session=session,

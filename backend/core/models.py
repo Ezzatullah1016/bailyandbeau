@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.files.storage import default_storage
 from django.db import models
 from django.utils import timezone
 
@@ -45,6 +46,19 @@ class ChildProfile(TimeStampedModel):
         return self.display_name
 
 
+class UserProfile(TimeStampedModel):
+    """Optional profile fields for auth users (parent accounts)."""
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="profile")
+    avatar_url = models.URLField(max_length=2048, blank=True)
+
+    class Meta:
+        verbose_name = "User profile"
+
+    def __str__(self):
+        return f"{self.user}"
+
+
 class Book(TimeStampedModel):
     class RoomType(models.TextChoices):
         READING = "reading", "Reading"
@@ -78,6 +92,20 @@ class Book(TimeStampedModel):
 
     def __str__(self):
         return self.title
+
+    @property
+    def pdf_view_url(self):
+        """URL to open the stored PDF (local MEDIA_URL or remote storage). Empty if not a PDF asset."""
+        if self.asset_type != self.AssetType.PDF:
+            return ""
+        key = (self.s3_key or "").strip()
+        if not key:
+            return ""
+        try:
+            return default_storage.url(key)
+        except Exception:
+            media = (settings.MEDIA_URL or "/media/").rstrip("/")
+            return f"{media}/{key.lstrip('/')}"
 
 
 class BookPage(TimeStampedModel):
@@ -443,6 +471,46 @@ class ReadingReminder(TimeStampedModel):
 
     def __str__(self):
         return f"{self.title} for {self.child_profile}"
+
+
+class PortalSettings(models.Model):
+    """Singleton (pk=1) settings editable from the super-admin portal; overrides env when filled."""
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1)
+
+    platform_name = models.CharField(max_length=120, default="Bailey & Beau")
+    support_email = models.EmailField(blank=True)
+    default_from_email = models.CharField(max_length=254, blank=True)
+    public_base_url = models.URLField(blank=True)
+
+    default_session_duration_minutes = models.PositiveSmallIntegerField(default=20)
+    session_warning_one_minutes = models.PositiveSmallIntegerField(default=5)
+    session_warning_two_minutes = models.PositiveSmallIntegerField(default=2)
+    invite_link_type_label = models.CharField(max_length=80, default="Single use", blank=True)
+
+    stripe_secret_key = models.TextField(blank=True)
+    stripe_webhook_secret = models.TextField(blank=True)
+
+    livekit_api_key = models.CharField(max_length=255, blank=True)
+    livekit_api_secret = models.TextField(blank=True)
+    livekit_url = models.URLField(blank=True)
+
+    storage_plan_total_gb = models.PositiveIntegerField(default=50)
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Portal settings"
+        verbose_name_plural = "Portal settings"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
 
 
 class Badge(TimeStampedModel):

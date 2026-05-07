@@ -30,6 +30,7 @@ try:
 except ImportError:  # poppler/pdf2image not available on all environments
     pdf2image = None
 
+from . import portal_settings as portal_conf
 from .models import ActivityConfig, Badge, Book, BookPage, ChildProfile, Entitlement, FavoriteBook, NotificationPreference, ReadingReminder, ReadingSession, SessionEvent, SessionInvite, SessionParticipant, SessionSnapshot, UserBadge
 from .serializers import (
     ActivityConfigSerializer,
@@ -38,6 +39,7 @@ from .serializers import (
     AdminEntitlementSerializer,
     AdminSessionDetailSerializer,
     AdminSessionEventSerializer,
+    BadgeCatalogSerializer,
     BadgeSerializer,
     BookPageSerializer,
     BookSerializer,
@@ -59,6 +61,13 @@ from .serializers import (
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+
+def _private_no_store_response(payload, status_code=status.HTTP_200_OK):
+    """Mark responses as non-cacheable by shared caches (earned badges, dashboard PII)."""
+    response = Response(payload, status=status_code)
+    response["Cache-Control"] = "private, no-store"
+    return response
 
 
 BILLING_PLANS = [
@@ -189,7 +198,7 @@ def sync_entitlement_from_stripe_event(event_payload):
 
 
 def _livekit_server_url():
-    url = (getattr(django_settings, "LIVEKIT_URL", "") or "").strip()
+    url = (portal_conf.effective_livekit_url() or "").strip()
     if url.startswith("wss://"):
         return "https://" + url[len("wss://"):]
     if url.startswith("ws://"):
@@ -200,9 +209,9 @@ def _livekit_server_url():
 def _livekit_is_configured():
     return bool(
         livekit_api
-        and getattr(django_settings, "LIVEKIT_API_KEY", "")
-        and getattr(django_settings, "LIVEKIT_API_SECRET", "")
-        and getattr(django_settings, "LIVEKIT_URL", "")
+        and portal_conf.effective_livekit_api_key()
+        and portal_conf.effective_livekit_api_secret()
+        and portal_conf.effective_livekit_url().strip()
     )
 
 
@@ -212,8 +221,8 @@ async def _ensure_livekit_room_async(room_name):
 
     client = livekit_api.LiveKitAPI(
         _livekit_server_url(),
-        getattr(django_settings, "LIVEKIT_API_KEY", ""),
-        getattr(django_settings, "LIVEKIT_API_SECRET", ""),
+        portal_conf.effective_livekit_api_key(),
+        portal_conf.effective_livekit_api_secret(),
     )
     try:
         await client.room.create_room(
@@ -248,8 +257,8 @@ async def _delete_livekit_room_async(room_name):
 
     client = livekit_api.LiveKitAPI(
         _livekit_server_url(),
-        getattr(django_settings, "LIVEKIT_API_KEY", ""),
-        getattr(django_settings, "LIVEKIT_API_SECRET", ""),
+        portal_conf.effective_livekit_api_key(),
+        portal_conf.effective_livekit_api_secret(),
     )
     try:
         await client.room.delete_room(livekit_api.DeleteRoomRequest(room=room_name))
@@ -302,8 +311,8 @@ def build_realtime_token(session, participant):
             )
             token = (
                 livekit_api.AccessToken(
-                    getattr(django_settings, "LIVEKIT_API_KEY", ""),
-                    getattr(django_settings, "LIVEKIT_API_SECRET", ""),
+                    portal_conf.effective_livekit_api_key(),
+                    portal_conf.effective_livekit_api_secret(),
                 )
                 .with_identity(str(participant.id))
                 .with_name(participant.display_name or str(participant.id))
@@ -425,6 +434,19 @@ class MeView(APIView):
     def get(self, request):
         return Response({"data": UserSerializer(request.user).data, "meta": {}, "error": None})
 
+    def patch(self, request):
+        user = request.user
+        update_fields: list[str] = []
+        if "first_name" in request.data:
+            user.first_name = request.data["first_name"]
+            update_fields.append("first_name")
+        if "last_name" in request.data:
+            user.last_name = request.data["last_name"]
+            update_fields.append("last_name")
+        if update_fields:
+            user.save(update_fields=update_fields)
+        return Response({"data": UserSerializer(user).data, "meta": {}, "error": None})
+
 
 class BillingPlansView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -503,7 +525,7 @@ class DashboardView(APIView):
         badges = UserBadge.objects.filter(child_profile__user=request.user)
         recent_sessions = sessions.order_by("-created_at")[:5]
 
-        return Response(
+        return _private_no_store_response(
             {
                 "data": {
                     "children_count": children.count(),
@@ -571,6 +593,11 @@ class AdminBookDetailView(APIView):
 
 
 class ChildProgressView(APIView):
+    """
+    Child session history and earned badges for one profile.
+    Only the parent who owns the child profile may access this endpoint.
+    """
+
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, pk):
@@ -585,7 +612,7 @@ class ChildProgressView(APIView):
         completed_sessions = sessions.filter(status=ReadingSession.Status.COMPLETED)
         badges = UserBadge.objects.filter(child_profile=child).select_related("badge", "session").order_by("-created_at")
 
-        return Response(
+        return _private_no_store_response(
             {
                 "data": {
                     "child": ChildProfileSerializer(child).data,
@@ -698,11 +725,11 @@ class StripeWebhookView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        webhook_secret = django_settings.STRIPE_WEBHOOK_SECRET
+        webhook_secret = portal_conf.effective_stripe_webhook_secret()
         sig_header = request.META.get('HTTP_STRIPE_SIGNATURE', '')
 
         if webhook_secret:
-            stripe.api_key = django_settings.STRIPE_SECRET_KEY
+            stripe.api_key = portal_conf.effective_stripe_secret_key()
             try:
                 event = stripe.Webhook.construct_event(
                     request.body, sig_header, webhook_secret
@@ -766,7 +793,7 @@ class CheckoutSessionView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        stripe_key = django_settings.STRIPE_SECRET_KEY
+        stripe_key = portal_conf.effective_stripe_secret_key()
         frontend_url = getattr(django_settings, 'FRONTEND_URL', 'http://localhost:3000')
 
         if not stripe_key:
@@ -850,12 +877,19 @@ class BookListView(APIView):
 
 
 class BadgeListView(APIView):
+    """
+    Authenticated catalog of active badge types (achievement art copy only).
+    Does not list who earned what — use GET /me/badges/ for private awards.
+    """
+
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         badges = Badge.objects.filter(is_active=True).order_by("name")
-        serializer = BadgeSerializer(badges, many=True)
-        return Response({"data": serializer.data, "meta": {"count": badges.count()}, "error": None})
+        serializer = BadgeCatalogSerializer(badges, many=True)
+        response = Response({"data": serializer.data, "meta": {"count": badges.count()}, "error": None})
+        response["Cache-Control"] = "private"
+        return response
 
 
 class FavoriteBookListCreateView(APIView):
@@ -2121,7 +2155,10 @@ class MediaUploadView(APIView):
 # ─── Me: Badges ───────────────────────────────────────────────────────────────
 
 class MeBadgesView(APIView):
-    """Return all badges earned by the current user's child profiles."""
+    """
+    Private to the authenticated parent account: awards for their child profiles only.
+    Not exposed on public URLs; responses are not cacheable by shared proxies.
+    """
 
     permission_classes = [permissions.IsAuthenticated]
 
@@ -2145,7 +2182,7 @@ class MeBadgesView(APIView):
             }
             for ub in awards
         ]
-        return Response({"data": data, "meta": {"count": len(data)}, "error": None})
+        return _private_no_store_response({"data": data, "meta": {"count": len(data)}, "error": None})
 
 
 # ─── Transfer Host ────────────────────────────────────────────────────────────

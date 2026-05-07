@@ -4,11 +4,14 @@ from urllib.parse import parse_qs, unquote, urlencode, urlparse
 
 from django.conf import settings as django_settings
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth import get_user_model, login as auth_login
+from django.core.files.storage import default_storage
 from django.db.models import Count, Max, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.dateparse import parse_date
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.text import slugify
@@ -20,6 +23,8 @@ from .models import (
     BookPage,
     ChildProfile,
     Entitlement,
+    UserProfile,
+    PortalSettings,
     ReadingReminder,
     ReadingSession,
     SessionEvent,
@@ -27,6 +32,7 @@ from .models import (
     SessionParticipant,
     UserBadge,
 )
+from . import portal_settings as portal_conf
 from .serializers import ActivityConfigSerializer, BookSerializer, LoginSerializer, RegisterSerializer
 
 User = get_user_model()
@@ -42,11 +48,25 @@ def _normalize_cover_image_url(raw_url):
         return f"https:{url}"
 
     parsed = urlparse(url)
-    if parsed.scheme and parsed.netloc and "google." in parsed.netloc and parsed.path.startswith("/imgres"):
+    if parsed.scheme and parsed.netloc and "google." in parsed.netloc:
         params = parse_qs(parsed.query)
-        image_candidate = (params.get("imgurl") or [""])[0].strip()
-        if image_candidate:
-            return unquote(image_candidate)
+        for key in ("imgurl", "mediaurl", "url", "q"):
+            candidate = (params.get(key) or [""])[0].strip()
+            if not candidate:
+                continue
+            decoded = unquote(candidate)
+            decoded_parsed = urlparse(decoded)
+            if decoded_parsed.scheme in {"http", "https"} and decoded_parsed.netloc:
+                return decoded
+
+    # Generic fallback: some search engines wrap target links in `url=...`.
+    params = parse_qs(parsed.query)
+    wrapped_url = (params.get("url") or [""])[0].strip()
+    if wrapped_url:
+        decoded = unquote(wrapped_url)
+        decoded_parsed = urlparse(decoded)
+        if decoded_parsed.scheme in {"http", "https"} and decoded_parsed.netloc:
+            return decoded
 
     return url
 
@@ -458,7 +478,10 @@ def super_admin_dashboard(request):
 def admin_session_monitor(request):
     sessions = ReadingSession.objects.select_related("book", "child_profile", "created_by").prefetch_related("participants").order_by("-created_at")
     q = request.GET.get("q", "").strip()
+    book_query = request.GET.get("book_q", "").strip()
     status_filter = request.GET.get("status", "").strip()
+    date_filter = request.GET.get("date", "").strip()
+    parsed_date = parse_date(date_filter) if date_filter else None
 
     if q:
         sessions = sessions.filter(
@@ -467,14 +490,20 @@ def admin_session_monitor(request):
             | Q(created_by__username__icontains=q)
             | Q(participants__display_name__icontains=q)
         ).distinct()
+    if book_query:
+        sessions = sessions.filter(Q(book__title__icontains=book_query) | Q(book__slug__icontains=book_query))
     if status_filter:
         sessions = sessions.filter(status=status_filter)
+    if parsed_date:
+        sessions = sessions.filter(created_at__date=parsed_date)
 
     context = {
         "active_nav": "sessions",
         "session_rows": _build_session_rows(sessions[:50]),
         "query": q,
+        "book_query": book_query,
         "status_filter": status_filter,
+        "date_filter": date_filter,
         "session_stats": {
             "active_now": ReadingSession.objects.filter(status=ReadingSession.Status.ACTIVE).count(),
             "completed_today": ReadingSession.objects.filter(status=ReadingSession.Status.COMPLETED, created_at__date=timezone.localdate()).count(),
@@ -532,13 +561,12 @@ def admin_book_library(request):
 
 def _book_payload_from_request(request):
     publish_state = request.POST.get("publish_state", "").strip()
-    return {
+    payload = {
         "title": request.POST.get("title", "").strip(),
         "slug": (request.POST.get("slug", "").strip() or slugify(request.POST.get("title", ""))),
         "description": request.POST.get("description", "").strip(),
         "room_type": request.POST.get("room_type", Book.RoomType.READING),
         "age_band": request.POST.get("age_band", Book.AgeBand.AGE_3_5),
-        "cover_image": _normalize_cover_image_url(request.POST.get("cover_image", "")),
         "published": (
             publish_state == "published"
             if publish_state in {"draft", "published"}
@@ -546,6 +574,94 @@ def _book_payload_from_request(request):
         ),
         "page_count": request.POST.get("page_count") or 1,
     }
+    posted_cover = _normalize_cover_image_url(request.POST.get("cover_image", ""))
+    if posted_cover:
+        payload["cover_image"] = posted_cover
+    return payload
+
+
+def _validate_user_avatar_file(uploaded_file):
+    """Return error message string or None if file is acceptable."""
+    if not uploaded_file:
+        return None
+    max_size_bytes = 2 * 1024 * 1024
+    content_type = (getattr(uploaded_file, "content_type", "") or "").lower()
+    if not content_type.startswith("image/"):
+        return "Profile picture must be an image file (JPG, PNG, WEBP, or GIF)."
+    if uploaded_file.size > max_size_bytes:
+        return "Profile picture exceeds 2MB limit."
+
+    ext = (uploaded_file.name.rsplit(".", 1)[-1] if "." in uploaded_file.name else "jpg").lower()
+    if ext not in {"jpg", "jpeg", "png", "webp", "gif"}:
+        return "Profile picture must use a .jpg, .png, .webp, or .gif extension."
+
+    return None
+
+
+def _validate_and_store_user_avatar_upload(request, uploaded_file):
+    """Store parent account avatar; returns (absolute_url, error_message)."""
+    if not uploaded_file:
+        return "", None
+    preflight = _validate_user_avatar_file(uploaded_file)
+    if preflight:
+        return "", preflight
+
+    ext = (uploaded_file.name.rsplit(".", 1)[-1] if "." in uploaded_file.name else "jpg").lower()
+    if ext not in {"jpg", "jpeg", "png", "webp", "gif"}:
+        ext = "jpg"
+    try:
+        uploaded_file.seek(0)
+    except (AttributeError, OSError):
+        pass
+    unique_name = f"user-avatars/{timezone.now().strftime('%Y/%m')}/{secrets.token_hex(12)}.{ext}"
+    stored_path = default_storage.save(unique_name, uploaded_file)
+    try:
+        public_url = default_storage.url(stored_path)
+    except Exception:
+        public_url = f"/media/{stored_path.lstrip('/')}"
+    if public_url.startswith("/"):
+        public_url = request.build_absolute_uri(public_url)
+    return public_url, None
+
+
+def _validate_and_store_cover_upload(request, uploaded_file):
+    if not uploaded_file:
+        return "", None
+    max_size_bytes = 5 * 1024 * 1024
+    content_type = (getattr(uploaded_file, "content_type", "") or "").lower()
+    if not content_type.startswith("image/"):
+        return "", "Cover upload must be an image file (jpg, png, webp, gif)."
+    if uploaded_file.size > max_size_bytes:
+        return "", "Cover upload exceeds 5MB limit."
+
+    ext = (uploaded_file.name.rsplit(".", 1)[-1] if "." in uploaded_file.name else "jpg").lower()
+    if ext not in {"jpg", "jpeg", "png", "webp", "gif"}:
+        ext = "jpg"
+    unique_name = f"book-covers/{timezone.now().strftime('%Y/%m')}/{secrets.token_hex(12)}.{ext}"
+    stored_path = default_storage.save(unique_name, uploaded_file)
+    try:
+        public_url = default_storage.url(stored_path)
+    except Exception:
+        public_url = f"/media/{stored_path.lstrip('/')}"
+    if public_url.startswith("/"):
+        public_url = request.build_absolute_uri(public_url)
+    return public_url, None
+
+
+def _validate_and_store_pdf_upload(uploaded_file):
+    if not uploaded_file:
+        return "", None
+    max_size_bytes = 30 * 1024 * 1024
+    content_type = (getattr(uploaded_file, "content_type", "") or "").lower()
+    filename = (getattr(uploaded_file, "name", "") or "").lower()
+    if content_type != "application/pdf" and not filename.endswith(".pdf"):
+        return "", "Book PDF must be a valid .pdf file."
+    if uploaded_file.size > max_size_bytes:
+        return "", "Book PDF exceeds 30MB limit."
+
+    unique_name = f"book-pdfs/{timezone.now().strftime('%Y/%m')}/{secrets.token_hex(12)}.pdf"
+    stored_path = default_storage.save(unique_name, uploaded_file)
+    return stored_path, None
 
 
 def _book_relation_context(book):
@@ -592,20 +708,64 @@ def _safe_local_path_or_default(request, value, fallback):
     return fallback
 
 
+def _format_key_value_rows(value):
+    if not isinstance(value, dict):
+        return []
+    rows = []
+    for key, raw in value.items():
+        if isinstance(raw, dict):
+            rendered = ", ".join(f"{child_key}: {child_value}" for child_key, child_value in raw.items()) or "—"
+        elif isinstance(raw, list):
+            rendered = ", ".join(str(item) for item in raw) or "—"
+        elif raw in ("", None):
+            rendered = "—"
+        else:
+            rendered = str(raw)
+        rows.append({"key": str(key), "value": rendered})
+    return rows
+
+
+def _flatten_serializer_errors(error_dict):
+    if not error_dict:
+        return []
+    flattened = []
+    for field, raw_messages in error_dict.items():
+        label = "General" if field == "non_field_errors" else str(field).replace("_", " ").title()
+        messages = raw_messages if isinstance(raw_messages, list) else [raw_messages]
+        for message in messages:
+            flattened.append({"field": label, "message": str(message)})
+    return flattened
+
+
 @staff_member_required
 def admin_book_create(request):
-    book_errors = None
+    book_errors = []
     selected_book = None
     if request.method == "POST":
         action = request.POST.get("action")
         if action == "save":
             payload = _book_payload_from_request(request)
+            uploaded_cover = request.FILES.get("cover_image_file")
+            uploaded_cover_url, upload_error = _validate_and_store_cover_upload(request, uploaded_cover)
+            uploaded_pdf = request.FILES.get("book_pdf_file")
+            uploaded_pdf_key, pdf_error = _validate_and_store_pdf_upload(uploaded_pdf)
+            if upload_error:
+                book_errors = [{"field": "Cover Image", "message": upload_error}]
+            elif pdf_error:
+                book_errors = [{"field": "Book PDF", "message": pdf_error}]
+            elif uploaded_cover_url:
+                payload["cover_image"] = uploaded_cover_url
             serializer = BookSerializer(data=payload)
-            if serializer.is_valid():
+            if not book_errors and serializer.is_valid():
                 created = serializer.save()
+                if uploaded_pdf_key:
+                    created.asset_type = Book.AssetType.PDF
+                    created.s3_key = uploaded_pdf_key
+                    created.save(update_fields=["asset_type", "s3_key", "updated_at"])
                 messages.success(request, f"Book '{created.title}' created successfully.")
                 return redirect(reverse("admin_book_detail", args=[created.id]))
-            book_errors = serializer.errors
+            if not book_errors:
+                book_errors = _flatten_serializer_errors(serializer.errors)
 
     context = {
         "active_nav": "books",
@@ -625,19 +785,34 @@ def admin_book_create(request):
 @staff_member_required
 def admin_book_detail(request, book_id):
     selected_book = get_object_or_404(Book, pk=book_id)
-    book_errors = None
+    book_errors = []
 
     if request.method == "POST":
         action = request.POST.get("action")
 
         if action == "save":
             payload = _book_payload_from_request(request)
+            uploaded_cover = request.FILES.get("cover_image_file")
+            uploaded_cover_url, upload_error = _validate_and_store_cover_upload(request, uploaded_cover)
+            uploaded_pdf = request.FILES.get("book_pdf_file")
+            uploaded_pdf_key, pdf_error = _validate_and_store_pdf_upload(uploaded_pdf)
+            if upload_error:
+                book_errors = [{"field": "Cover Image", "message": upload_error}]
+            elif pdf_error:
+                book_errors = [{"field": "Book PDF", "message": pdf_error}]
+            elif uploaded_cover_url:
+                payload["cover_image"] = uploaded_cover_url
             serializer = BookSerializer(selected_book, data=payload, partial=True)
-            if serializer.is_valid():
+            if not book_errors and serializer.is_valid():
                 selected_book = serializer.save()
+                if uploaded_pdf_key:
+                    selected_book.asset_type = Book.AssetType.PDF
+                    selected_book.s3_key = uploaded_pdf_key
+                    selected_book.save(update_fields=["asset_type", "s3_key", "updated_at"])
                 messages.success(request, f"Book '{selected_book.title}' saved successfully.")
                 return redirect(reverse("admin_book_detail", args=[selected_book.id]))
-            book_errors = serializer.errors
+            if not book_errors:
+                book_errors = _flatten_serializer_errors(serializer.errors)
         elif action == "delete":
             title = selected_book.title
             selected_book.delete()
@@ -788,7 +963,7 @@ def admin_activity_config(request):
         }
 
     selected_activity = None
-    activity_errors = None
+    activity_errors = []
     selected_activity_json = "{}"
     selected_activity_config = {}
     selected_book_id = request.GET.get("book", "").strip()
@@ -829,7 +1004,7 @@ def admin_activity_config(request):
                 if posted_return_to:
                     return redirect(posted_return_to)
                 return redirect(f"{reverse('admin_activity_config')}?selected={saved_activity.id}")
-            activity_errors = serializer.errors
+            activity_errors = _flatten_serializer_errors(serializer.errors)
             selected_activity_json = json.dumps(parsed_config or {}, indent=2)
         elif action == "delete":
             activity = get_object_or_404(ActivityConfig, pk=request.POST.get("activity_id"))
@@ -973,8 +1148,10 @@ def _validate_user_payload(payload, existing_user=None):
 
 def _user_detail_context(user):
     entitlement = getattr(user, "entitlement", None)
+    profile, _ = UserProfile.objects.get_or_create(user=user)
     return {
         "selected_user": user,
+        "user_profile": profile,
         "selected_entitlement": entitlement,
         "selected_children": user.child_profiles.filter(is_active=True).order_by("display_name"),
         "selected_recent_sessions": user.created_sessions.select_related("book", "child_profile").order_by("-created_at")[:8],
@@ -992,6 +1169,11 @@ def admin_user_create(request):
         password = (request.POST.get("password") or "").strip()
         if not password:
             user_errors["password"] = "Password is required when creating a user."
+        avatar_file = request.FILES.get("avatar_file")
+        if avatar_file:
+            avatar_msg = _validate_user_avatar_file(avatar_file)
+            if avatar_msg:
+                user_errors["avatar"] = avatar_msg
         if not user_errors:
             selected_user = User.objects.create_user(
                 username=payload["username"],
@@ -1002,6 +1184,14 @@ def admin_user_create(request):
                 is_active=payload["is_active"],
             )
             Entitlement.objects.get_or_create(user=selected_user)
+            profile, _ = UserProfile.objects.get_or_create(user=selected_user)
+            if avatar_file:
+                avatar_url, store_err = _validate_and_store_user_avatar_upload(request, avatar_file)
+                if store_err:
+                    messages.warning(request, store_err)
+                elif avatar_url:
+                    profile.avatar_url = avatar_url
+                    profile.save(update_fields=["avatar_url", "updated_at"])
             messages.success(request, f"User '{selected_user.username}' created successfully.")
             return redirect(reverse("admin_user_detail", args=[selected_user.id]))
 
@@ -1010,6 +1200,7 @@ def admin_user_create(request):
         "user_errors": user_errors,
         "create_mode": True,
         "selected_user": selected_user,
+        "user_profile": None,
         "selected_entitlement": None,
         "selected_children": [],
         "selected_recent_sessions": [],
@@ -1025,8 +1216,15 @@ def admin_user_detail(request, user_id):
     if request.method == "POST":
         action = request.POST.get("action")
         if action == "save":
+            profile, _ = UserProfile.objects.get_or_create(user=selected_user)
             payload = _user_payload_from_request(request)
             user_errors = _validate_user_payload(payload, existing_user=selected_user)
+            avatar_file = request.FILES.get("avatar_file")
+            clear_avatar = request.POST.get("clear_avatar") == "on"
+            if avatar_file:
+                avatar_msg = _validate_user_avatar_file(avatar_file)
+                if avatar_msg:
+                    user_errors["avatar"] = avatar_msg
             if not user_errors:
                 selected_user.first_name = payload["first_name"]
                 selected_user.last_name = payload["last_name"]
@@ -1034,6 +1232,16 @@ def admin_user_detail(request, user_id):
                 selected_user.email = payload["email"]
                 selected_user.is_active = payload["is_active"]
                 selected_user.save(update_fields=["first_name", "last_name", "username", "email", "is_active"])
+                if avatar_file:
+                    avatar_url, store_err = _validate_and_store_user_avatar_upload(request, avatar_file)
+                    if store_err:
+                        messages.error(request, store_err)
+                    elif avatar_url:
+                        profile.avatar_url = avatar_url
+                        profile.save(update_fields=["avatar_url", "updated_at"])
+                elif clear_avatar:
+                    profile.avatar_url = ""
+                    profile.save(update_fields=["avatar_url", "updated_at"])
                 messages.success(request, f"User '{selected_user.username}' saved successfully.")
                 return redirect(reverse("admin_user_detail", args=[selected_user.id]))
         elif action == "toggle_active":
@@ -1133,6 +1341,27 @@ def admin_subscriptions(request):
     return render(request, "core/admin_subscriptions.html", context)
 
 
+def _get_or_create_manual_grant_session(child_profile):
+    """Stable synthetic completed session used as anchor for staff-granted badges."""
+    room = f"admin-badge-grant-{child_profile.id}"
+    existing = ReadingSession.objects.filter(livekit_room_name=room).first()
+    if existing:
+        return existing
+    book = Book.objects.filter(published=True).order_by("title").first() or Book.objects.order_by("title").first()
+    if not book:
+        raise ValueError("No book exists — add a book before granting badges.")
+    return ReadingSession.objects.create(
+        book=book,
+        child_profile=child_profile,
+        created_by=child_profile.user,
+        status=ReadingSession.Status.COMPLETED,
+        room_type=ReadingSession.RoomType.READING,
+        livekit_room_name=room,
+        started_at=timezone.now(),
+        ended_at=timezone.now(),
+    )
+
+
 @staff_member_required
 def admin_badges(request):
     """Badge catalogue and award activity based on Badge and UserBadge data."""
@@ -1142,6 +1371,37 @@ def admin_badges(request):
         award.delete()
         messages.success(request, "Badge award revoked.")
         return redirect(f"{reverse('admin_badges')}?selected={badge_id}")
+
+    if request.method == "POST" and request.POST.get("action") == "grant_award":
+        badge = get_object_or_404(Badge, pk=request.POST.get("badge_id"))
+        child_profile = ChildProfile.objects.filter(pk=request.POST.get("child_profile_id")).select_related("user").first()
+        if not child_profile:
+            messages.error(request, "Choose a valid child profile.")
+            return redirect(f"{reverse('admin_badges')}?selected={badge.id}")
+        if not badge.is_active:
+            messages.error(request, "Cannot grant an inactive badge — activate it first.")
+            return redirect(f"{reverse('admin_badges')}?selected={badge.id}")
+        try:
+            anchor_session = _get_or_create_manual_grant_session(child_profile)
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return redirect(f"{reverse('admin_badges')}?selected={badge.id}")
+        award, created = UserBadge.objects.get_or_create(
+            child_profile=child_profile,
+            badge=badge,
+            session=anchor_session,
+        )
+        if created:
+            messages.success(
+                request,
+                f"Granted “{badge.name}” to {child_profile.display_name} ({child_profile.user.username}).",
+            )
+        else:
+            messages.warning(
+                request,
+                f"{child_profile.display_name} already has “{badge.name}” (including manual grants).",
+            )
+        return redirect(f"{reverse('admin_badges')}?selected={badge.id}")
 
     badges = Badge.objects.annotate(award_total=Count("awards"), last_awarded=Max("awards__created_at")).order_by("-award_total", "name")
     selected_id = request.GET.get("selected")
@@ -1172,12 +1432,19 @@ def admin_badges(request):
         .order_by("-created_at")[:20]
         if selected_badge else []
     )
+    grant_child_options = (
+        ChildProfile.objects.filter(is_active=True)
+        .select_related("user")
+        .order_by("user__username", "display_name")
+    )
+
     context = {
         "active_nav": "badges",
         "badge_rows": badge_rows,
         "selected_badge": selected_badge,
         "recent_awards": recent_awards,
         "selected_badge_award_rows": selected_badge_award_rows,
+        "grant_child_options": grant_child_options,
         "badge_stats": {
             "total": Badge.objects.count(),
             "awarded": UserBadge.objects.count(),
@@ -1213,15 +1480,17 @@ def admin_live_sessions(request):
         selected_session = live_queryset.first() or recent_queryset.first()
 
     event_timeline = []
+    selected_reconnect_count = 0
     if selected_session:
         timeline_source = selected_session.events.select_related("participant").order_by("created_at")[:10]
+        selected_reconnect_count = selected_session.events.filter(event_type=SessionEvent.EventType.RECONNECTED).count()
         for event in timeline_source:
             event_timeline.append(
                 {
                     "label": event.get_event_type_display(),
                     "meta": (event.participant.display_name if event.participant else "System"),
                     "timestamp": timezone.localtime(event.created_at).strftime("%I:%M:%S %p"),
-                    "detail": event.payload or {},
+                    "detail_rows": _format_key_value_rows(event.payload or {}),
                 }
             )
         if not event_timeline:
@@ -1230,7 +1499,7 @@ def admin_live_sessions(request):
                     "label": "Session created",
                     "meta": selected_session.created_by.get_full_name() or selected_session.created_by.username,
                     "timestamp": timezone.localtime(selected_session.created_at).strftime("%I:%M:%S %p"),
-                    "detail": {"status": selected_session.get_status_display()},
+                    "detail_rows": _format_key_value_rows({"status": selected_session.get_status_display()}),
                 }
             )
 
@@ -1240,6 +1509,7 @@ def admin_live_sessions(request):
         "live_rows": _build_live_session_cards(live_queryset[:3]),
         "selected_session": selected_session,
         "selected_timeline": event_timeline,
+        "selected_reconnect_count": selected_reconnect_count,
         "selected_hosts": [p for p in selected_session.participants.all() if p.session_role == SessionParticipant.SessionRole.HOST] if selected_session else [],
         "selected_guests": [p for p in selected_session.participants.all() if p.session_role != SessionParticipant.SessionRole.HOST] if selected_session else [],
         "recent_session_rows": _build_session_rows(recent_queryset[:10]),
@@ -1328,7 +1598,7 @@ def admin_session_detail(request, session_id):
             "label": event.get_event_type_display(),
             "meta": event.participant.display_name if event.participant else "System",
             "timestamp": timezone.localtime(event.created_at).strftime("%d %b %H:%M:%S"),
-            "payload": event.payload,
+            "payload_rows": _format_key_value_rows(event.payload),
             "tone": {
                 SessionEvent.EventType.CANCELLED: "rose",
                 SessionEvent.EventType.RECONNECTED: "violet",
@@ -1352,17 +1622,125 @@ def admin_session_detail(request, session_id):
         "timeline": timeline,
         "invite": invite,
         "snapshot": snapshot,
+        "snapshot_timer_rows": _format_key_value_rows(getattr(snapshot, "timer_state", {})) if snapshot else [],
         "can_cancel": can_cancel,
         "duration": _session_duration_label(session),
     }
     return render(request, "core/admin_session_detail.html", context)
 
 
+def _settings_redirect(fragment=""):
+    url = reverse("admin_settings")
+    if fragment:
+        url = f"{url}#{fragment}"
+    return redirect(url)
+
+
+def _parse_bounded_int(raw, default, lo, hi):
+    try:
+        v = int(raw)
+    except (TypeError, ValueError):
+        return default
+    return max(lo, min(hi, v))
+
+
 @staff_member_required
 def admin_settings(request):
-    """Operational settings snapshot + admin invite flow."""
+    """Operational settings persisted in PortalSettings + admin invite flow."""
     if request.method == "POST":
         action = request.POST.get("action")
+        if action == "save_platform":
+            portal = PortalSettings.get_solo()
+            portal.platform_name = (request.POST.get("platform_name") or "").strip() or portal.platform_name
+            portal.support_email = (request.POST.get("support_email") or "").strip()
+            portal.default_from_email = (request.POST.get("default_from_email") or "").strip()
+            portal.public_base_url = (request.POST.get("public_base_url") or "").strip()
+            try:
+                portal.full_clean()
+                portal.save()
+            except ValidationError as exc:
+                flat = [str(item) for errs in exc.error_dict.values() for item in errs]
+                messages.error(request, " ".join(flat) or "Could not save platform details.")
+                return _settings_redirect("platform")
+            messages.success(request, "Platform details saved.")
+            return _settings_redirect("platform")
+        if action == "save_session_defaults":
+            portal = PortalSettings.get_solo()
+            portal.default_session_duration_minutes = _parse_bounded_int(
+                request.POST.get("session_duration_minutes"), portal.default_session_duration_minutes, 1, 480
+            )
+            portal.session_warning_one_minutes = _parse_bounded_int(
+                request.POST.get("session_warning_one"), portal.session_warning_one_minutes, 1, 120
+            )
+            portal.session_warning_two_minutes = _parse_bounded_int(
+                request.POST.get("session_warning_two"), portal.session_warning_two_minutes, 1, 120
+            )
+            portal.invite_link_type_label = (request.POST.get("invite_link_type_label") or "").strip() or portal.invite_link_type_label
+            portal.save(
+                update_fields=[
+                    "default_session_duration_minutes",
+                    "session_warning_one_minutes",
+                    "session_warning_two_minutes",
+                    "invite_link_type_label",
+                    "updated_at",
+                ]
+            )
+            messages.success(request, "Session defaults saved. New sessions use the updated timer length.")
+            return _settings_redirect("session-defaults")
+        if action == "save_stripe":
+            portal = PortalSettings.get_solo()
+            if request.POST.get("stripe_secret_clear"):
+                portal.stripe_secret_key = ""
+            else:
+                sk = (request.POST.get("stripe_secret_key") or "").strip()
+                if sk:
+                    portal.stripe_secret_key = sk
+            if request.POST.get("stripe_webhook_clear"):
+                portal.stripe_webhook_secret = ""
+            else:
+                wh = (request.POST.get("stripe_webhook_secret") or "").strip()
+                if wh:
+                    portal.stripe_webhook_secret = wh
+            portal.save(update_fields=["stripe_secret_key", "stripe_webhook_secret", "updated_at"])
+            messages.success(request, "Stripe settings saved.")
+            return _settings_redirect("stripe")
+        if action == "save_livekit":
+            portal = PortalSettings.get_solo()
+            if request.POST.get("livekit_key_clear"):
+                portal.livekit_api_key = ""
+            else:
+                key = (request.POST.get("livekit_api_key") or "").strip()
+                if key:
+                    portal.livekit_api_key = key
+            if request.POST.get("livekit_secret_clear"):
+                portal.livekit_api_secret = ""
+            else:
+                secret = (request.POST.get("livekit_api_secret") or "").strip()
+                if secret:
+                    portal.livekit_api_secret = secret
+            if request.POST.get("livekit_url_clear"):
+                portal.livekit_url = ""
+            else:
+                url_val = (request.POST.get("livekit_url") or "").strip()
+                if url_val:
+                    portal.livekit_url = url_val
+            try:
+                portal.full_clean()
+                portal.save()
+            except ValidationError as exc:
+                flat = [str(item) for errs in exc.error_dict.values() for item in errs]
+                messages.error(request, " ".join(flat) or "Could not save LiveKit settings.")
+                return _settings_redirect("livekit")
+            messages.success(request, "LiveKit settings saved.")
+            return _settings_redirect("livekit")
+        if action == "save_storage_display":
+            portal = PortalSettings.get_solo()
+            portal.storage_plan_total_gb = _parse_bounded_int(
+                request.POST.get("storage_plan_total_gb"), portal.storage_plan_total_gb, 1, 10_000_000
+            )
+            portal.save(update_fields=["storage_plan_total_gb", "updated_at"])
+            messages.success(request, "Storage display ceiling updated.")
+            return _settings_redirect("storage")
         if action == "invite_admin":
             invite_name = (request.POST.get("invite_name") or "").strip()
             invite_email = (request.POST.get("invite_email") or "").strip().lower()
@@ -1435,34 +1813,47 @@ def admin_settings(request):
             return redirect(reverse("admin_settings"))
 
     admin_accounts = User.objects.filter(is_staff=True).order_by("first_name", "username")
+    portal = PortalSettings.get_solo()
     storage_used = round((Book.objects.count() * 0.12) + (ActivityConfig.objects.count() * 0.04), 1)
-    storage_total = 50
+    storage_total = portal_conf.effective_storage_plan_total_gb()
+
+    effective_stripe_secret = portal_conf.effective_stripe_secret_key()
+    effective_stripe_wh = portal_conf.effective_stripe_webhook_secret()
+    effective_lk_key = portal_conf.effective_livekit_api_key()
+    effective_lk_secret = portal_conf.effective_livekit_api_secret()
+    effective_lk_url = portal_conf.effective_livekit_url()
 
     context = {
         "active_nav": "settings",
         "platform_settings": {
-            "platform_name": "Bailey & Beau",
-            "support_email": getattr(django_settings, "SUPPORT_EMAIL", "support@baileyandbeau.local"),
-            "default_from_email": getattr(django_settings, "DEFAULT_FROM_EMAIL", "no-reply@baileyandbeau.local"),
-            "base_url": request.build_absolute_uri("/").rstrip("/"),
+            "platform_name": portal_conf.effective_platform_name(),
+            "support_email": portal_conf.effective_support_email(),
+            "default_from_email": portal_conf.effective_default_from_email(),
+            "public_base_url": portal_conf.effective_public_base_url(request),
             "email_backend": getattr(django_settings, "EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"),
         },
         "session_defaults": {
-            "duration": 20,
-            "warning_one": 5,
-            "warning_two": 2,
-            "link_type": "Single use",
-            "clear_canvas": True,
+            "duration": portal.default_session_duration_minutes,
+            "warning_one": portal.session_warning_one_minutes,
+            "warning_two": portal.session_warning_two_minutes,
+            "link_type": portal.invite_link_type_label or "Single use",
         },
         "stripe_settings": {
-            "secret_key": _mask_secret(getattr(django_settings, "STRIPE_SECRET_KEY", ""), 7),
-            "webhook_secret": _mask_secret(getattr(django_settings, "STRIPE_WEBHOOK_SECRET", ""), 7),
+            "secret_masked": _mask_secret(effective_stripe_secret, 7),
+            "webhook_masked": _mask_secret(effective_stripe_wh, 7),
+            "secret_saved_db": bool(portal.stripe_secret_key.strip()),
+            "webhook_saved_db": bool(portal.stripe_webhook_secret.strip()),
+            "uses_env_secret": bool(not portal.stripe_secret_key.strip() and getattr(django_settings, "STRIPE_SECRET_KEY", "")),
+            "uses_env_webhook": bool(not portal.stripe_webhook_secret.strip() and getattr(django_settings, "STRIPE_WEBHOOK_SECRET", "")),
         },
         "livekit_settings": {
-            "api_key": _mask_secret(getattr(django_settings, "LIVEKIT_API_KEY", ""), 4),
-            "api_secret": _mask_secret(getattr(django_settings, "LIVEKIT_API_SECRET", ""), 4),
-            "url": getattr(django_settings, "LIVEKIT_URL", "Not configured") or "Not configured",
-            "is_connected": bool(getattr(django_settings, "LIVEKIT_API_KEY", "") and getattr(django_settings, "LIVEKIT_API_SECRET", "")),
+            "api_masked": _mask_secret(effective_lk_key, 4),
+            "secret_masked": _mask_secret(effective_lk_secret, 4),
+            "url_display": effective_lk_url or "Not configured",
+            "is_connected": bool(effective_lk_key and effective_lk_secret and effective_lk_url.strip()),
+            "key_saved_db": bool(portal.livekit_api_key.strip()),
+            "secret_saved_db": bool(portal.livekit_api_secret.strip()),
+            "url_saved_db": bool(portal.livekit_url.strip()),
         },
         "storage_usage": {
             "used": storage_used,
@@ -1470,5 +1861,6 @@ def admin_settings(request):
             "percent": min(_percentage(storage_used, storage_total), 100),
         },
         "admin_accounts": admin_accounts,
+        "portal": portal,
     }
     return render(request, "core/admin_settings.html", context)

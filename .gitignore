@@ -7,6 +7,9 @@ backend/db.sqlite3
 backend/.env
 backend/.env.staging
 backend/media/
+backend/book-covers/
+backend/book-pdfs/
+backend/user-avatars/
 
 # ─── Node / Next.js ───────────────────────────────────────────────────────────
 frontend/node_modules/
@@ -26,9 +29,16 @@ Thumbs.db
 *.tmp
 *.bak
 *.md
+!DEPLOY.md
+!NGROK.md
+!README.md
+
+# ─── Deploy (local only — never commit keys) ─────────────────────────────────
+deploy/.env
 
 # ─── Secrets ──────────────────────────────────────────────────────────────────
 *.pem
+backend/keys/
 .claude/*
 .env
 .claude

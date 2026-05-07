@@ -1,7 +1,7 @@
 const defaultBaseUrl = 'http://127.0.0.1:8000/api/v1';
 const devFallbackBaseUrls = ['http://127.0.0.1:8001/api/v1'];
 
-/** Try-order for login/API calls: explicit env, same-origin `/api/v1` when not on localhost, then local defaults. */
+/** Try-order for login/API calls: explicit env, LAN Django on :8000 when UI opened by IP/hostname, same-origin `/api/v1`, then local defaults. */
 function computeApiBaseCandidates(): string[] {
   const explicit = process.env.NEXT_PUBLIC_API_BASE_URL;
   const urls: string[] = [];
@@ -9,6 +9,8 @@ function computeApiBaseCandidates(): string[] {
   if (typeof window !== 'undefined') {
     const { hostname, origin } = window.location;
     if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      const lanDjango = `http://${hostname}:8000/api/v1`;
+      if (!urls.includes(lanDjango)) urls.push(lanDjango);
       const sameOrigin = `${origin}/api/v1`;
       if (!urls.includes(sameOrigin)) urls.push(sameOrigin);
     }

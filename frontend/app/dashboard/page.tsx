@@ -6,10 +6,11 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowRight, Bell, BookOpen, BookMarked, CalendarDays, CheckSquare,
   CreditCard, DoorOpen, Lock, Medal, MoreHorizontal, Play, Settings,
-  UserCircle, X,
+  X,
 } from 'lucide-react';
 import { apiRequest, createSession, type UserBadgeData } from '@/lib/api';
 import { Sidebar } from '@/components/dashboard/Sidebar';
+import { HeaderProfileAvatar } from '@/components/dashboard/AccountAvatar';
 import { usePathname } from 'next/navigation';
 import { Icon } from '@/components/ui/Icon';
 
@@ -275,11 +276,11 @@ function DashboardInner() {
       <header className="flex justify-between items-center w-full px-8 h-16 sticky top-0 z-40 bg-[#faf7f6]/80 backdrop-blur-xl shadow-sm border-b border-[#3d3b62]/10">
         <div className="font-baloo text-xl font-bold text-[#3d3b62]">Dashboard</div>
         <div className="flex items-center gap-4">
-          <button className="relative group">
+          <button type="button" className="relative group">
             <Bell className="w-5 h-5 text-stone-500 group-hover:text-[#3d3b62] transition-colors" />
             <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full border-2 border-white" />
           </button>
-          <UserCircle className="w-5 h-5 text-stone-500 cursor-pointer" />
+          <HeaderProfileAvatar me={me} />
         </div>
       </header>
 
@@ -462,9 +463,12 @@ function DashboardInner() {
           </div>
 
           <div className="lg:col-span-4 bg-white rounded-2xl p-6 shadow-[0_6px_18px_rgba(0,0,0,0.08)] border border-[#eccdca]">
-            <div className="flex justify-between items-center mb-8">
+            <div className="flex justify-between items-center mb-2">
               <h4 className="font-baloo text-2xl text-[#3d3b62] font-bold">Badge Collection</h4>
             </div>
+            <p className="text-[10px] text-stone-500 mb-6 leading-snug">
+              Private to your account — not a public profile.
+            </p>
 
             {badges.length === 0 ? (
               <div className="flex flex-col items-center gap-3 py-8 text-stone-400">

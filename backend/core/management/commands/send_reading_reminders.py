@@ -1,8 +1,8 @@
-from django.conf import settings
 from django.core.mail import send_mail
 from django.core.management.base import BaseCommand
 
 from core.models import NotificationPreference, ReadingReminder
+from core.portal_settings import effective_default_from_email
 
 
 class Command(BaseCommand):
@@ -37,7 +37,7 @@ class Command(BaseCommand):
                 send_mail(
                     subject,
                     message,
-                    settings.DEFAULT_FROM_EMAIL,
+                    effective_default_from_email(),
                     [reminder.user.email],
                     fail_silently=False,
                 )

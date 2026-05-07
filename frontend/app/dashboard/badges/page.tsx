@@ -8,8 +8,8 @@ import { apiRequest } from '@/lib/api';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { usePathname } from 'next/navigation';
 
-interface Badge { id: string; name: string; code: string; description: string; icon_url: string; trigger_type: string; }
-interface UserBadge { id: string; badge_code: string; badge_name: string; awarded_at: string; }
+interface Badge { id: string; name: string; code: string; description: string; icon: string; }
+interface UserBadge { id: string; badge_code: string; badge_name: string; earned_at: string; }
 interface MeData { id: number; username: string; first_name: string; last_name: string; }
 
 const BADGE_ICONS: Record<string, string> = {
@@ -59,6 +59,9 @@ export default function BadgesPage() {
         <div className="mb-8">
           <h2 className="font-baloo text-4xl text-[#3d3b62] font-bold mb-2">Badge Collection</h2>
           <p className="text-stone-500">{earned.length} of {allBadges.length || '?'} badges earned</p>
+          <p className="mt-2 text-xs text-stone-500 max-w-xl">
+            Your family&apos;s badges are private to this account — they aren&apos;t shown on a public profile or to session guests.
+          </p>
         </div>
 
         {allBadges.length > 0 && (
@@ -84,7 +87,7 @@ export default function BadgesPage() {
                   </div>
                   <div>
                     <p className="font-baloo font-bold text-[#3d3b62] text-sm">{ub.badge_name}</p>
-                    <p className="text-[10px] text-stone-400 mt-1">Earned {fmtDate(ub.awarded_at)}</p>
+                    <p className="text-[10px] text-stone-400 mt-1">Earned {fmtDate(ub.earned_at)}</p>
                   </div>
                 </div>
               ))}

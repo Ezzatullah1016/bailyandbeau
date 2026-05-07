@@ -66,7 +66,13 @@
         <p class="mt-1 text-sm text-slate-500">Validation comes from the existing `ActivityConfigSerializer` and model `clean()` rules.</p>
 
         {% if activity_errors %}
-        <div class="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{{ activity_errors }}</div>
+        <div class="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            <ul class="list-disc space-y-1 pl-5">
+                {% for error in activity_errors %}
+                <li><span class="font-semibold">{{ error.field }}:</span> {{ error.message }}</li>
+                {% endfor %}
+            </ul>
+        </div>
         {% endif %}
 
         <form method="post" class="mt-4 space-y-4" data-validate-form="activity-form" data-form-type="activity" novalidate>

@@ -15,7 +15,6 @@ from datetime import timedelta
 from pathlib import Path
 
 import sentry_sdk
-from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -37,6 +36,7 @@ DEFAULT_ALLOWED_HOSTS = [
     'localhost',
     'testserver',
     '.ngrok-free.dev',
+    '.ngrok-free.app',
     '.ngrok.io',
     '.ngrok.app',
 ]
@@ -66,10 +66,17 @@ CSRF_TRUSTED_ORIGINS = [
     origin.strip()
     for origin in os.getenv(
         'DJANGO_CSRF_TRUSTED_ORIGINS',
-        'http://127.0.0.1,http://localhost,http://127.0.0.1:3000,http://localhost:3000,https://*.ngrok-free.dev,https://*.ngrok.io,https://*.ngrok.app',
+        'http://127.0.0.1,http://localhost,http://127.0.0.1:3000,http://localhost:3000,'
+        'https://*.ngrok-free.dev,https://*.ngrok-free.app,https://*.ngrok.io,https://*.ngrok.app',
     ).split(',')
     if origin.strip()
 ]
+# Optional: comma-separated origins when using Django admin/forms from another device (e.g. http://192.168.1.10:8000)
+if DEBUG:
+    for _extra in os.getenv('DJANGO_DEV_CSRF_ORIGINS', '').split(','):
+        _extra = _extra.strip()
+        if _extra and _extra not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_extra)
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 USE_X_FORWARDED_HOST = True
 
@@ -238,12 +245,9 @@ else:
     MEDIA_URL = os.getenv('MEDIA_URL', '/media/')
     MEDIA_ROOT = os.getenv('MEDIA_ROOT', BASE_DIR / 'media')
 
-# ─── LiveKit production guard ────────────────────────────────────────────────
-if not DEBUG and (not LIVEKIT_API_KEY or not LIVEKIT_API_SECRET):
-    raise ImproperlyConfigured(
-        "LIVEKIT_API_KEY and LIVEKIT_API_SECRET must be set in production. "
-        "Sessions will not function without them."
-    )
+# ─── LiveKit ─────────────────────────────────────────────────────────────────
+# Credentials may be supplied via environment or Super-admin → Settings (PortalSettings).
+# Missing keys surface at token/session time instead of import-time so the portal can bootstrap.
 
 # ─── Sentry Error Monitoring ──────────────────────────────────────────────────
 SENTRY_DSN = os.getenv('SENTRY_DSN', '')

@@ -2,25 +2,14 @@
 
 import Link from 'next/link';
 import { Icon } from '@/components/ui/Icon';
-import { BrandLogo } from '@/components/brand/BrandLogo';
-
-interface MeData {
-  id: number;
-  username: string;
-  email?: string;
-  first_name: string;
-  last_name: string;
-}
+import { SidebarProfileAvatar, type DashboardMe } from '@/components/dashboard/AccountAvatar';
 
 interface SidebarProps {
-  me: MeData | null;
+  me: DashboardMe | null;
   currentPath: string;
 }
 
 export function Sidebar({ me, currentPath }: SidebarProps) {
-  const initials = me
-    ? `${me.first_name?.[0] ?? ''}${me.last_name?.[0] ?? ''}`.toUpperCase() || me.username[0].toUpperCase()
-    : '?';
   const displayName = me ? (me.first_name ? `${me.first_name} ${me.last_name}`.trim() : me.username) : '';
 
   function handleSignOut() {
@@ -67,9 +56,7 @@ export function Sidebar({ me, currentPath }: SidebarProps) {
 
       <div className="px-4 mt-auto pt-8 border-t border-white/10">
         <div className="flex items-center gap-3 p-2 rounded-xl bg-white/5">
-          <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 border border-white/20">
-            {initials}
-          </div>
+          <SidebarProfileAvatar me={me} />
           <div className="flex-1 min-w-0">
             <p className="font-karla text-white text-sm font-medium truncate">{displayName}</p>
             <button

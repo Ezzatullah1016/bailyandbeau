@@ -1,134 +1,350 @@
 {% extends 'core/base.html' %}
 
+{% block extra_head %}
+<style>
+  /* Tailwind bundle lacks arbitrary sticky top / scroll-margin utilities used here */
+  .settings-jump-nav {
+    position: sticky;
+    z-index: 30;
+    top: 6.75rem;
+  }
+  @media (min-width: 1024px) {
+    .settings-jump-nav {
+      top: 5rem;
+    }
+  }
+  .settings-anchor {
+    scroll-margin-top: 7rem;
+  }
+  @media (min-width: 1024px) {
+    .settings-anchor {
+      scroll-margin-top: 6rem;
+    }
+  }
+</style>
+{% endblock %}
+
 {% block title %}Bailey & Beau | Settings{% endblock %}
 {% block page_title %}Settings{% endblock %}
-{% block page_subtitle %}Shared operational configuration for platform metadata, session defaults, integrations, and staff accounts.{% endblock %}
+{% block page_subtitle %}Saved to the database (overrides environment when set). Secrets never appear in full—leave blank to keep the current key, or tick clear to use .env again.{% endblock %}
 
 {% block content %}
-<div class="grid gap-8 xl:grid-cols-[0.24fr_0.76fr]">
-    <nav class="rounded-2xl border border-stone-200 bg-white p-3 shadow-sm">
-        <ul class="space-y-1 text-sm font-medium">
-            <li><a class="block rounded-xl bg-brand/10 px-4 py-3 text-brand-dark" href="#platform">General</a></li>
-            <li><a class="block rounded-xl px-4 py-3 text-slate-600 hover:bg-stone-50" href="#session-defaults">Session defaults</a></li>
-            <li><a class="block rounded-xl px-4 py-3 text-slate-600 hover:bg-stone-50" href="#stripe">Stripe</a></li>
-            <li><a class="block rounded-xl px-4 py-3 text-slate-600 hover:bg-stone-50" href="#livekit">LiveKit</a></li>
-            <li><a class="block rounded-xl px-4 py-3 text-slate-600 hover:bg-stone-50" href="#admins">Admin accounts</a></li>
-        </ul>
+<div class="space-y-6">
+    <nav aria-label="Section navigation" class="settings-jump-nav -mx-4 mb-2 border-b border-stone-200 bg-stone-50/95 px-4 py-3 backdrop-blur-sm lg:-mx-8 lg:px-8">
+        <p class="mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">Jump to</p>
+        <div class="-mx-1 flex min-w-0 gap-2 overflow-x-auto pb-1">
+            <a data-settings-jump href="#platform" class="settings-jump flex-shrink-0 whitespace-nowrap rounded-full border border-brand-dark bg-brand-dark px-3 py-1.5 text-xs font-semibold text-white">Platform</a>
+            <a data-settings-jump href="#session-defaults" class="settings-jump flex-shrink-0 whitespace-nowrap rounded-full border border-stone-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-stone-50">Session defaults</a>
+            <a data-settings-jump href="#stripe" class="settings-jump flex-shrink-0 whitespace-nowrap rounded-full border border-stone-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-stone-50">Stripe</a>
+            <a data-settings-jump href="#livekit" class="settings-jump flex-shrink-0 whitespace-nowrap rounded-full border border-stone-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-stone-50">LiveKit</a>
+            <a data-settings-jump href="#storage" class="settings-jump flex-shrink-0 whitespace-nowrap rounded-full border border-stone-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-stone-50">Storage</a>
+            <a data-settings-jump href="#admins" class="settings-jump flex-shrink-0 whitespace-nowrap rounded-full border border-stone-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-stone-50">Admin accounts</a>
+        </div>
     </nav>
 
-    <div class="space-y-6">
-        <section id="platform" class="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-            <div class="mb-5 flex items-center justify-between"><h3 class="text-lg font-semibold text-slate-900">Platform details</h3><button class="rounded-xl border border-stone-300 px-4 py-2 text-sm font-semibold text-slate-700">Save</button></div>
-            <div class="grid gap-4 md:grid-cols-2">
-                <div><label class="mb-1 block text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Platform name</label><input class="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm" type="text" value="{{ platform_settings.platform_name }}"></div>
-                <div><label class="mb-1 block text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Support email</label><input class="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm" type="email" value="{{ platform_settings.support_email }}"></div>
-                <div><label class="mb-1 block text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Default from email</label><input class="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm" type="text" value="{{ platform_settings.default_from_email }}"></div>
-                <div><label class="mb-1 block text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Base URL</label><input class="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm" type="text" value="{{ platform_settings.base_url }}"></div>
-            </div>
-        </section>
-
-        <section id="session-defaults" class="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-            <h3 class="text-lg font-semibold text-slate-900">Session defaults</h3>
-            <div class="mt-4 grid gap-4 md:grid-cols-2">
-                <div><label class="mb-1 block text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Duration (min)</label><input class="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm" type="number" value="{{ session_defaults.duration }}"></div>
-                <div><label class="mb-1 block text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Link type</label><input class="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm" type="text" value="{{ session_defaults.link_type }}"></div>
-                <div><label class="mb-1 block text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Warning threshold #1</label><input class="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm" type="number" value="{{ session_defaults.warning_one }}"></div>
-                <div><label class="mb-1 block text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Warning threshold #2</label><input class="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm" type="number" value="{{ session_defaults.warning_two }}"></div>
-            </div>
-        </section>
-
-        <section id="stripe" class="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-            <div class="mb-5 flex items-center justify-between"><div><h3 class="text-lg font-semibold text-slate-900">Stripe integration</h3><p class="text-sm text-slate-500">Current billing configuration from Django settings.</p></div><span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">Configured</span></div>
-            <div class="grid gap-4 md:grid-cols-2">
-                <div><label class="mb-1 block text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Secret key</label><input class="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm" type="text" value="{{ stripe_settings.secret_key }}"></div>
-                <div><label class="mb-1 block text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Webhook secret</label><input class="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm" type="text" value="{{ stripe_settings.webhook_secret }}"></div>
-            </div>
-        </section>
-
-        <section id="livekit" class="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-            <div class="mb-5 flex items-center justify-between"><div><h3 class="text-lg font-semibold text-slate-900">LiveKit integration</h3><p class="text-sm text-slate-500">Realtime credentials currently available in the Django environment.</p></div><span class="rounded-full px-3 py-1 text-xs font-semibold {% if livekit_settings.is_connected %}bg-emerald-100 text-emerald-700{% else %}bg-amber-100 text-amber-700{% endif %}">{% if livekit_settings.is_connected %}Connected{% else %}Not configured{% endif %}</span></div>
-            <div class="grid gap-4 md:grid-cols-2">
-                <div><label class="mb-1 block text-xs font-bold uppercase tracking-[0.2em] text-slate-500">API key</label><input class="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm" type="text" value="{{ livekit_settings.api_key }}"></div>
-                <div><label class="mb-1 block text-xs font-bold uppercase tracking-[0.2em] text-slate-500">API secret</label><input class="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm" type="text" value="{{ livekit_settings.api_secret }}"></div>
-                <div class="md:col-span-2"><label class="mb-1 block text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Server URL</label><input class="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm" type="text" value="{{ livekit_settings.url }}"></div>
-            </div>
-        </section>
-
-        <section class="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-            <h3 class="text-lg font-semibold text-slate-900">Storage snapshot</h3>
-            <div class="mt-4 rounded-xl bg-stone-50 p-4">
-                <div class="mb-2 flex items-center justify-between text-sm font-semibold"><span>{{ storage_usage.used }} GB used</span><span class="text-slate-500">{{ storage_usage.total }} GB total</span></div>
-                <div class="h-2 rounded-full bg-stone-200"><div class="h-2 rounded-full bg-brand-dark" style="width: {{ storage_usage.percent }}%"></div></div>
-            </div>
-        </section>
-
-        <section id="admins" class="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-            <div class="mb-5 flex items-center justify-between">
-                <h3 class="text-lg font-semibold text-slate-900">Admin accounts</h3>
-            </div>
-            <form method="post" class="mb-5 grid gap-3 rounded-xl border border-stone-200 bg-stone-50 p-4 md:grid-cols-[1fr_1fr_auto]">
+    <div class="grid gap-6 lg:grid-cols-2">
+        {# Platform #}
+        <section id="platform" class="settings-anchor flex min-h-0 min-w-0 flex-col rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+            <header class="mb-4 border-b border-stone-100 pb-4">
+                <h3 class="text-lg font-semibold text-slate-900">Platform details</h3>
+                <p class="mt-0.5 text-sm text-slate-500">Shown to families and used as defaults for outbound mail when set here.</p>
+            </header>
+            <form method="post" class="w-full space-y-4">
                 {% csrf_token %}
-                <input type="hidden" name="action" value="invite_admin">
-                <input
-                    type="text"
-                    name="invite_name"
-                    placeholder="Invite admin name"
-                    required
-                    class="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm"
-                >
-                <input
-                    type="email"
-                    name="invite_email"
-                    placeholder="Invite admin email"
-                    required
-                    class="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm"
-                >
-                <button type="submit" class="rounded-xl bg-brand-dark px-4 py-2 text-sm font-semibold text-white">Invite admin</button>
+                <input type="hidden" name="action" value="save_platform">
+                <div class="grid gap-4 md:grid-cols-2">
+                    <div class="flex flex-col gap-1 md:col-span-2">
+                        <label for="pf-name" class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">Platform name</label>
+                        <input id="pf-name" name="platform_name" type="text" value="{{ platform_settings.platform_name }}" autocomplete="organization" class="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-sm">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label for="pf-support" class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">Support email</label>
+                        <input id="pf-support" name="support_email" type="email" value="{{ portal.support_email }}" autocomplete="email" class="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-sm">
+                        <p class="text-xs text-slate-500">Leave blank to fall back to <span class="font-mono text-[11px]">SUPPORT_EMAIL</span> from the environment.</p>
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label for="pf-from" class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">Default from email</label>
+                        <input id="pf-from" name="default_from_email" type="text" value="{{ portal.default_from_email }}" autocomplete="email" class="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-sm">
+                        <p class="text-xs text-slate-500">Leave blank to use <span class="font-mono text-[11px]">DEFAULT_FROM_EMAIL</span> from environment.</p>
+                    </div>
+                    <div class="flex flex-col gap-1 md:col-span-2">
+                        <label for="pf-public-base" class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">Public base URL (optional)</label>
+                        <input id="pf-public-base" name="public_base_url" type="url" value="{{ portal.public_base_url }}" placeholder="https://app.example.com" class="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-sm">
+                        <p class="text-xs text-slate-500">Effective now: <span class="break-all font-mono text-[11px]">{{ platform_settings.public_base_url }}</span></p>
+                    </div>
+                    <div class="flex flex-col gap-1 md:col-span-2">
+                        <label for="pf-email-backend" class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">Email backend</label>
+                        <input id="pf-email-backend" readonly type="text" value="{{ platform_settings.email_backend }}" class="w-full rounded-xl border border-stone-200 bg-stone-50 px-3.5 py-2 text-sm text-slate-600">
+                        <p class="text-xs text-slate-500">Set via <span class="font-mono text-[11px]">EMAIL_BACKEND</span> in environment only.</p>
+                    </div>
+                </div>
+                <button type="submit" class="w-full rounded-xl bg-brand-dark py-2.5 text-sm font-semibold text-white hover:opacity-95">Save platform details</button>
             </form>
-            <div class="overflow-x-auto">
-                <table class="table-hover min-w-full text-left text-sm">
-                    <thead class="bg-stone-50 text-slate-500"><tr><th class="px-4 py-3 font-semibold">Name</th><th class="px-4 py-3 font-semibold">Email</th><th class="px-4 py-3 font-semibold">Role</th><th class="px-4 py-3 font-semibold text-right">Status</th><th class="px-4 py-3 font-semibold text-right">Actions</th></tr></thead>
-                    <tbody class="divide-y divide-stone-100">
+        </section>
+
+        {# Session defaults #}
+        <section id="session-defaults" class="settings-anchor flex min-h-0 min-w-0 flex-col rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+            <header class="mb-4 border-b border-stone-100 pb-4">
+                <h3 class="text-lg font-semibold text-slate-900">Session defaults</h3>
+                <p class="mt-0.5 text-sm text-slate-500">Default lobby timer for <strong>new</strong> reading sessions. Existing sessions keep their current values.</p>
+            </header>
+            <form method="post" class="w-full space-y-4">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="save_session_defaults">
+                <div class="grid gap-4 md:grid-cols-2">
+                    <div class="flex flex-col gap-1">
+                        <label for="sd-duration" class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">Duration (minutes)</label>
+                        <input id="sd-duration" name="session_duration_minutes" type="number" min="1" max="480" value="{{ session_defaults.duration }}" class="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-sm">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label for="sd-link" class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">Invite link label</label>
+                        <input id="sd-link" name="invite_link_type_label" type="text" value="{{ session_defaults.link_type }}" class="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-sm">
+                        <p class="text-xs text-slate-500">Display label only (product invite behaviour unchanged).</p>
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label for="sd-w1" class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">Warning threshold #1 (minutes left)</label>
+                        <input id="sd-w1" name="session_warning_one" type="number" min="1" max="120" value="{{ session_defaults.warning_one }}" class="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-sm">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label for="sd-w2" class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">Warning threshold #2 (minutes left)</label>
+                        <input id="sd-w2" name="session_warning_two" type="number" min="1" max="120" value="{{ session_defaults.warning_two }}" class="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-sm">
+                    </div>
+                </div>
+                <button type="submit" class="w-full rounded-xl bg-brand-dark py-2.5 text-sm font-semibold text-white hover:opacity-95">Save session defaults</button>
+            </form>
+        </section>
+
+        {# Stripe #}
+        <section id="stripe" class="settings-anchor flex min-h-0 min-w-0 flex-col rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+            <header class="mb-4 border-b border-stone-100 pb-4">
+                <h3 class="text-lg font-semibold text-slate-900">Stripe integration</h3>
+                <p class="mt-0.5 text-sm text-slate-500">Effective key (masked): <span class="font-mono text-xs">{{ stripe_settings.secret_masked }}</span> · webhook: <span class="font-mono text-xs">{{ stripe_settings.webhook_masked }}</span></p>
+            </header>
+            <form method="post" class="w-full space-y-4">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="save_stripe">
+                <div class="grid items-start gap-4 md:grid-cols-2">
+                    <div class="flex min-w-0 flex-col gap-1">
+                        <label for="st-secret" class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">Secret key</label>
+                        <input id="st-secret" name="stripe_secret_key" type="password" autocomplete="new-password" placeholder="Leave blank to keep current value" class="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-sm">
+                        <label class="flex cursor-pointer items-center gap-2 text-xs text-slate-600">
+                            <input type="checkbox" name="stripe_secret_clear" value="1" class="rounded border-stone-300">
+                            Clear saved secret (use <span class="font-mono">STRIPE_SECRET_KEY</span> from env)
+                        </label>
+                        {% if stripe_settings.secret_saved_db %}<p class="text-xs text-emerald-700">Database override is active for the secret key.</p>{% elif stripe_settings.uses_env_secret %}<p class="text-xs text-slate-500">Using environment variable.</p>{% endif %}
+                    </div>
+                    <div class="flex min-w-0 flex-col gap-1">
+                        <label for="st-webhook" class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">Webhook secret</label>
+                        <input id="st-webhook" name="stripe_webhook_secret" type="password" autocomplete="new-password" placeholder="Leave blank to keep current value" class="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-sm">
+                        <label class="flex cursor-pointer items-center gap-2 text-xs text-slate-600">
+                            <input type="checkbox" name="stripe_webhook_clear" value="1" class="rounded border-stone-300">
+                            Clear saved webhook secret (use env)
+                        </label>
+                        {% if stripe_settings.webhook_saved_db %}<p class="text-xs text-emerald-700">Database override is active for the webhook secret.</p>{% elif stripe_settings.uses_env_webhook %}<p class="text-xs text-slate-500">Using environment variable.</p>{% endif %}
+                    </div>
+                </div>
+                <button type="submit" class="w-full rounded-xl bg-brand-dark py-2.5 text-sm font-semibold text-white hover:opacity-95 sm:w-auto sm:min-w-[14rem]">Save Stripe settings</button>
+            </form>
+        </section>
+
+        {# LiveKit #}
+        <section id="livekit" class="settings-anchor flex min-h-0 min-w-0 flex-col rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+            <header class="mb-4 border-b border-stone-100 pb-4">
+                <h3 class="text-lg font-semibold text-slate-900">LiveKit integration</h3>
+                <p class="mt-0.5 text-sm text-slate-500">Masked effective credentials shown below. Values saved here override environment.</p>
+            </header>
+            <form method="post" class="max-w-4xl space-y-4">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="save_livekit">
+                <p class="rounded-lg bg-stone-50 px-3 py-2 text-xs text-slate-600">Effective · key <span class="font-mono">{{ livekit_settings.api_masked }}</span> · secret <span class="font-mono">{{ livekit_settings.secret_masked }}</span></p>
+                <div class="grid gap-4 md:grid-cols-2 md:items-start">
+                    <div class="flex min-w-0 flex-col gap-1">
+                        <label for="lk-key" class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">API key</label>
+                        <input id="lk-key" name="livekit_api_key" type="password" autocomplete="new-password" placeholder="Leave blank to keep current" class="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-sm">
+                        <label class="flex cursor-pointer items-center gap-2 text-xs text-slate-600">
+                            <input type="checkbox" name="livekit_key_clear" value="1" class="rounded border-stone-300"> Clear saved key (env)
+                        </label>
+                        {% if livekit_settings.key_saved_db %}<p class="text-xs text-emerald-700">Database override active.</p>{% endif %}
+                    </div>
+                    <div class="flex min-w-0 flex-col gap-1">
+                        <label for="lk-secret" class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">API secret</label>
+                        <input id="lk-secret" name="livekit_api_secret" type="password" autocomplete="new-password" placeholder="Leave blank to keep current" class="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-sm">
+                        <label class="flex cursor-pointer items-center gap-2 text-xs text-slate-600">
+                            <input type="checkbox" name="livekit_secret_clear" value="1" class="rounded border-stone-300"> Clear saved secret (env)
+                        </label>
+                        {% if livekit_settings.secret_saved_db %}<p class="text-xs text-emerald-700">Database override active.</p>{% endif %}
+                    </div>
+                    <div class="flex flex-col gap-1 md:col-span-2">
+                        <label for="lk-url" class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">Server URL (<span class="normal-case tracking-normal">wss://…</span>)</label>
+                        <input id="lk-url" name="livekit_url" type="url" value="{{ portal.livekit_url }}" placeholder="{{ livekit_settings.url_display }}" class="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-sm">
+                        <label class="flex cursor-pointer items-center gap-2 text-xs text-slate-600">
+                            <input type="checkbox" name="livekit_url_clear" value="1" class="rounded border-stone-300"> Clear saved URL (env <span class="font-mono">LIVEKIT_URL</span>)
+                        </label>
+                        {% if livekit_settings.url_saved_db %}<p class="text-xs text-emerald-700">Database URL override active.</p>{% endif %}
+                        <p class="text-xs text-slate-500">Effective URL: <span class="break-all font-mono text-[11px]">{{ livekit_settings.url_display }}</span></p>
+                    </div>
+                </div>
+                <button type="submit" class="w-full rounded-xl bg-brand-dark py-2.5 text-sm font-semibold text-white hover:opacity-95 sm:w-auto sm:min-w-[14rem]">Save LiveKit settings</button>
+            </form>
+        </section>
+
+        {# Storage #}
+        <section id="storage" class="settings-anchor flex min-h-0 min-w-0 flex-col rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+            <header class="mb-4 border-b border-stone-100 pb-4">
+                <h3 class="text-lg font-semibold text-slate-900">Storage snapshot</h3>
+                <p class="mt-0.5 text-sm text-slate-500">“Used” is estimated from library size; adjust the ceiling for the progress bar.</p>
+            </header>
+            <form method="post" class="w-full space-y-4">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="save_storage_display">
+                <div class="grid gap-4 md:grid-cols-2">
+                    <div class="flex flex-col gap-1">
+                        <label for="stor-used" class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">Used (GB)</label>
+                        <input id="stor-used" readonly type="text" value="{{ storage_usage.used }}" class="w-full rounded-xl border border-stone-200 bg-stone-50 px-3.5 py-2 text-sm text-slate-600">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label for="stor-total" class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">Plan ceiling (GB)</label>
+                        <input id="stor-total" name="storage_plan_total_gb" type="number" min="1" value="{{ storage_usage.total }}" class="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-sm">
+                    </div>
+                    <div class="flex flex-col gap-1 md:col-span-2">
+                        <span class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">Utilization</span>
+                        <div class="rounded-xl border border-stone-200 bg-stone-50 p-3">
+                            <div class="mb-2 flex justify-between text-xs font-semibold text-slate-700"><span>{{ storage_usage.used }} GB</span><span class="text-slate-500">of {{ storage_usage.total }} GB</span></div>
+                            <div class="h-2 rounded-full bg-stone-200"><div class="js-storage-bar h-2 rounded-full bg-brand-dark transition-[width]" data-percent="{{ storage_usage.percent }}"></div></div>
+                            <p class="mt-2 text-xs text-slate-500">{{ storage_usage.percent }}% of quota</p>
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" class="w-full rounded-xl bg-brand-dark py-2.5 text-sm font-semibold text-white hover:opacity-95">Save storage display</button>
+            </form>
+        </section>
+
+        {# Admin accounts — invite mini form + account cards #}
+        <section id="admins" class="settings-anchor flex min-h-0 min-w-0 flex-col rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+            <header class="mb-4 border-b border-stone-100 pb-4">
+                <h3 class="text-lg font-semibold text-slate-900">Admin accounts</h3>
+                <p class="mt-0.5 text-sm text-slate-500">Invite staff or manage access. You cannot change your own account from here.</p>
+            </header>
+
+            <div class="grid flex-1 gap-6 lg:grid-cols-2">
+                <div class="min-w-0">
+                    <h4 class="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Invite admin</h4>
+                    <form method="post" class="space-y-4 rounded-xl border border-stone-200 bg-stone-50/80 p-4">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="invite_admin">
+                        <div class="grid gap-4 md:grid-cols-2">
+                            <div class="flex flex-col gap-1">
+                                <label for="invite-name" class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">Full name</label>
+                                <input id="invite-name" type="text" name="invite_name" placeholder="e.g. Jordan Lee" required class="w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm">
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <label for="invite-email" class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">Email</label>
+                                <input id="invite-email" type="email" name="invite_email" placeholder="admin@company.com" required class="w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm">
+                            </div>
+                        </div>
+                        <button type="submit" class="w-full rounded-xl bg-brand-dark py-2.5 text-sm font-semibold text-white hover:opacity-95">Send invite &amp; grant access</button>
+                    </form>
+                </div>
+
+                <div class="min-w-0">
+                    <h4 class="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Staff with access</h4>
+                    {% if admin_accounts %}
+                    <ul class="grid gap-3 sm:grid-cols-2">
                         {% for account in admin_accounts %}
-                        <tr>
-                            <td class="px-4 py-3 font-medium text-slate-900">{{ account.get_full_name|default:account.username }}</td>
-                            <td class="px-4 py-3 text-slate-600">{{ account.email }}</td>
-                            <td class="px-4 py-3">{% if account.is_superuser %}Super Admin{% else %}Staff{% endif %}</td>
-                            <td class="px-4 py-3 text-right">
-                                <span class="rounded-full px-2.5 py-1 text-xs font-semibold {% if account.is_active %}bg-emerald-100 text-emerald-700{% else %}bg-slate-100 text-slate-700{% endif %}">
-                                    {% if account.is_active %}Active{% else %}Inactive{% endif %}
-                                </span>
-                            </td>
-                            <td class="px-4 py-3">
-                                <div class="flex justify-end gap-2">
-                                    {% if request.user.id != account.id %}
-                                    <form method="post">
-                                        {% csrf_token %}
-                                        <input type="hidden" name="action" value="toggle_admin_active">
-                                        <input type="hidden" name="admin_id" value="{{ account.id }}">
-                                        <button type="submit" class="rounded-lg border border-stone-300 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-stone-50">
-                                            {% if account.is_active %}Deactivate{% else %}Activate{% endif %}
-                                        </button>
-                                    </form>
-                                    <form method="post" onsubmit="return confirm('Revoke admin access for this account?');">
-                                        {% csrf_token %}
-                                        <input type="hidden" name="action" value="revoke_admin">
-                                        <input type="hidden" name="admin_id" value="{{ account.id }}">
-                                        <button type="submit" class="rounded-lg border border-rose-300 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50">Revoke admin</button>
-                                    </form>
-                                    {% else %}
-                                    <span class="text-xs text-slate-400">Current account</span>
-                                    {% endif %}
+                        <li class="rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
+                            <div class="mb-3 flex flex-wrap items-start justify-between gap-2 border-b border-stone-100 pb-3">
+                                <div class="min-w-0">
+                                    <p class="font-semibold text-slate-900">{{ account.get_full_name|default:account.username }}</p>
+                                    <p class="truncate text-sm text-slate-600">{{ account.email }}</p>
                                 </div>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">No admin accounts available.</td></tr>
+                                <span class="flex-shrink-0 rounded-full bg-stone-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">{% if account.is_superuser %}Super admin{% else %}Staff{% endif %}</span>
+                            </div>
+                            <div class="mb-3 flex flex-col gap-1">
+                                <span class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">Status</span>
+                                <input readonly type="text" value="{% if account.is_active %}Active{% else %}Inactive{% endif %}" class="w-full rounded-xl border border-stone-200 bg-stone-50 px-3.5 py-2 text-sm text-slate-600">
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                {% if request.user.id != account.id %}
+                                <form method="post" class="inline">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="toggle_admin_active">
+                                    <input type="hidden" name="admin_id" value="{{ account.id }}">
+                                    <button type="submit" class="rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:bg-stone-50">{% if account.is_active %}Deactivate{% else %}Activate{% endif %}</button>
+                                </form>
+                                <form method="post" class="inline" onsubmit="return confirm('Revoke admin access for this account?');">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="revoke_admin">
+                                    <input type="hidden" name="admin_id" value="{{ account.id }}">
+                                    <button type="submit" class="rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50">Revoke admin</button>
+                                </form>
+                                {% else %}
+                                <p class="text-xs text-slate-400">Signed in as this account</p>
+                                {% endif %}
+                            </div>
+                        </li>
                         {% endfor %}
-                    </tbody>
-                </table>
+                    </ul>
+                    {% else %}
+                    <p class="rounded-xl border border-dashed border-stone-200 bg-stone-50 px-4 py-8 text-center text-sm text-slate-500">No staff accounts found.</p>
+                    {% endif %}
+                </div>
             </div>
         </section>
     </div>
 </div>
+<script>
+(() => {
+    const bar = document.querySelector('.js-storage-bar');
+    if (bar) {
+        const raw = Number(bar.getAttribute('data-percent') || 0);
+        const safe = Math.max(0, Math.min(100, Number.isFinite(raw) ? raw : 0));
+        bar.style.width = `${safe}%`;
+    }
+
+    const jumps = document.querySelectorAll('[data-settings-jump]');
+    const sections = ['platform', 'session-defaults', 'stripe', 'livekit', 'storage', 'admins'];
+
+    function pillActive(el, on) {
+        el.classList.toggle('border-brand-dark', on);
+        el.classList.toggle('bg-brand-dark', on);
+        el.classList.toggle('text-white', on);
+        el.classList.toggle('border-stone-300', !on);
+        el.classList.toggle('bg-white', !on);
+        el.classList.toggle('text-slate-700', !on);
+    }
+
+    function syncFromHash() {
+        const id = (location.hash || '#platform').slice(1);
+        jumps.forEach((a) => pillActive(a, a.getAttribute('href') === '#' + id));
+    }
+
+    jumps.forEach((a) => {
+        a.addEventListener('click', () => {
+            const id = (a.getAttribute('href') || '').slice(1);
+            requestAnimationFrame(() => {
+                jumps.forEach((j) => pillActive(j, j.getAttribute('href') === '#' + id));
+            });
+        });
+    });
+
+    window.addEventListener('hashchange', syncFromHash);
+    syncFromHash();
+
+    const obs = new IntersectionObserver(
+        (entries) => {
+            const visible = entries
+                .filter((e) => e.isIntersecting && sections.includes(e.target.id))
+                .sort((a, b) => (b.intersectionRatio || 0) - (a.intersectionRatio || 0));
+            const id = visible[0]?.target?.id;
+            if (!id) return;
+            jumps.forEach((a) => pillActive(a, a.getAttribute('href') === '#' + id));
+        },
+        { root: null, rootMargin: '-14% 0px -55% 0px', threshold: [0, 0.12, 0.35] },
+    );
+    sections.forEach((sid) => {
+        const el = document.getElementById(sid);
+        if (el) obs.observe(el);
+    });
+})();
+</script>
 {% endblock %}

@@ -12,7 +12,7 @@
 <form method="post">
     {% csrf_token %}
     <input type="hidden" name="action" value="cancel">
-    <button type="submit" data-confirm="Cancel this session? This cannot be undone." class="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700">Cancel Session</button>
+    <button type="submit" data-confirm-message="Cancel this session? This cannot be undone." class="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700">Cancel Session</button>
 </form>
 {% endif %}
 {% endblock %}
@@ -105,8 +105,12 @@
                                 <div>
                                     <p class="text-sm font-semibold text-slate-900">{{ event.label }}</p>
                                     <p class="text-xs text-slate-500">{{ event.meta }}</p>
-                                    {% if event.payload %}
-                                    <p class="mt-0.5 font-mono text-xs text-slate-400">{{ event.payload }}</p>
+                                    {% if event.payload_rows %}
+                                    <div class="mt-2 space-y-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
+                                        {% for row in event.payload_rows %}
+                                        <p class="text-[11px] text-slate-500"><span class="font-semibold text-slate-700">{{ row.key }}</span>: {{ row.value }}</p>
+                                        {% endfor %}
+                                    </div>
                                     {% endif %}
                                 </div>
                                 <span class="flex-shrink-0 text-xs text-slate-400">{{ event.timestamp }}</span>
@@ -181,10 +185,14 @@
                         <span class="text-slate-500">Page</span>
                         <span class="font-semibold">{{ snapshot.page_number }}</span>
                     </div>
-                    {% if snapshot.timer_state %}
-                    <div class="flex justify-between">
-                        <span class="text-slate-500">Timer state</span>
-                        <span class="font-mono text-xs text-slate-600">{{ snapshot.timer_state }}</span>
+                    {% if snapshot_timer_rows %}
+                    <div class="space-y-1">
+                        <p class="text-slate-500">Timer state</p>
+                        <div class="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
+                            {% for row in snapshot_timer_rows %}
+                            <p class="text-[11px] text-slate-500"><span class="font-semibold text-slate-700">{{ row.key }}</span>: {{ row.value }}</p>
+                            {% endfor %}
+                        </div>
                     </div>
                     {% endif %}
                 </div>
