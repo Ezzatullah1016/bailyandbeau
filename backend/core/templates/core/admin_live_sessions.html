@@ -13,6 +13,35 @@
     <p class="text-sm font-semibold text-slate-900">{{ active_count }} live sessions active right now</p>
 </div>
 
+<form method="get" class="mb-6 flex flex-wrap items-center gap-3 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+    <span class="material-symbols-outlined text-slate-400">filter_list</span>
+    <div class="relative min-w-[220px] flex-1">
+        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">search</span>
+        <input type="text" name="q" value="{{ query }}" placeholder="Search by host or guest…"
+               class="w-full rounded-xl border border-stone-200 bg-cream pl-9 pr-4 py-2 text-sm focus:border-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-dark/10">
+    </div>
+    <div class="relative min-w-[200px]">
+        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">menu_book</span>
+        <input type="text" name="book_q" value="{{ book_query }}" placeholder="Search book title…"
+               class="w-full rounded-xl border border-stone-200 bg-cream pl-9 pr-4 py-2 text-sm focus:border-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-dark/10">
+    </div>
+    <select name="status" class="min-w-[150px] rounded-xl border border-stone-200 bg-cream px-4 py-2 text-sm focus:border-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-dark/10">
+        <option value="">All Statuses</option>
+        {% for value, label in status_choices %}
+        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+    </select>
+    <div class="relative min-w-[170px]">
+        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">calendar_today</span>
+        <input type="date" name="date" value="{{ date_filter }}"
+               class="w-full rounded-xl border border-stone-200 bg-cream pl-9 pr-4 py-2 text-sm text-slate-700 focus:border-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-dark/10">
+    </div>
+    <button type="submit" class="rounded-xl bg-brand-dark px-5 py-2 text-sm font-semibold text-white hover:opacity-90">Apply</button>
+    {% if has_active_filters %}
+    <a href="{% url 'admin_live_sessions' %}" class="text-sm font-semibold text-brand-dark hover:underline">Reset</a>
+    {% endif %}
+</form>
+
 <div class="grid gap-6 md:grid-cols-3">
     {% for row in live_rows %}
     <article class="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
@@ -25,47 +54,9 @@
         <div class="mt-4 flex items-center justify-between"><span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ row.status_tone }}">{{ row.status }}</span><a href="{% url 'admin_session_detail' row.id %}" title="View details" aria-label="View details" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-brand-dark shadow-sm hover:bg-stone-50"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-5 w-5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg></a></div>
     </article>
     {% empty %}
-    <article class="rounded-2xl border border-stone-200 bg-white p-8 shadow-sm md:col-span-3"><div class="flex flex-col items-center gap-3 text-center"><span class="material-symbols-outlined text-4xl text-slate-300">wifi_off</span><p class="text-sm font-semibold text-slate-600">No live sessions right now</p><p class="text-xs text-slate-400">Active rooms will appear here automatically when reading sessions start.</p></div></article>
+    <article class="rounded-2xl border border-stone-200 bg-white p-8 shadow-sm md:col-span-3"><div class="flex flex-col items-center gap-3 text-center"><span class="material-symbols-outlined text-4xl text-slate-300">wifi_off</span><p class="text-sm font-semibold text-slate-600">{% if has_active_filters %}No live sessions match these filters{% else %}No live sessions right now{% endif %}</p><p class="text-xs text-slate-400">{% if has_active_filters %}Adjust the search above or reset to see every active room.{% else %}Active rooms will appear here automatically when reading sessions start.{% endif %}</p></div></article>
     {% endfor %}
 </div>
-
-{% if selected_session %}
-<section class="mt-6 overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
-    <div class="flex items-center justify-between border-b border-stone-200 px-5 py-4">
-        <h3 class="text-lg font-semibold text-slate-900">Session detail — #{{ selected_session.id|stringformat:'s'|slice:':8'|upper }}</h3>
-        <div class="flex items-center gap-3">
-            <span class="rounded-full px-2.5 py-1 text-xs font-semibold {% if selected_session.status == 'active' %}bg-emerald-100 text-emerald-700{% elif selected_session.status == 'lobby' %}bg-indigo-100 text-indigo-700{% elif selected_session.status == 'reconnecting' %}bg-violet-100 text-violet-700{% elif selected_session.status == 'completed' %}bg-sky-100 text-sky-700{% elif selected_session.status == 'cancelled' %}bg-rose-100 text-rose-700{% else %}bg-slate-100 text-slate-700{% endif %}">{{ selected_session.get_status_display }}</span>
-            <a href="{% url 'admin_session_detail' selected_session.id %}" class="text-xs font-semibold text-brand-dark hover:underline">Open full detail</a>
-        </div>
-    </div>
-    <div class="grid gap-6 lg:grid-cols-[0.8fr_1.2fr] p-5">
-        <div>
-            <h4 class="text-sm font-semibold text-slate-900">Event timeline</h4>
-            <div class="mt-4 space-y-3">
-                {% for item in selected_timeline %}
-                <div class="rounded-xl bg-stone-50 px-3 py-3">
-                    <p class="font-semibold text-slate-900">{{ item.label }}</p>
-                    <p class="text-xs text-slate-500">{{ item.meta }} · {{ item.timestamp }}</p>
-                    {% if item.detail_rows %}
-                    <div class="mt-2 space-y-1 rounded-lg border border-stone-200 bg-white px-2 py-1.5">
-                        {% for row in item.detail_rows %}
-                        <p class="text-[11px] text-slate-500"><span class="font-semibold text-slate-700">{{ row.key }}</span>: {{ row.value }}</p>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        <div class="grid gap-4 sm:grid-cols-2">
-            <div class="rounded-xl bg-stone-50 p-4"><p class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Book</p><p class="mt-2 font-semibold text-slate-900">{{ selected_session.book.title }}</p></div>
-            <div class="rounded-xl bg-stone-50 p-4"><p class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Child</p><p class="mt-2 font-semibold text-slate-900">{{ selected_session.child_profile.display_name }}</p></div>
-            <div class="rounded-xl bg-stone-50 p-4"><p class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Started</p><p class="mt-2 font-semibold text-slate-900">{% if selected_session.started_at %}{{ selected_session.started_at|date:'d M Y, h:i A' }}{% else %}Not started{% endif %}</p></div>
-            <div class="rounded-xl bg-stone-50 p-4"><p class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Reconnects</p><p class="mt-2 font-semibold text-slate-900">{{ selected_reconnect_count }}</p></div>
-        </div>
-    </div>
-</section>
-{% endif %}
 
 <section class="mt-6 overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
     <div class="border-b border-stone-200 px-5 py-4"><h3 class="text-lg font-semibold text-slate-900">Recent sessions</h3></div>
@@ -84,7 +75,7 @@
                     <td class="px-5 py-4 text-right"><a href="{% url 'admin_session_detail' row.id %}" class="text-xs font-semibold text-brand-dark hover:underline">Open</a></td>
                 </tr>
                 {% empty %}
-                <tr><td colspan="7" class="px-5 py-10 text-center text-slate-500">No recent sessions to display.</td></tr>
+                <tr><td colspan="7" class="px-5 py-10 text-center text-slate-500">{% if has_active_filters %}No sessions match the current filters. <a href="{% url 'admin_live_sessions' %}" class="font-semibold text-brand-dark hover:underline">Clear filters</a>{% else %}No recent sessions to display.{% endif %}</td></tr>
                 {% endfor %}
             </tbody>
         </table>

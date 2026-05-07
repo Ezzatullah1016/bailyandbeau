@@ -516,12 +516,20 @@ def admin_session_monitor(request):
 
 @staff_member_required
 def admin_book_library(request):
-    if request.method == "POST" and request.POST.get("action") == "toggle_publish":
-        book = get_object_or_404(Book, pk=request.POST.get("book_id"))
-        book.published = not book.published
-        book.save(update_fields=["published", "updated_at"])
-        messages.success(request, f"Updated publish status for '{book.title}'.")
-        return redirect(reverse("admin_book_library"))
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "toggle_publish":
+            book = get_object_or_404(Book, pk=request.POST.get("book_id"))
+            book.published = not book.published
+            book.save(update_fields=["published", "updated_at"])
+            messages.success(request, f"Updated publish status for '{book.title}'.")
+            return redirect(reverse("admin_book_library"))
+        if action == "delete":
+            book = get_object_or_404(Book, pk=request.POST.get("book_id"))
+            title = book.title
+            book.delete()
+            messages.success(request, f"Deleted '{title}' from the library.")
+            return redirect(reverse("admin_book_library"))
 
     books = Book.objects.annotate(activity_total=Count("activity_configs")).order_by("title")
     query = request.GET.get("q", "").strip()
@@ -723,6 +731,106 @@ def _format_key_value_rows(value):
             rendered = str(raw)
         rows.append({"key": str(key), "value": rendered})
     return rows
+
+
+def _slug_to_title(slug):
+    """`charlie-and-the-chocolate-factory` -> `Charlie and the Chocolate Factory`."""
+    if not slug:
+        return ""
+    small_words = {"and", "or", "the", "a", "an", "of", "in", "on", "to", "for", "with"}
+    parts = str(slug).replace("_", "-").split("-")
+    out = []
+    for index, word in enumerate(parts):
+        if not word:
+            continue
+        if index > 0 and word.lower() in small_words:
+            out.append(word.lower())
+        else:
+            out.append(word[:1].upper() + word[1:].lower())
+    return " ".join(out)
+
+
+def _humanize_seconds(value):
+    """`1200` -> `20 minutes`. Falls back to a raw seconds string."""
+    try:
+        total = int(value)
+    except (TypeError, ValueError):
+        return None
+    if total < 0:
+        return None
+    if total < 60:
+        return f"{total} second" + ("" if total == 1 else "s")
+    minutes, seconds = divmod(total, 60)
+    if minutes < 60:
+        if seconds == 0:
+            return f"{minutes} minute" + ("" if minutes == 1 else "s")
+        return f"{minutes} min {seconds} sec"
+    hours, minutes = divmod(minutes, 60)
+    if minutes == 0:
+        return f"{hours} hour" + ("" if hours == 1 else "s")
+    return f"{hours} hr {minutes} min"
+
+
+def _humanize_session_event(event_type, payload, participant_name=None):
+    """Return a human-readable sentence for a SessionEvent entry."""
+    payload = payload if isinstance(payload, dict) else {}
+    actor = participant_name or "System"
+
+    if event_type == SessionEvent.EventType.CREATED:
+        room_type = (payload.get("room_type") or "").replace("_", " ").strip()
+        book_label = _slug_to_title(payload.get("book_slug"))
+        if room_type and book_label:
+            return f"{room_type.title()} room scheduled for {book_label}."
+        if book_label:
+            return f"Session scheduled for {book_label}."
+        if room_type:
+            return f"{room_type.title()} room scheduled."
+        return "Session created."
+
+    if event_type == SessionEvent.EventType.STARTED:
+        return f"Reading session started by {actor}." if participant_name else "Reading session started."
+
+    if event_type == SessionEvent.EventType.RECONNECTED:
+        return f"{actor} reconnected to the room." if participant_name else "A participant reconnected to the room."
+
+    if event_type == SessionEvent.EventType.COMPLETED:
+        return f"Session marked complete by {actor}." if participant_name else "Session marked complete."
+
+    if event_type == SessionEvent.EventType.CANCELLED:
+        if payload.get("forced_by_admin"):
+            return "Cancelled by an admin from the operations dashboard."
+        source = (payload.get("source") or "").strip()
+        if source == "api":
+            return "Cancelled via the API."
+        if source:
+            return f"Cancelled via {source}."
+        return "Session cancelled."
+
+    if event_type == "host_transferred":
+        return f"Host role transferred from {actor}." if participant_name else "Host role transferred."
+
+    label = str(event_type).replace("_", " ").strip().capitalize() or "Event"
+    return f"{label}."
+
+
+def _humanize_timer_state(timer_state):
+    """Render `{'remaining_seconds': 1200}` as `'20 minutes left on the reading timer.'`."""
+    if not isinstance(timer_state, dict) or not timer_state:
+        return ""
+    parts = []
+    remaining = _humanize_seconds(timer_state.get("remaining_seconds"))
+    if remaining:
+        parts.append(f"{remaining} left on the reading timer")
+    elapsed = _humanize_seconds(timer_state.get("elapsed_seconds"))
+    if elapsed:
+        parts.append(f"{elapsed} elapsed so far")
+    if timer_state.get("paused") is True:
+        parts.append("timer is paused")
+    elif timer_state.get("paused") is False and "remaining_seconds" not in timer_state:
+        parts.append("timer is running")
+    if not parts:
+        return ""
+    return ", ".join(parts).capitalize() + "."
 
 
 def _flatten_serializer_errors(error_dict):
@@ -1460,8 +1568,31 @@ def admin_badges(request):
 @staff_member_required
 def admin_live_sessions(request):
     """Focused live operations view for active and recently completed reading sessions."""
+    query = request.GET.get("q", "").strip()
+    book_query = request.GET.get("book_q", "").strip()
+    status_filter = request.GET.get("status", "").strip()
+    date_filter = request.GET.get("date", "").strip()
+
+    live_statuses = [
+        ReadingSession.Status.ACTIVE,
+        ReadingSession.Status.RECONNECTING,
+        ReadingSession.Status.LOBBY,
+    ]
+
+    def _apply_shared_filters(queryset):
+        if query:
+            queryset = queryset.filter(
+                Q(participants__display_name__icontains=query)
+                | Q(created_by__username__icontains=query)
+                | Q(created_by__first_name__icontains=query)
+                | Q(created_by__last_name__icontains=query)
+            ).distinct()
+        if book_query:
+            queryset = queryset.filter(book__title__icontains=book_query)
+        return queryset
+
     live_queryset = (
-        ReadingSession.objects.filter(status__in=[ReadingSession.Status.ACTIVE, ReadingSession.Status.RECONNECTING, ReadingSession.Status.LOBBY])
+        ReadingSession.objects.filter(status__in=live_statuses)
         .select_related("book", "child_profile", "created_by")
         .prefetch_related("participants", "events")
         .order_by("-updated_at")
@@ -1472,47 +1603,34 @@ def admin_live_sessions(request):
         .order_by("-created_at")
     )
 
-    selected_id = request.GET.get("session")
-    selected_session = None
-    if selected_id:
-        selected_session = recent_queryset.filter(pk=selected_id).first()
-    if not selected_session:
-        selected_session = live_queryset.first() or recent_queryset.first()
+    live_queryset = _apply_shared_filters(live_queryset)
+    recent_queryset = _apply_shared_filters(recent_queryset)
 
-    event_timeline = []
-    selected_reconnect_count = 0
-    if selected_session:
-        timeline_source = selected_session.events.select_related("participant").order_by("created_at")[:10]
-        selected_reconnect_count = selected_session.events.filter(event_type=SessionEvent.EventType.RECONNECTED).count()
-        for event in timeline_source:
-            event_timeline.append(
-                {
-                    "label": event.get_event_type_display(),
-                    "meta": (event.participant.display_name if event.participant else "System"),
-                    "timestamp": timezone.localtime(event.created_at).strftime("%I:%M:%S %p"),
-                    "detail_rows": _format_key_value_rows(event.payload or {}),
-                }
-            )
-        if not event_timeline:
-            event_timeline.append(
-                {
-                    "label": "Session created",
-                    "meta": selected_session.created_by.get_full_name() or selected_session.created_by.username,
-                    "timestamp": timezone.localtime(selected_session.created_at).strftime("%I:%M:%S %p"),
-                    "detail_rows": _format_key_value_rows({"status": selected_session.get_status_display()}),
-                }
-            )
+    if status_filter:
+        recent_queryset = recent_queryset.filter(status=status_filter)
+        if status_filter not in {s.value for s in live_statuses}:
+            live_queryset = live_queryset.none()
+        else:
+            live_queryset = live_queryset.filter(status=status_filter)
+
+    if date_filter:
+        parsed_date = parse_date(date_filter)
+        if parsed_date:
+            recent_queryset = recent_queryset.filter(created_at__date=parsed_date)
+
+    has_active_filters = bool(query or book_query or status_filter or date_filter)
 
     context = {
         "active_nav": "live_sessions",
         "active_count": live_queryset.count(),
-        "live_rows": _build_live_session_cards(live_queryset[:3]),
-        "selected_session": selected_session,
-        "selected_timeline": event_timeline,
-        "selected_reconnect_count": selected_reconnect_count,
-        "selected_hosts": [p for p in selected_session.participants.all() if p.session_role == SessionParticipant.SessionRole.HOST] if selected_session else [],
-        "selected_guests": [p for p in selected_session.participants.all() if p.session_role != SessionParticipant.SessionRole.HOST] if selected_session else [],
-        "recent_session_rows": _build_session_rows(recent_queryset[:10]),
+        "live_rows": _build_live_session_cards(live_queryset[:6 if has_active_filters else 3]),
+        "recent_session_rows": _build_session_rows(recent_queryset[:25 if has_active_filters else 10]),
+        "query": query,
+        "book_query": book_query,
+        "status_filter": status_filter,
+        "date_filter": date_filter,
+        "has_active_filters": has_active_filters,
+        "status_choices": ReadingSession.Status.choices,
     }
     return render(request, "core/admin_live_sessions.html", context)
 
@@ -1594,11 +1712,12 @@ def admin_session_detail(request, session_id):
     invite = getattr(session, "invite", None)
     timeline = []
     for event in session.events.select_related("participant").order_by("created_at")[:20]:
+        participant_name = event.participant.display_name if event.participant else None
         timeline.append({
             "label": event.get_event_type_display(),
-            "meta": event.participant.display_name if event.participant else "System",
+            "meta": participant_name or "System",
             "timestamp": timezone.localtime(event.created_at).strftime("%d %b %H:%M:%S"),
-            "payload_rows": _format_key_value_rows(event.payload),
+            "description": _humanize_session_event(event.event_type, event.payload, participant_name),
             "tone": {
                 SessionEvent.EventType.CANCELLED: "rose",
                 SessionEvent.EventType.RECONNECTED: "violet",
@@ -1622,7 +1741,7 @@ def admin_session_detail(request, session_id):
         "timeline": timeline,
         "invite": invite,
         "snapshot": snapshot,
-        "snapshot_timer_rows": _format_key_value_rows(getattr(snapshot, "timer_state", {})) if snapshot else [],
+        "snapshot_timer_summary": _humanize_timer_state(getattr(snapshot, "timer_state", {})) if snapshot else "",
         "can_cancel": can_cancel,
         "duration": _session_duration_label(session),
     }
