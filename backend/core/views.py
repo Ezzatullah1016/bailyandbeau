@@ -1623,7 +1623,7 @@ def admin_live_sessions(request):
     context = {
         "active_nav": "live_sessions",
         "active_count": live_queryset.count(),
-        "live_rows": _build_live_session_cards(live_queryset[:6 if has_active_filters else 3]),
+        "live_rows": _build_live_session_cards(live_queryset[:60]),
         "recent_session_rows": _build_session_rows(recent_queryset[:25 if has_active_filters else 10]),
         "query": query,
         "book_query": book_query,
