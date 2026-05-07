@@ -198,9 +198,9 @@ class AdminPortalPageTests(TestCase):
             self.assertContains(response, expected_text)
 
         session_response = self.client.get(reverse("admin_session_monitor"))
-        self.assertContains(session_response, "Platform Insights")
-        self.assertContains(session_response, "Live Ops Active")
-        self.assertContains(session_response, "View Logged Issues")
+        self.assertNotContains(session_response, "Platform Insights")
+        self.assertNotContains(session_response, "Live Ops Active")
+        self.assertNotContains(session_response, "View Logged Issues")
         self.assertContains(session_response, "portaladmin")
 
     def test_admin_user_detail_rejects_invalid_profile_picture(self):
