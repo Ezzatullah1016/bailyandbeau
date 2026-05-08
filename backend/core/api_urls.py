@@ -3,6 +3,8 @@ from django.urls import path
 from .api_views import (
     MediaUploadView,
     MeBadgesView,
+    MeDeleteView,
+    MeExportView,
     TransferHostView,
     AdminActivityDetailView,
     AdminActivityListCreateView,
@@ -73,6 +75,8 @@ urlpatterns = [
     path("auth/refresh/", TokenRefreshApiView.as_view(), name="auth-refresh"),
     path("me/", MeView.as_view(), name="me"),
     path("me/badges/", MeBadgesView.as_view(), name="me-badges"),
+    path("me/delete/", MeDeleteView.as_view(), name="me-delete"),
+    path("me/export/", MeExportView.as_view(), name="me-export"),
     path("dashboard/", DashboardView.as_view(), name="dashboard"),
     path("notifications/preferences/", NotificationPreferenceView.as_view(), name="notification-preferences"),
     path("reminders/", ReadingReminderListCreateView.as_view(), name="reading-reminder-list"),

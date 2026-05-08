@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { Suspense, useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Room, RoomEvent } from 'livekit-client';
 import { BookOpen, X } from 'lucide-react';
@@ -23,6 +23,20 @@ function buildMsg(type: string, payload: Record<string, unknown> = {}): Uint8Arr
 type AnyActivityState = string | DragDropState | QuizState | HotspotState | null;
 
 export default function ActivityPage() {
+  return (
+    <Suspense
+      fallback={(
+        <div className="flex min-h-screen items-center justify-center bg-[#1a1a1c]">
+          <BookOpen className="h-10 w-10 animate-pulse text-[#764f84]" aria-hidden />
+        </div>
+      )}
+    >
+      <ActivityPageContent />
+    </Suspense>
+  );
+}
+
+function ActivityPageContent() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const router = useRouter();

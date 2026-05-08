@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { BookOpen, Sparkles } from 'lucide-react';
 import { joinViaInvite } from '@/lib/api';
+import { MAX_LIVEKIT_ROOM_PARTICIPANTS } from '@/lib/sessionLimits';
 import { useSession } from '@/contexts/SessionContext';
 
 export default function InviteJoinPage() {
@@ -35,10 +36,13 @@ export default function InviteJoinPage() {
       });
       router.push(`/session/${data.session_id}/reading-room`);
     } catch (e) {
+      const msg = e instanceof Error ? e.message : '';
+        const soft =
+        /expired|invalid|invite/i.test(msg);
       setError(
-        e instanceof Error && e.message.includes('invite_expired')
-          ? 'This invite link has expired or already been used.'
-          : 'Could not join the session. Please check the link and try again.',
+        soft
+          ? 'This invite link has expired, hit its use limit, or is no longer valid. Ask the host for a fresh link from the reading room.'
+          : msg || 'Could not join the session. Please check the link and try again.',
       );
     } finally {
       setLoading(false);
@@ -97,7 +101,7 @@ export default function InviteJoinPage() {
             </button>
 
             <p className="font-karla text-center text-xs text-stone-400 italic">
-              No account required. This link is single-use.
+              No account required. The live room allows up to {MAX_LIVEKIT_ROOM_PARTICIPANTS} people at once.
             </p>
           </div>
         </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { BookOpen, Clock, Rocket, BookMarked, Sparkles, VideoOff, Copy, Check } from 'lucide-react';
 import {
@@ -9,6 +9,7 @@ import {
   readySessionWithToken,
   type SessionDetailData,
 } from '@/lib/api';
+import { MAX_LIVEKIT_ROOM_PARTICIPANTS } from '@/lib/sessionLimits';
 import { useSession } from '@/contexts/SessionContext';
 
 // ─── Data channel message types ───────────────────────────────────────────────
@@ -44,7 +45,7 @@ function isValidLiveKitUrl(url: string): boolean {
 
 // ─── Lobby page ────────────────────────────────────────────────────────────────
 
-export default function LobbyPage() {
+function LobbyPageContent() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -213,7 +214,13 @@ export default function LobbyPage() {
       setPhase('waiting');
       await connectToLobby(data.realtime_token, data.livekit_url, data.participant.id, 'guest');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to join session.');
+      const msg = e instanceof Error ? e.message : '';
+      const soft = /expired|invalid|invite/i.test(msg);
+      setError(
+        soft
+          ? 'This invite is no longer valid or has hit its use limit. Ask the host to copy a fresh link from the reading room (Copy link).'
+          : msg || 'Failed to join session.',
+      );
       setPhase('check');
     }
   }
@@ -249,10 +256,10 @@ export default function LobbyPage() {
 
   return (
     <>
-      <main className="flex h-screen w-full overflow-hidden font-karla text-[#1d1b16] antialiased">
+      <main className="flex flex-col md:flex-row h-screen w-full overflow-hidden font-karla text-[#1d1b16] antialiased">
 
         {/* ── LEFT COLUMN ──────────────────────────────────────────────────── */}
-        <section className="w-1/2 bg-[#faf7f6] p-12 flex flex-col justify-between overflow-y-auto">
+        <section className="w-full md:w-1/2 bg-[#faf7f6] p-8 md:p-12 flex flex-col justify-between overflow-y-auto">
           <div>
             <div className="mb-12">
               <span className="font-baloo text-2xl font-bold text-[#3d3b62] tracking-tight">
@@ -318,7 +325,9 @@ export default function LobbyPage() {
                       {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                     </button>
                   </div>
-                  <p className="font-karla text-[10px] text-[#43493d]/60 mt-1">Share this link with your reading partner</p>
+                  <p className="font-karla text-[10px] text-[#43493d]/60 mt-1">
+                    Share this link with your reading partners. Up to {MAX_LIVEKIT_ROOM_PARTICIPANTS} people can be in the live room at once.
+                  </p>
                 </div>
               )}
 
@@ -437,7 +446,7 @@ export default function LobbyPage() {
         </section>
 
         {/* ── RIGHT COLUMN ─────────────────────────────────────────────────── */}
-        <section className="w-1/2 bg-gradient-to-b from-[#3d3b62] to-[#764f84] p-12 relative flex items-center justify-center overflow-hidden">
+        <section className="hidden md:flex w-full md:w-1/2 bg-gradient-to-b from-[#3d3b62] to-[#764f84] p-12 relative items-center justify-center overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 blur-[120px] rounded-full -mr-32 -mt-32" />
           <div className="absolute bottom-0 left-0 w-64 h-64 bg-white/5 blur-[120px] rounded-full -ml-32 -mb-32" />
 
@@ -479,5 +488,19 @@ export default function LobbyPage() {
         </section>
       </main>
     </>
+  );
+}
+
+export default function LobbyPage() {
+  return (
+    <Suspense
+      fallback={(
+        <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#3d3b62] to-[#764f84]">
+          <BookOpen className="h-12 w-12 animate-pulse text-white/80" aria-hidden />
+        </div>
+      )}
+    >
+      <LobbyPageContent />
+    </Suspense>
   );
 }

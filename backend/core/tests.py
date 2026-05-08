@@ -1312,7 +1312,7 @@ class ApiTests(TestCase):
         response = self.client.get(f"/api/v1/sessions/{session_id}/invite/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["data"]["max_uses"], 1)
+        self.assertEqual(response.json()["data"]["max_uses"], 50)
         self.assertFalse(response.json()["data"]["host_role_granted"])
         self.assertTrue(response.json()["data"]["token"])
 
@@ -2335,3 +2335,155 @@ class NotificationPreferenceApiTests(TestCase):
         self.assertFalse(prefs.email_reminders)
         self.assertFalse(prefs.session_updates)
         self.assertTrue(prefs.marketing_opt_in)
+
+
+# ─── TransferHostView ─────────────────────────────────────────────────────────
+
+class TransferHostViewTests(TestCase):
+    def setUp(self):
+        self.host_user = User.objects.create_user(username="host_u", password="pw")
+        self.guest_user = User.objects.create_user(username="guest_u", password="pw")
+        child = ChildProfile.objects.create(user=self.host_user, display_name="Leo", age_band=ChildProfile.AgeBand.AGE_3_5)
+        book = Book.objects.create(title="T", slug="t", room_type=Book.RoomType.READING, age_band=Book.AgeBand.AGE_3_5, published=True, page_count=5)
+        self.session = ReadingSession.objects.create(book=book, child_profile=child, created_by=self.host_user, status=ReadingSession.Status.ACTIVE)
+        self.host_p = SessionParticipant.objects.create(session=self.session, user=self.host_user, display_name="Host", session_role=SessionParticipant.SessionRole.HOST, participant_type=SessionParticipant.ParticipantType.HOST)
+        self.guest_p = SessionParticipant.objects.create(session=self.session, user=self.guest_user, display_name="Guest", session_role=SessionParticipant.SessionRole.PARTICIPANT, participant_type=SessionParticipant.ParticipantType.GUEST)
+        self.url = f"/api/v1/sessions/{self.session.id}/transfer-host/"
+
+    def test_transfer_host_requires_auth(self):
+        response = self.client.post(self.url, data={}, content_type="application/json")
+        self.assertEqual(response.status_code, 401)
+
+    def test_transfer_host_success(self):
+        self.client.force_login(self.host_user)
+        response = self.client.post(
+            self.url,
+            data={"current_participant_id": str(self.host_p.id), "new_participant_id": str(self.guest_p.id)},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.host_p.refresh_from_db()
+        self.guest_p.refresh_from_db()
+        self.assertEqual(self.guest_p.session_role, SessionParticipant.SessionRole.HOST)
+        self.assertEqual(self.host_p.session_role, SessionParticipant.SessionRole.PARTICIPANT)
+
+    def test_transfer_host_non_host_rejected(self):
+        self.client.force_login(self.guest_user)
+        response = self.client.post(
+            self.url,
+            data={"current_participant_id": str(self.guest_p.id), "new_participant_id": str(self.host_p.id)},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_transfer_host_wrong_user_rejected(self):
+        other = User.objects.create_user(username="other_u", password="pw")
+        self.client.force_login(other)
+        response = self.client.post(
+            self.url,
+            data={"current_participant_id": str(self.host_p.id), "new_participant_id": str(self.guest_p.id)},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 403)
+
+
+# ─── SessionGuestTokenView ────────────────────────────────────────────────────
+
+class SessionGuestTokenViewTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="parent_gt", password="pw")
+        child = ChildProfile.objects.create(user=self.user, display_name="Mia", age_band=ChildProfile.AgeBand.AGE_3_5)
+        book = Book.objects.create(title="B", slug="b", room_type=Book.RoomType.READING, age_band=Book.AgeBand.AGE_3_5, published=True, page_count=5)
+        self.session = ReadingSession.objects.create(book=book, child_profile=child, created_by=self.user, status=ReadingSession.Status.ACTIVE)
+        self.participant = SessionParticipant.objects.create(
+            session=self.session, user=self.user, display_name="Mia", session_role=SessionParticipant.SessionRole.PARTICIPANT, participant_type=SessionParticipant.ParticipantType.GUEST,
+        )
+
+    def test_missing_participant_id_returns_400(self):
+        response = self.client.get(f"/api/v1/sessions/{self.session.id}/token/")
+        self.assertEqual(response.status_code, 400)
+
+    def test_invalid_participant_id_returns_403(self):
+        response = self.client.get(f"/api/v1/sessions/{self.session.id}/token/?participant_id=00000000-0000-0000-0000-000000000000")
+        self.assertEqual(response.status_code, 403)
+
+    def test_session_not_found_returns_404(self):
+        import uuid
+        response = self.client.get(f"/api/v1/sessions/{uuid.uuid4()}/token/?participant_id={self.participant.id}")
+        self.assertEqual(response.status_code, 404)
+
+
+# ─── AdminEntitlementDetailView ───────────────────────────────────────────────
+
+class AdminEntitlementDetailViewTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(username="admin_ent", password="pw", is_staff=True, is_superuser=True)
+        self.regular = User.objects.create_user(username="reg_ent", password="pw")
+        self.target = User.objects.create_user(username="target_ent", password="pw")
+        self.entitlement = Entitlement.objects.create(user=self.target, plan="active", sessions_remaining=10)
+        self.url = f"/api/v1/admin/entitlements/{self.target.id}/"
+
+    def test_non_admin_returns_403(self):
+        self.client.force_login(self.regular)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 403)
+
+    def test_admin_can_get_entitlement(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"]["plan"], "active")
+
+    def test_admin_can_patch_entitlement(self):
+        self.client.force_login(self.admin)
+        response = self.client.patch(self.url, data={"sessions_remaining": 5}, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        self.entitlement.refresh_from_db()
+        self.assertEqual(self.entitlement.sessions_remaining, 5)
+
+    def test_missing_entitlement_returns_404(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/api/v1/admin/entitlements/99999/")
+        self.assertEqual(response.status_code, 404)
+
+
+# ─── AdminSessionEventExportView ──────────────────────────────────────────────
+
+class AdminSessionEventExportViewTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(username="admin_ev", password="pw", is_staff=True, is_superuser=True)
+        self.regular = User.objects.create_user(username="reg_ev", password="pw")
+        child = ChildProfile.objects.create(user=self.admin, display_name="Rex", age_band=ChildProfile.AgeBand.AGE_3_5)
+        book = Book.objects.create(title="E", slug="e", room_type=Book.RoomType.READING, age_band=Book.AgeBand.AGE_3_5, published=True, page_count=5)
+        session = ReadingSession.objects.create(book=book, child_profile=child, created_by=self.admin)
+        participant = SessionParticipant.objects.create(session=session, user=self.admin, display_name="Rex", session_role=SessionParticipant.SessionRole.HOST, participant_type=SessionParticipant.ParticipantType.HOST)
+        SessionEvent.objects.create(session=session, participant=participant, event_type="session_started", payload={})
+        self.url = "/api/v1/admin/events/export/"
+
+    def test_non_admin_returns_403(self):
+        self.client.force_login(self.regular)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 403)
+
+    def test_export_returns_csv(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "text/csv")
+        content = response.content.decode()
+        self.assertIn("event_id", content)
+        self.assertIn("session_started", content)
+
+    def test_export_filter_by_event_type(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(self.url + "?event_type=session_started")
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("session_started", content)
+
+    def test_export_filter_excludes_other_types(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(self.url + "?event_type=page_turn")
+        content = response.content.decode()
+        lines = [l for l in content.strip().splitlines() if l and not l.startswith("event_id")]
+        self.assertEqual(len(lines), 0)

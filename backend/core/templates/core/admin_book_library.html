@@ -53,6 +53,12 @@
             <option value="published" {% if status_filter == 'published' %}selected{% endif %}>Published</option>
             <option value="draft" {% if status_filter == 'draft' %}selected{% endif %}>Draft</option>
         </select>
+        <select name="asset_type" class="rounded-xl border border-stone-200 bg-cream px-4 py-2 text-sm focus:border-brand-dark focus:outline-none">
+            <option value="">All Asset Types</option>
+            {% for value, label in asset_type_choices %}
+            <option value="{{ value }}" {% if asset_type_filter == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
         <button type="submit" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Apply</button>
         <a href="{% url 'admin_book_library' %}" class="text-sm font-semibold text-brand-dark hover:underline">Reset</a>
     </form>

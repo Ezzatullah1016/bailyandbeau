@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { AppShell } from './AppShell';
+import { CookieBanner } from '@/components/CookieBanner';
 import { Plus_Jakarta_Sans, Cormorant_Garamond, Jost, Baloo_2, Karla } from 'next/font/google';
 
 const jakarta = Plus_Jakarta_Sans({ subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-jakarta' });
@@ -19,6 +20,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en" className={`${jakarta.variable} ${cormorant.variable} ${jost.variable} ${baloo.variable} ${karla.variable}`}>
       <body>
         <AppShell>{children}</AppShell>
+        <CookieBanner />
       </body>
     </html>
   );

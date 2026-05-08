@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Lock, Medal, RefreshCw } from 'lucide-react';
 import { apiRequest } from '@/lib/api';
 import { Sidebar } from '@/components/dashboard/Sidebar';
@@ -22,13 +22,16 @@ function fmtDate(iso: string) {
 }
 
 
-export default function BadgesPage() {
+function BadgesPageContent() {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [me, setMe] = useState<MeData | null>(null);
   const [allBadges, setAllBadges] = useState<Badge[]>([]);
   const [earned, setEarned] = useState<UserBadge[]>([]);
   const [loading, setLoading] = useState(true);
+  const newBadgeCodes = useRef<Set<string>>(new Set());
+  const newBadgeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('bb_access_token');
@@ -39,6 +42,16 @@ export default function BadgesPage() {
       apiRequest<{ data: UserBadge[] }>('/me/badges/').then((r) => setEarned(r.data)),
     ]).catch(() => router.replace('/login')).finally(() => setLoading(false));
   }, [router]);
+
+  // Pick up new badge codes passed via ?new=code1,code2 from session completion redirect
+  useEffect(() => {
+    const raw = searchParams.get('new');
+    if (raw) {
+      raw.split(',').forEach((c) => newBadgeCodes.current.add(c.trim()));
+      // Scroll to earned section after load
+      setTimeout(() => newBadgeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
+    }
+  }, [searchParams]);
 
   const earnedCodes = new Set(earned.map((b) => b.badge_code));
 
@@ -51,8 +64,8 @@ export default function BadgesPage() {
   return (
     <>
       <Sidebar me={me} currentPath={pathname} />
-      <div className="ml-64 flex-1 min-w-0 overflow-x-hidden flex flex-col">
-      <header className="flex justify-between items-center w-full px-8 h-16 sticky top-0 z-40 bg-[#faf7f6]/80 backdrop-blur-xl shadow-sm border-b border-[#3d3b62]/10">
+      <div className="ml-0 md:ml-64 flex-1 min-w-0 overflow-x-hidden flex flex-col">
+      <header className="flex justify-between items-center w-full pl-16 pr-8 md:px-8 h-16 sticky top-0 z-40 bg-[#faf7f6]/80 backdrop-blur-xl shadow-sm border-b border-[#3d3b62]/10">
         <div className="font-baloo text-xl font-bold text-[#3d3b62]">Badges</div>
       </header>
       <main className="p-8 min-h-screen bg-[#faf7f6] font-karla text-[#1d1b16]">
@@ -80,9 +93,15 @@ export default function BadgesPage() {
           <section className="mb-10">
             <h3 className="font-baloo text-2xl text-[#3d3b62] font-bold mb-6">Earned Badges</h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-              {earned.map((ub) => (
-                <div key={ub.id} className="bg-white rounded-2xl p-6 shadow-sm border border-[#eccdca] flex flex-col items-center gap-3 text-center">
-                  <div className="h-20 w-20 rounded-full bg-[#f0c75e]/30 flex items-center justify-center text-4xl shadow-lg border-4 border-white ring-2 ring-[#f0c75e]/40">
+              {earned.map((ub) => {
+                const isNew = newBadgeCodes.current.has(ub.badge_code);
+                return (
+                <div
+                  key={ub.id}
+                  ref={isNew ? newBadgeRef : undefined}
+                  className={`bg-white rounded-2xl p-6 shadow-sm border flex flex-col items-center gap-3 text-center ${isNew ? 'border-[#f0c75e] ring-2 ring-[#f0c75e]/40' : 'border-[#eccdca]'}`}
+                >
+                  <div className={`h-20 w-20 rounded-full bg-[#f0c75e]/30 flex items-center justify-center text-4xl shadow-lg border-4 border-white ring-2 ring-[#f0c75e]/40 ${isNew ? 'badge-reveal' : ''}`}>
                     {BADGE_ICONS[ub.badge_code] ?? '🏅'}
                   </div>
                   <div>
@@ -90,7 +109,8 @@ export default function BadgesPage() {
                     <p className="text-[10px] text-stone-400 mt-1">Earned {fmtDate(ub.earned_at)}</p>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         )}
@@ -132,5 +152,19 @@ export default function BadgesPage() {
       </main>
       </div>
     </>
+  );
+}
+
+export default function BadgesPage() {
+  return (
+    <Suspense
+      fallback={(
+        <div className="flex h-screen w-screen items-center justify-center bg-[#faf7f6]">
+          <RefreshCw className="h-10 w-10 animate-spin text-[#764f84]" />
+        </div>
+      )}
+    >
+      <BadgesPageContent />
+    </Suspense>
   );
 }

@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Baby, Bell, CheckCircle, Clock, LogOut, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
+import { Baby, Bell, CheckCircle, Clock, Download, LogOut, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
+import Link from 'next/link';
 import { apiRequest, type UserBadgeData } from '@/lib/api';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { HeaderProfileAvatar, dashboardInitials, resolveUserAvatarUrl } from '@/components/dashboard/AccountAvatar';
@@ -103,6 +104,60 @@ function SectionHeader({ title, subtitle }: { title: string; subtitle: string })
       <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
       <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>
     </header>
+  );
+}
+
+function DeleteAccountButton() {
+  const router = useRouter();
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  if (!confirming) {
+    return (
+      <button
+        type="button"
+        onClick={() => setConfirming(true)}
+        className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50"
+      >
+        <Trash2 className="h-4 w-4" /> Delete my account
+      </button>
+    );
+  }
+
+  async function confirmDelete() {
+    setDeleting(true);
+    try {
+      await apiRequest('/me/delete/', { method: 'DELETE' });
+      localStorage.removeItem('bb_access_token');
+      localStorage.removeItem('bb_refresh_token');
+      router.replace('/login');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-3">
+      <p className="text-sm font-semibold text-red-700">Are you sure? This permanently deletes your account and all data.</p>
+      <div className="flex gap-3">
+        <button
+          type="button"
+          onClick={confirmDelete}
+          disabled={deleting}
+          className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-red-600 py-2 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-60"
+        >
+          {deleting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+          {deleting ? 'Deleting…' : 'Yes, delete'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setConfirming(false)}
+          className="flex-1 rounded-xl border border-red-200 bg-white py-2 text-sm font-bold text-red-600 hover:bg-red-50"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -248,8 +303,8 @@ export default function SettingsPage() {
   return (
     <>
       <Sidebar me={me} currentPath={pathname} />
-      <div className="ml-64 flex min-w-0 flex-1 flex-col overflow-x-hidden">
-        <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-stone-200 bg-stone-50/90 px-8 shadow-sm backdrop-blur-md">
+      <div className="ml-0 md:ml-64 flex min-w-0 flex-1 flex-col overflow-x-hidden">
+        <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-stone-200 bg-stone-50/90 pl-16 pr-8 md:px-8 shadow-sm backdrop-blur-md">
           <span className="text-base font-semibold text-slate-900">Settings</span>
           <HeaderProfileAvatar me={me} />
         </header>
@@ -590,7 +645,7 @@ export default function SettingsPage() {
                   title="Sign out"
                   subtitle="Sign out of your Bailey & Beau account on this device."
                 />
-                <div className="mx-auto max-w-md">
+                <div className="mx-auto max-w-md space-y-3">
                   <button
                     type="button"
                     onClick={() => {
@@ -602,7 +657,19 @@ export default function SettingsPage() {
                   >
                     <LogOut className="h-4 w-4" /> Sign out
                   </button>
+                  <a
+                    href="/api/v1/me/export/"
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#eccdca] bg-white py-2.5 text-sm font-semibold text-[#3d3b62] hover:bg-stone-50"
+                  >
+                    <Download className="h-4 w-4" /> Export my data
+                  </a>
+                  <DeleteAccountButton />
                 </div>
+                <p className="mt-4 text-center text-xs text-stone-400">
+                  <Link href="/privacy" className="underline hover:text-[#3d3b62]">Privacy Policy</Link>
+                  {' · '}
+                  <Link href="/terms" className="underline hover:text-[#3d3b62]">Terms of Service</Link>
+                </p>
               </section>
             </div>
           </div>

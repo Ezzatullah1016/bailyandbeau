@@ -536,6 +536,7 @@ def admin_book_library(request):
     room_type = request.GET.get("room_type", "").strip()
     age_band = request.GET.get("age_band", "").strip()
     status_filter = request.GET.get("status", "").strip()
+    asset_type_filter = request.GET.get("asset_type", "").strip()
 
     if query:
         books = books.filter(Q(title__icontains=query) | Q(slug__icontains=query) | Q(description__icontains=query))
@@ -547,6 +548,8 @@ def admin_book_library(request):
         books = books.filter(published=True)
     elif status_filter == "draft":
         books = books.filter(published=False)
+    if asset_type_filter:
+        books = books.filter(asset_type=asset_type_filter)
 
     context = {
         "active_nav": "books",
@@ -555,6 +558,7 @@ def admin_book_library(request):
         "room_type_filter": room_type,
         "age_band_filter": age_band,
         "status_filter": status_filter,
+        "asset_type_filter": asset_type_filter,
         "book_stats": {
             "total": Book.objects.count(),
             "published": Book.objects.filter(published=True).count(),
@@ -563,6 +567,7 @@ def admin_book_library(request):
         },
         "room_type_choices": Book.RoomType.choices,
         "age_band_choices": Book.AgeBand.choices,
+        "asset_type_choices": Book.AssetType.choices,
     }
     return render(request, "core/admin_book_library.html", context)
 
@@ -1479,6 +1484,26 @@ def admin_badges(request):
         award.delete()
         messages.success(request, "Badge award revoked.")
         return redirect(f"{reverse('admin_badges')}?selected={badge_id}")
+
+    if request.method == "POST" and request.POST.get("action") == "update_trigger_config":
+        badge = get_object_or_404(Badge, pk=request.POST.get("badge_id"))
+        trigger_type = badge.trigger_type
+        config = dict(badge.trigger_config or {})
+        if trigger_type == "session_complete":
+            slug = request.POST.get("config_book_slug", "").strip()
+            if slug:
+                config["book_slug"] = slug
+            else:
+                config.pop("book_slug", None)
+        elif trigger_type == "sessions_count":
+            try:
+                config["count"] = max(1, int(request.POST.get("config_count", 1)))
+            except (ValueError, TypeError):
+                pass
+        badge.trigger_config = config
+        badge.save(update_fields=["trigger_config"])
+        messages.success(request, "Trigger configuration saved.")
+        return redirect(f"{reverse('admin_badges')}?selected={badge.id}")
 
     if request.method == "POST" and request.POST.get("action") == "grant_award":
         badge = get_object_or_404(Badge, pk=request.POST.get("badge_id"))

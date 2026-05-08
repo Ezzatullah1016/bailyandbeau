@@ -20,6 +20,8 @@ export interface AnnotationCanvasHandle {
   clearCanvas(local?: boolean): void;
   getJSON(): string;
   undo(): void;
+  /** After CSS transforms (e.g. zoom) change, refresh size + pointer mapping */
+  recalcLayout(): void;
 }
 
 interface Props {
@@ -27,6 +29,8 @@ interface Props {
   color: string;
   brushSize: number;
   onSync: (json: string) => void;
+  /** When false, pointer events pass through so the flip book receives swipes/clicks */
+  drawingEnabled: boolean;
 }
 
 /** Convert a hex color to rgba() string with the given alpha (0–1). */
@@ -38,26 +42,106 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+function applyToolToCanvas(
+  canvas: FabricCanvas,
+  tool: AnnotationTool,
+  color: string,
+  brushSize: number,
+  emitSync: (c: FabricCanvas) => void,
+  drawingEnabled: boolean,
+) {
+  canvas.off('mouse:down');
+  canvas.off('mouse:move');
+
+  if (!drawingEnabled) {
+    canvas.isDrawingMode = false;
+    canvas.defaultCursor = 'default';
+    canvas.hoverCursor = 'default';
+    (canvas as { freeDrawingCursor?: string }).freeDrawingCursor = 'default';
+    const passthrough = canvas.upperCanvasEl as HTMLCanvasElement | undefined;
+    if (passthrough) passthrough.style.cursor = 'default';
+    return;
+  }
+
+  const brush = canvas.freeDrawingBrush;
+  if (brush && typeof brush === 'object') {
+    (brush as { strokeLineCap?: string }).strokeLineCap = 'round';
+    (brush as { strokeLineJoin?: string }).strokeLineJoin = 'round';
+  }
+
+  if (tool === 'pen') {
+    canvas.isDrawingMode = true;
+    canvas.defaultCursor = 'crosshair';
+    canvas.hoverCursor = 'crosshair';
+    (canvas as { freeDrawingCursor?: string }).freeDrawingCursor = 'crosshair';
+    canvas.freeDrawingBrush.color = color;
+    canvas.freeDrawingBrush.width = brushSize;
+  } else if (tool === 'highlighter') {
+    canvas.isDrawingMode = true;
+    canvas.defaultCursor = 'crosshair';
+    canvas.hoverCursor = 'crosshair';
+    (canvas as { freeDrawingCursor?: string }).freeDrawingCursor = 'crosshair';
+    canvas.freeDrawingBrush.color = hexToRgba(color, 0.35);
+    canvas.freeDrawingBrush.width = Math.max(brushSize, 20);
+  } else if (tool === 'eraser') {
+    canvas.isDrawingMode = false;
+    canvas.defaultCursor = 'pointer';
+    canvas.hoverCursor = 'pointer';
+    canvas.on('mouse:down', (opt: any) => {
+      const target = canvas.findTarget(opt.e, false);
+      if (target) {
+        canvas.remove(target);
+        canvas.requestRenderAll();
+        emitSync(canvas);
+      }
+    });
+  }
+
+  const upper = canvas.upperCanvasEl as HTMLCanvasElement | undefined;
+  if (upper) {
+    upper.style.cursor = tool === 'eraser' ? 'pointer' : 'crosshair';
+  }
+}
+
 const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
-  function AnnotationCanvas({ tool, color, brushSize, onSync }, ref) {
+  function AnnotationCanvas({ tool, color, brushSize, onSync, drawingEnabled }, ref) {
     const canvasElRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const fabricRef = useRef<FabricCanvas | null>(null);
+    const layoutResizeRef = useRef<(() => void) | null>(null);
+    const annPropsRef = useRef({ tool, color, brushSize, drawingEnabled });
+    annPropsRef.current = { tool, color, brushSize, drawingEnabled };
     const isRemoteLoadRef = useRef(false);
     const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const cancelPendingDebouncedSync = useCallback(() => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+    }, []);
 
     // ── Emit serialized canvas (debounced for large payloads) ──────────────
     const emitSync = useCallback(
       (canvas: FabricCanvas) => {
         const json = JSON.stringify(canvas.toJSON());
-        if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+        cancelPendingDebouncedSync();
         if (json.length >= DEBOUNCE_THRESHOLD_BYTES) {
           debounceTimerRef.current = setTimeout(() => onSync(json), DEBOUNCE_MS);
         } else {
           onSync(json);
         }
       },
-      [onSync],
+      [onSync, cancelPendingDebouncedSync],
+    );
+
+    /** Push current canvas state immediately (no debounce). Used after clear / remote replace. */
+    const syncNow = useCallback(
+      (canvas: FabricCanvas) => {
+        cancelPendingDebouncedSync();
+        onSync(JSON.stringify(canvas.toJSON()));
+      },
+      [onSync, cancelPendingDebouncedSync],
     );
 
     // ── Initialise Fabric canvas ───────────────────────────────────────────
@@ -82,7 +166,16 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
           canvas.setHeight(height);
           canvas.renderAll();
         };
+        layoutResizeRef.current = resize;
         resize();
+        applyToolToCanvas(
+          canvas,
+          annPropsRef.current.tool,
+          annPropsRef.current.color,
+          annPropsRef.current.brushSize,
+          emitSync,
+          annPropsRef.current.drawingEnabled,
+        );
 
         resizeObs = new ResizeObserver(resize);
         if (containerRef.current) resizeObs.observe(containerRef.current);
@@ -104,6 +197,7 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
       });
 
       return () => {
+        layoutResizeRef.current = null;
         resizeObs?.disconnect();
         if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
         try { canvas?.dispose(); } catch { /* ignore */ }
@@ -117,29 +211,8 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
       const canvas = fabricRef.current;
       if (!canvas) return;
 
-      // Always remove previous mouse handlers before setting new ones
-      canvas.off('mouse:down');
-      canvas.off('mouse:move');
-
-      if (tool === 'pen') {
-        canvas.isDrawingMode = true;
-        canvas.freeDrawingBrush.color = color;
-        canvas.freeDrawingBrush.width = brushSize;
-      } else if (tool === 'highlighter') {
-        canvas.isDrawingMode = true;
-        canvas.freeDrawingBrush.color = hexToRgba(color, 0.35);
-        canvas.freeDrawingBrush.width = Math.max(brushSize, 20);
-      } else if (tool === 'eraser') {
-        canvas.isDrawingMode = false;
-        canvas.on('mouse:down', (opt: any) => {
-          const target = canvas.findTarget(opt.e, false);
-          if (target) {
-            canvas.remove(target);
-            canvas.requestRenderAll();
-          }
-        });
-      }
-    }, [tool, color, brushSize]);
+      applyToolToCanvas(canvas, tool, color, brushSize, emitSync, drawingEnabled);
+    }, [tool, color, brushSize, drawingEnabled, emitSync]);
 
     // ── Expose imperative handles ─────────────────────────────────────────
     useImperativeHandle(
@@ -148,6 +221,7 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
         loadRemoteJSON(json: string) {
           const canvas = fabricRef.current;
           if (!canvas) return;
+          cancelPendingDebouncedSync();
           isRemoteLoadRef.current = true;
           canvas.loadFromJSON(json, () => {
             canvas.renderAll();
@@ -158,11 +232,13 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
         clearCanvas(_local = false) {
           const canvas = fabricRef.current;
           if (!canvas) return;
+          cancelPendingDebouncedSync();
           isRemoteLoadRef.current = true;
           canvas.clear();
           canvas.setBackgroundColor('white', () => {
             canvas.renderAll();
             isRemoteLoadRef.current = false;
+            syncNow(canvas);
           });
         },
 
@@ -182,15 +258,25 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
             emitSync(canvas);
           }
         },
+
+        recalcLayout() {
+          layoutResizeRef.current?.();
+          const canvas = fabricRef.current;
+          if (!canvas) return;
+          if (typeof canvas.calcOffset === 'function') canvas.calcOffset();
+          canvas.requestRenderAll();
+        },
       }),
-      [emitSync],
+      [emitSync, cancelPendingDebouncedSync, syncNow],
     );
 
     return (
       <div
         ref={containerRef}
-        className="absolute inset-0 z-10 pointer-events-auto"
-        style={{ cursor: tool === 'eraser' ? 'cell' : 'crosshair' }}
+        className={`absolute inset-0 z-10 ${drawingEnabled ? 'pointer-events-auto' : 'pointer-events-none'}`}
+        style={{
+          cursor: drawingEnabled ? (tool === 'eraser' ? 'cell' : 'crosshair') : 'default',
+        }}
       >
         <canvas ref={canvasElRef} className="absolute inset-0" />
       </div>

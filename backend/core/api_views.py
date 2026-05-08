@@ -448,6 +448,58 @@ class MeView(APIView):
         return Response({"data": UserSerializer(user).data, "meta": {}, "error": None})
 
 
+class MeDeleteView(APIView):
+    """GDPR right to erasure — deletes the authenticated user and all their data."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request):
+        user = request.user
+        user.delete()
+        return Response({"data": None, "meta": {"deleted": True}, "error": None}, status=status.HTTP_200_OK)
+
+
+class MeExportView(APIView):
+    """GDPR data portability — returns a JSON export of the user's personal data."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        children = list(
+            ChildProfile.objects.filter(user=user, is_active=True).values(
+                "id", "display_name", "age_band", "created_at"
+            )
+        )
+        sessions = list(
+            ReadingSession.objects.filter(created_by=user).values(
+                "id", "status", "room_type", "current_page", "started_at", "ended_at", "created_at"
+            )
+        )
+        reminders = list(
+            ReadingReminder.objects.filter(user=user).values(
+                "id", "title", "frequency", "time_of_day", "is_active", "created_at"
+            )
+        )
+        payload = {
+            "account": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "date_joined": user.date_joined.isoformat(),
+            },
+            "children": children,
+            "sessions": sessions,
+            "reminders": reminders,
+        }
+        response = HttpResponse(
+            json.dumps(payload, indent=2, default=str),
+            content_type="application/json",
+        )
+        response["Content-Disposition"] = 'attachment; filename="bailey-and-beau-data-export.json"'
+        return response
+
+
 class BillingPlansView(APIView):
     permission_classes = [permissions.AllowAny]
 

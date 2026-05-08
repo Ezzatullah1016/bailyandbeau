@@ -1,11 +1,12 @@
 'use client';
 
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const FULLSCREEN_PREFIXES = ['/session', '/invite', '/dashboard', '/onboarding', '/login'];
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+function AppShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isFullscreen = FULLSCREEN_PREFIXES.some((prefix) => pathname?.startsWith(prefix));
 
@@ -31,5 +32,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </header>
       {children}
     </div>
+  );
+}
+
+/** `usePathname()` must run under Suspense (Next.js app router). */
+export function AppShell({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={<>{children}</>}>
+      <AppShellInner>{children}</AppShellInner>
+    </Suspense>
   );
 }

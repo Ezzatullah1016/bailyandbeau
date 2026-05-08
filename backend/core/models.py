@@ -357,7 +357,10 @@ class SessionInvite(TimeStampedModel):
     token = models.CharField(max_length=64, unique=True, default=generate_invite_token, editable=False)
     host_role_granted = models.BooleanField(default=False)
     expires_at = models.DateTimeField(default=invite_expiry_default)
-    max_uses = models.PositiveIntegerField(default=1)
+    max_uses = models.PositiveIntegerField(
+        default=50,
+        help_text="Max number of guests who can claim this link (each join consumes one use).",
+    )
     used_count = models.PositiveIntegerField(default=0)
 
     def is_usable(self):

@@ -1,11 +1,11 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import {
   ArrowRight, Bell, BookOpen, BookMarked, CalendarDays, CheckSquare,
-  CreditCard, DoorOpen, Lock, Medal, MoreHorizontal, Play, Settings,
+  CreditCard, DoorOpen, Lock, Medal, MoreHorizontal, Play, RefreshCw, Settings,
   X,
 } from 'lucide-react';
 import { apiRequest, createSession, type UserBadgeData } from '@/lib/api';
@@ -204,9 +204,7 @@ function StartSessionModal({
 function DashboardInner() {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const startBook = searchParams.get('startBook');
-
+  const [startBook, setStartBook] = useState<string | null>(null);
   const [me, setMe] = useState<MeData | null>(null);
   const [dash, setDash] = useState<DashboardData | null>(null);
   const [entitlement, setEntitlement] = useState<EntitlementData | null>(null);
@@ -215,22 +213,62 @@ function DashboardInner() {
   const [badges, setBadges] = useState<UserBadgeData[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const q = new URLSearchParams(window.location.search);
+    setStartBook(q.get('startBook'));
+  }, [pathname]);
+
+  useEffect(() => {
+    let cancelled = false;
     const token = typeof localStorage !== 'undefined' ? localStorage.getItem('bb_access_token') : null;
-    if (!token) { router.replace('/login'); return; }
+    if (!token) {
+      router.replace('/login');
+      setLoading(false);
+      return;
+    }
+
+    setLoadError(null);
+    setLoading(true);
+
+    const safetyMs = 75000;
+    const safetyId = typeof window !== 'undefined' ? window.setTimeout(() => {
+      if (!cancelled) setLoading(false);
+    }, safetyMs) : null;
 
     Promise.all([
-      apiRequest<{ data: MeData }>('/me/').then((r) => setMe(r.data)),
-      apiRequest<{ data: DashboardData }>('/dashboard/').then((r) => setDash(r.data)),
-      apiRequest<{ data: EntitlementData }>('/billing/entitlement/').then((r) => setEntitlement(r.data)),
-      apiRequest<{ data: Book[] }>('/books/').then((r) => setBooks(r.data)),
-      apiRequest<{ data: ChildProfile[] }>('/children/').then((r) => setChildren(r.data)),
-      apiRequest<{ data: UserBadgeData[] }>('/me/badges/').then((r) => setBadges(r.data)),
+      apiRequest<{ data: MeData }>('/me/').then((r) => { if (!cancelled) setMe(r.data); }),
+      apiRequest<{ data: DashboardData }>('/dashboard/').then((r) => { if (!cancelled) setDash(r.data); }),
+      apiRequest<{ data: EntitlementData }>('/billing/entitlement/').then((r) => { if (!cancelled) setEntitlement(r.data); }),
+      apiRequest<{ data: Book[] }>('/books/').then((r) => { if (!cancelled) setBooks(r.data); }),
+      apiRequest<{ data: ChildProfile[] }>('/children/').then((r) => { if (!cancelled) setChildren(r.data); }),
+      apiRequest<{ data: UserBadgeData[] }>('/me/badges/').then((r) => { if (!cancelled) setBadges(r.data); }),
     ])
-      .catch(() => router.replace('/login'))
-      .finally(() => setLoading(false));
-  }, [router]);
+      .catch((e) => {
+        if (cancelled) return;
+        console.error('[Dashboard] load failed', e);
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg.includes('Session expired') || msg.includes('sign in again')) {
+          router.replace('/login');
+          return;
+        }
+        setLoadError(
+          'Could not load your dashboard. The API may be offline or unreachable. If you use Laragon, start Django (often port 8000) and ensure NEXT_PUBLIC_API_BASE_URL matches your API base.',
+        );
+      })
+      .finally(() => {
+        if (safetyId) clearTimeout(safetyId);
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+      if (safetyId) clearTimeout(safetyId);
+    };
+  }, [router, reloadKey]);
 
   useEffect(() => {
     if (!startBook || books.length === 0 || children.length === 0) return;
@@ -258,6 +296,38 @@ function DashboardInner() {
     );
   }
 
+  if (loadError) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-[#faf7f6] p-6">
+        <div className="max-w-md rounded-2xl border border-[#eccdca] bg-white p-8 text-center shadow-lg">
+          <p className="font-karla text-sm text-[#764f84]">{loadError}</p>
+          <p className="mt-3 font-karla text-xs text-stone-500">
+            API tried: check the browser Network tab for requests to{' '}
+            <code className="rounded bg-stone-100 px-1 py-0.5 text-[11px]">/api/v1/</code> on your Django host.
+          </p>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                setReloadKey((k) => k + 1);
+              }}
+              className="font-baloo inline-flex items-center justify-center gap-2 rounded-xl bg-[#3d3b62] px-6 py-3 text-sm font-bold text-white transition-all hover:bg-[#764f84]"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Retry
+            </button>
+            <Link
+              href="/login"
+              className="font-baloo inline-flex items-center justify-center rounded-xl border border-[#eccdca] px-6 py-3 text-sm font-bold text-[#3d3b62] hover:bg-stone-50"
+            >
+              Back to login
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       {showModal && (
@@ -272,8 +342,8 @@ function DashboardInner() {
 
       <Sidebar me={me} currentPath={pathname} />
 
-      <div className="ml-64 flex-1 min-w-0 overflow-x-hidden flex flex-col">
-      <header className="flex justify-between items-center w-full px-8 h-16 sticky top-0 z-40 bg-[#faf7f6]/80 backdrop-blur-xl shadow-sm border-b border-[#3d3b62]/10">
+      <div className="ml-0 md:ml-64 flex-1 min-w-0 overflow-x-hidden flex flex-col">
+      <header className="flex justify-between items-center w-full pl-16 pr-8 md:px-8 h-16 sticky top-0 z-40 bg-[#faf7f6]/80 backdrop-blur-xl shadow-sm border-b border-[#3d3b62]/10">
         <div className="font-baloo text-xl font-bold text-[#3d3b62]">Dashboard</div>
         <div className="flex items-center gap-4">
           <button type="button" className="relative group">
@@ -512,18 +582,5 @@ function DashboardInner() {
 }
 
 export default function DashboardPage() {
-  return (
-    <Suspense
-      fallback={(
-        <div className="h-screen w-screen flex items-center justify-center bg-[#ece6ee]">
-          <div className="flex flex-col items-center gap-4">
-            <Icon name="sync" className="w-10 h-10 text-[#3d3b62] animate-spin" />
-            <p className="text-sm text-[#764f84] font-medium">Loading dashboard…</p>
-          </div>
-        </div>
-      )}
-    >
-      <DashboardInner />
-    </Suspense>
-  );
+  return <DashboardInner />;
 }

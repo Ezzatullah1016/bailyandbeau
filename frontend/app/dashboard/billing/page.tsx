@@ -71,8 +71,8 @@ export default function BillingPage() {
   return (
     <>
       <Sidebar me={me} currentPath={pathname} />
-      <div className="ml-64 flex-1 min-w-0 overflow-x-hidden flex flex-col">
-      <header className="flex items-center w-full px-8 h-16 sticky top-0 z-40 bg-[#faf7f6]/80 backdrop-blur-xl shadow-sm border-b border-[#3d3b62]/10">
+      <div className="ml-0 md:ml-64 flex-1 min-w-0 overflow-x-hidden flex flex-col">
+      <header className="flex items-center w-full pl-16 pr-8 md:px-8 h-16 sticky top-0 z-40 bg-[#faf7f6]/80 backdrop-blur-xl shadow-sm border-b border-[#3d3b62]/10">
         <div className="font-baloo text-xl font-bold text-[#3d3b62]">Billing</div>
       </header>
       <main className="p-8 min-h-screen bg-[#faf7f6] font-karla text-[#1d1b16]">

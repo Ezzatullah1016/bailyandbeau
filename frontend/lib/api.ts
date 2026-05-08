@@ -1,6 +1,16 @@
 const defaultBaseUrl = 'http://127.0.0.1:8000/api/v1';
 const devFallbackBaseUrls = ['http://127.0.0.1:8001/api/v1'];
 
+/** Max time to wait per base URL before trying the next (avoids infinite "Loading…" when API is down). */
+const API_FETCH_TIMEOUT_MS = 12_000;
+
+function isRetryableFetchError(error: unknown): boolean {
+  if (error instanceof TypeError) return true;
+  if (typeof DOMException !== 'undefined' && error instanceof DOMException && error.name === 'AbortError') return true;
+  if (error && typeof error === 'object' && (error as Error).name === 'AbortError') return true;
+  return false;
+}
+
 /** Try-order for login/API calls: explicit env, LAN Django on :8000 when UI opened by IP/hostname, same-origin `/api/v1`, then local defaults. */
 function computeApiBaseCandidates(): string[] {
   const explicit = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -29,13 +39,24 @@ export const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? defaultBaseUrl
 async function fetchWithFallback(path: string, init?: RequestInit): Promise<Response> {
   let lastError: unknown;
   for (const baseUrl of computeApiBaseCandidates()) {
+    const hasExternalSignal = Boolean(init?.signal);
+    const ctrl = hasExternalSignal ? null : new AbortController();
+    const tid =
+      !hasExternalSignal && ctrl
+        ? setTimeout(() => ctrl.abort(), API_FETCH_TIMEOUT_MS)
+        : null;
     try {
-      return await fetch(`${baseUrl}${path}`, init);
+      return await fetch(`${baseUrl}${path}`, {
+        ...init,
+        signal: init?.signal ?? ctrl!.signal,
+      });
     } catch (error) {
       lastError = error;
-      if (!(error instanceof TypeError)) {
+      if (!isRetryableFetchError(error)) {
         throw error;
       }
+    } finally {
+      if (tid) clearTimeout(tid);
     }
   }
   throw lastError ?? new Error('Network request failed');
