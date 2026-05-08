@@ -1,5 +1,7 @@
 # ─── Python / Django ──────────────────────────────────────────────────────────
 .venv/
+venv/
+backend/venv/
 __pycache__/
 *.py[cod]
 *.sqlite3
