@@ -279,6 +279,20 @@ function SessionMediaDock() {
   );
 }
 
+/** Wraps AnnotationToolbar and injects LiveKit mic/camera state */
+function UnifiedBar(props: Omit<Parameters<typeof AnnotationToolbar>[0], 'isMicEnabled' | 'isCameraEnabled' | 'onToggleMic' | 'onToggleCamera'>) {
+  const { localParticipant, isMicrophoneEnabled, isCameraEnabled } = useLocalParticipant();
+  return (
+    <AnnotationToolbar
+      {...props}
+      isMicEnabled={isMicrophoneEnabled}
+      isCameraEnabled={isCameraEnabled}
+      onToggleMic={() => localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)}
+      onToggleCamera={() => localParticipant.setCameraEnabled(!isCameraEnabled)}
+    />
+  );
+}
+
 function SessionTimerRing({
   remaining,
   totalSecs,
@@ -1791,69 +1805,26 @@ function RoomContent({
           </aside>
         </main>
 
-        {/* Fixed bottom: annotation tools + session dock (pointer-events-none on shell so the book stays clickable between rows) */}
-        <div className="pointer-events-none fixed bottom-5 left-1/2 z-[58] flex w-full max-w-[calc(100vw-1rem)] -translate-x-1/2 flex-col items-stretch gap-2">
-          <div className="pointer-events-auto w-full min-w-0 px-0 sm:px-0">
-            <AnnotationToolbar
-              interactionMode={interactionMode}
-              onInteractionModeChange={setInteractionMode}
-              color={annColor}
-              brushSize={annBrush}
-              onColorChange={setAnnColor}
-              onBrushSizeChange={setAnnBrush}
-              onClear={handleClearCanvas}
-              onUndo={() => canvasRef.current?.undo()}
-              onReaction={handleReaction}
-              tooltipPlacement="below"
-              className="w-full min-w-0"
-            />
-          </div>
-          <div className="pointer-events-auto flex max-w-full items-center justify-center gap-2 self-center rounded-full border border-white/10 bg-stone-950/90 px-2 py-2.5 shadow-2xl backdrop-blur-xl sm:gap-4 sm:px-5 sm:py-3">
-            <SessionMediaDock />
-            <div className="mx-1 h-10 w-px shrink-0 bg-white/10 sm:mx-2" aria-hidden />
-            {role === 'host' && inviteToken && (
-              <button
-                type="button"
-                onClick={handleCopyInviteLink}
-                aria-label="Copy invite link"
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 border-teal-500/40 bg-teal-950/40 text-teal-200 transition-all hover:bg-teal-900/50 sm:h-14 sm:w-14"
-              >
-                {linkCopied ? <Check className="h-5 w-5 sm:h-6 sm:w-6" /> : <Copy className="h-5 w-5 sm:h-6 sm:w-6" />}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                setRoomPanelOpen(true);
-                setActiveTab('video');
-              }}
-              aria-label="Open participants and video"
-              className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 border-orange-400/45 bg-orange-950/35 text-orange-200 transition-all hover:bg-orange-900/45 sm:h-14 sm:w-14"
-            >
-              <Users className="h-5 w-5 sm:h-6 sm:w-6" />
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-orange-400 px-1 text-[9px] font-bold text-stone-900">
-                {participants.length}
-              </span>
-            </button>
-            {role === 'host' && (
-              <button
-                type="button"
-                onClick={() => router.push(`/session/${sessionId}/activity?bookId=${bookId}`)}
-                aria-label="Open activities"
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 border-pink-400/45 bg-pink-950/35 text-pink-200 transition-all hover:bg-pink-900/40 sm:h-14 sm:w-14"
-              >
-                <Gamepad2 className="h-5 w-5 sm:h-6 sm:w-6" />
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => handleEndSession(false)}
-              aria-label={role === 'host' ? 'End session' : 'Leave session'}
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 border-red-500/50 bg-red-950/50 text-red-200 transition-all hover:bg-red-900/60 sm:h-14 sm:w-14"
-            >
-              <Phone className="h-5 w-5 sm:h-6 sm:w-6 rotate-[135deg]" />
-            </button>
-          </div>
+        {/* Fixed bottom: unified circular controls */}
+        <div className="pointer-events-none fixed bottom-5 left-1/2 z-[58] flex w-full max-w-[calc(100vw-1rem)] -translate-x-1/2 flex-col items-center gap-2">
+          <UnifiedBar
+            interactionMode={interactionMode}
+            onInteractionModeChange={setInteractionMode}
+            color={annColor}
+            brushSize={annBrush}
+            onColorChange={setAnnColor}
+            onBrushSizeChange={setAnnBrush}
+            onClear={handleClearCanvas}
+            onUndo={() => canvasRef.current?.undo()}
+            onReaction={handleReaction}
+            role={role}
+            participantCount={participants.length}
+            onOpenParticipants={() => { setRoomPanelOpen(true); setActiveTab('video'); }}
+            onOpenActivities={role === 'host' ? () => router.push(`/session/${sessionId}/activity?bookId=${bookId}`) : undefined}
+            onCopyInvite={role === 'host' && inviteToken ? handleCopyInviteLink : undefined}
+            linkCopied={linkCopied}
+            onEndSession={() => handleEndSession(false)}
+          />
         </div>
 
         {/* Reading progress bar */}
