@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Bailey & Beau — update an existing deployment on the EC2 instance.
 #
-# Production target: Ubuntu 24.04 at https://16.16.146.231
+# Production target: Ubuntu 24.04 (eu-north-1) at https://51.21.140.88
 # Repo lives at /home/ubuntu/app and tracks origin/main.
 #
 # The server is pre-provisioned with:
@@ -11,7 +11,7 @@
 #               /super-admin, /webhooks → gunicorn and everything else → Next.js
 #
 # Usage (from a workstation with the deployment key):
-#   ssh -i backend/keys/deployment.pem ubuntu@16.16.146.231 \
+#   ssh -i backend/keys/deployment.pem ubuntu@51.21.140.88 \
 #       'bash /home/ubuntu/app/deploy/update.sh'
 #
 # Or run directly on the server as the `ubuntu` user:

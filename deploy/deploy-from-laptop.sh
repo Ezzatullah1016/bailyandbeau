@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-SERVER_IP="${SERVER_IP:-16.16.146.231}"
+SERVER_IP="${SERVER_IP:-51.21.140.88}"
 USER_NAME="${USER_NAME:-ubuntu}"
 PEM="${PEM:-backend/keys/deployment.pem}"
 APP_DIR="${APP_DIR:-/home/ubuntu/app}"

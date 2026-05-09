@@ -1,8 +1,8 @@
 # Deploying Bailey & Beau
 
-**Live target:** `https://16.16.146.231/`  
-**SSH:** `ubuntu@16.16.146.231`  
-**Key:** `backend/keys/deployment.pem` (gitignored — never commit it)
+**Live target:** `https://51.21.140.88/` (EC2 eu-north-1, Elastic IP)  
+**SSH:** `ubuntu@51.21.140.88`  
+**Key:** `backend/keys/deployment.pem` (gitignored — never commit it). On Windows, `deploy/run-deploy.ps1` also accepts `baileyandbeauco-key.pem` in the repo root if the path above is missing.
 
 The EC2 box is already provisioned. Deploys are **just**: push code → SSH in → run `deploy/update.sh`.
 
@@ -50,7 +50,7 @@ Both helpers:
 - Read **`backend/keys/deployment.pem`** (locally only, never uploaded)
 - On Windows, tighten the key's ACL so OpenSSH accepts it (`icacls`)
 - Optionally `git push origin HEAD` first
-- SSH to `ubuntu@16.16.146.231`
+- SSH to `ubuntu@51.21.140.88`
 - Run `bash /home/ubuntu/app/deploy/update.sh`
 
 If you only want to redeploy without pushing (e.g. you already pushed via GitHub):
@@ -68,7 +68,7 @@ If you only want to redeploy without pushing (e.g. you already pushed via GitHub
 git push origin main
 
 # 2. SSH in and run the update
-ssh -i backend/keys/deployment.pem ubuntu@16.16.146.231 \
+ssh -i backend/keys/deployment.pem ubuntu@51.21.140.88 \
   'bash /home/ubuntu/app/deploy/update.sh'
 ```
 
@@ -77,7 +77,7 @@ ssh -i backend/keys/deployment.pem ubuntu@16.16.146.231 \
 ## Common ops
 
 ```bash
-ssh -i backend/keys/deployment.pem ubuntu@16.16.146.231
+ssh -i backend/keys/deployment.pem ubuntu@51.21.140.88
 
 sudo systemctl status gunicorn --no-pager
 sudo journalctl -u gunicorn -n 100 -f

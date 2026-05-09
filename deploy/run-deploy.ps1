@@ -2,7 +2,7 @@
     deploy/run-deploy.ps1 — deploy the latest origin/main onto EC2.
 
     Usage (PowerShell, from repo root):
-        ./deploy/run-deploy.ps1                   # ubuntu@16.16.146.231 + PEM (see below)
+        ./deploy/run-deploy.ps1                   # ubuntu@51.21.140.88 + PEM (see below)
         ./deploy/run-deploy.ps1 -Push             # also git push first
         ./deploy/run-deploy.ps1 -Pem path\to\key.pem   # optional explicit key
         ./deploy/run-deploy.ps1 -User ubuntu       # default SSH user (Ubuntu EC2 AMI)
@@ -21,7 +21,7 @@
 #>
 
 param(
-    [string]$ServerIp = '16.16.146.231',
+    [string]$ServerIp = '51.21.140.88',
     [string]$User     = 'ubuntu',
     [string]$Pem      = 'backend/keys/deployment.pem',
     [string]$AppDir   = '/home/ubuntu/app',
