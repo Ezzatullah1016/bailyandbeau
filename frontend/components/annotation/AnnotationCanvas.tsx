@@ -42,6 +42,31 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+/** Cursor shown over the book while annotating (Fabric + wrapper). */
+function cursorForTool(tool: AnnotationTool, drawingEnabled: boolean): string {
+  if (!drawingEnabled) return 'default';
+  if (tool === 'eraser') return 'pointer';
+  return 'crosshair';
+}
+
+function setFabricSurfaceCursors(canvas: FabricCanvas, cssCursor: string) {
+  const upper = canvas.upperCanvasEl as HTMLCanvasElement | undefined;
+  const lower = canvas.lowerCanvasEl as HTMLCanvasElement | undefined;
+  if (upper) upper.style.cursor = cssCursor;
+  if (lower) lower.style.cursor = cssCursor;
+}
+
+type FabricNS = { PencilBrush?: new (canvas: FabricCanvas) => unknown };
+
+function ensureFreeDrawingBrush(canvas: FabricCanvas, fabricNS: FabricNS | null | undefined) {
+  if (canvas.freeDrawingBrush || !fabricNS?.PencilBrush) return;
+  try {
+    canvas.freeDrawingBrush = new fabricNS.PencilBrush(canvas) as any;
+  } catch {
+    /* ignore */
+  }
+}
+
 function applyToolToCanvas(
   canvas: FabricCanvas,
   tool: AnnotationTool,
@@ -49,6 +74,7 @@ function applyToolToCanvas(
   brushSize: number,
   emitSync: (c: FabricCanvas) => void,
   drawingEnabled: boolean,
+  fabricNS?: FabricNS | null,
 ) {
   canvas.off('mouse:down');
   canvas.off('mouse:move');
@@ -58,35 +84,42 @@ function applyToolToCanvas(
     canvas.defaultCursor = 'default';
     canvas.hoverCursor = 'default';
     (canvas as { freeDrawingCursor?: string }).freeDrawingCursor = 'default';
-    const passthrough = canvas.upperCanvasEl as HTMLCanvasElement | undefined;
-    if (passthrough) passthrough.style.cursor = 'default';
+    setFabricSurfaceCursors(canvas, 'default');
     return;
   }
 
-  const brush = canvas.freeDrawingBrush;
-  if (brush && typeof brush === 'object') {
-    (brush as { strokeLineCap?: string }).strokeLineCap = 'round';
-    (brush as { strokeLineJoin?: string }).strokeLineJoin = 'round';
+  const cursor = cursorForTool(tool, true);
+  if (tool === 'pen' || tool === 'highlighter') {
+    ensureFreeDrawingBrush(canvas, fabricNS);
   }
+  const brush = canvas.freeDrawingBrush;
 
   if (tool === 'pen') {
+    if (!brush) return;
+    (brush as { strokeLineCap?: string }).strokeLineCap = 'round';
+    (brush as { strokeLineJoin?: string }).strokeLineJoin = 'round';
     canvas.isDrawingMode = true;
-    canvas.defaultCursor = 'crosshair';
-    canvas.hoverCursor = 'crosshair';
-    (canvas as { freeDrawingCursor?: string }).freeDrawingCursor = 'crosshair';
-    canvas.freeDrawingBrush.color = color;
-    canvas.freeDrawingBrush.width = brushSize;
+    canvas.defaultCursor = cursor;
+    canvas.hoverCursor = cursor;
+    (canvas as { freeDrawingCursor?: string }).freeDrawingCursor = cursor;
+    brush.color = color;
+    brush.width = brushSize;
   } else if (tool === 'highlighter') {
+    if (!brush) return;
+    (brush as { strokeLineCap?: string }).strokeLineCap = 'round';
+    (brush as { strokeLineJoin?: string }).strokeLineJoin = 'round';
     canvas.isDrawingMode = true;
-    canvas.defaultCursor = 'crosshair';
-    canvas.hoverCursor = 'crosshair';
-    (canvas as { freeDrawingCursor?: string }).freeDrawingCursor = 'crosshair';
-    canvas.freeDrawingBrush.color = hexToRgba(color, 0.35);
-    canvas.freeDrawingBrush.width = Math.max(brushSize, 20);
+    canvas.defaultCursor = cursor;
+    canvas.hoverCursor = cursor;
+    (canvas as { freeDrawingCursor?: string }).freeDrawingCursor = cursor;
+    brush.color = hexToRgba(color, 0.35);
+    brush.width = Math.max(brushSize, 20);
   } else if (tool === 'eraser') {
     canvas.isDrawingMode = false;
     canvas.defaultCursor = 'pointer';
     canvas.hoverCursor = 'pointer';
+    (canvas as { freeDrawingCursor?: string }).freeDrawingCursor = 'default';
+    canvas.skipTargetFind = false;
     canvas.on('mouse:down', (opt: any) => {
       const target = canvas.findTarget(opt.e, false);
       if (target) {
@@ -97,10 +130,7 @@ function applyToolToCanvas(
     });
   }
 
-  const upper = canvas.upperCanvasEl as HTMLCanvasElement | undefined;
-  if (upper) {
-    upper.style.cursor = tool === 'eraser' ? 'pointer' : 'crosshair';
-  }
+  setFabricSurfaceCursors(canvas, cursor);
 }
 
 const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
@@ -108,6 +138,7 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
     const canvasElRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const fabricRef = useRef<FabricCanvas | null>(null);
+    const fabricLibRef = useRef<FabricNS | null>(null);
     const layoutResizeRef = useRef<(() => void) | null>(null);
     const annPropsRef = useRef({ tool, color, brushSize, drawingEnabled });
     annPropsRef.current = { tool, color, brushSize, drawingEnabled };
@@ -150,14 +181,33 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
 
       let canvas: FabricCanvas;
       let resizeObs: ResizeObserver | null = null;
+      let removeOffsetSync: (() => void) | null = null;
 
       import('fabric').then(({ fabric }) => {
+        fabricLibRef.current = fabric as FabricNS;
         canvas = new fabric.Canvas(canvasElRef.current!, {
           isDrawingMode: true,
           selection: false,
           renderOnAddRemove: true,
+          /**
+           * Must be true for stylus / pen: Fabric listens on pointer*; with false it only
+           * uses mouse* and many pens never drive free-drawing reliably.
+           * Window-level pan capture from react-zoom-pan-pinch is stopped on the
+           * annotation container while drawing (see effect below).
+           */
+          enablePointerEvents: true,
+          perPixelTargetFind: true,
+          targetFindTolerance: 8,
         });
         fabricRef.current = canvas;
+
+        /** Parent uses CSS transforms (zoom/pan). Refresh offset before Fabric handles the pointer. */
+        const syncOffset = () => {
+          if (typeof canvas.calcOffset === 'function') canvas.calcOffset();
+        };
+        const upper = canvas.upperCanvasEl as HTMLCanvasElement | undefined;
+        upper?.addEventListener('pointerdown', syncOffset, true);
+        removeOffsetSync = () => upper?.removeEventListener('pointerdown', syncOffset, true);
 
         const resize = () => {
           if (!containerRef.current) return;
@@ -175,6 +225,7 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
           annPropsRef.current.brushSize,
           emitSync,
           annPropsRef.current.drawingEnabled,
+          fabricLibRef.current,
         );
 
         resizeObs = new ResizeObserver(resize);
@@ -197,11 +248,14 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
       });
 
       return () => {
+        removeOffsetSync?.();
+        removeOffsetSync = null;
         layoutResizeRef.current = null;
         resizeObs?.disconnect();
         if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
         try { canvas?.dispose(); } catch { /* ignore */ }
         fabricRef.current = null;
+        fabricLibRef.current = null;
       };
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -211,8 +265,29 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
       const canvas = fabricRef.current;
       if (!canvas) return;
 
-      applyToolToCanvas(canvas, tool, color, brushSize, emitSync, drawingEnabled);
+      applyToolToCanvas(canvas, tool, color, brushSize, emitSync, drawingEnabled, fabricLibRef.current);
     }, [tool, color, brushSize, drawingEnabled, emitSync]);
+
+    /**
+     * react-zoom-pan-pinch attaches `mousedown` on `window` for pan start. Even when
+     * `panning.disabled` is true, `onPanningStart` still runs and can fight Fabric.
+     * After Fabric handles the event on the upper canvas, stop bubbling at this wrapper.
+     */
+    useEffect(() => {
+      const el = containerRef.current;
+      if (!el || !drawingEnabled) return;
+      const isolate = (ev: Event) => {
+        ev.stopPropagation();
+      };
+      el.addEventListener('mousedown', isolate);
+      el.addEventListener('pointerdown', isolate);
+      el.addEventListener('touchstart', isolate, { passive: true });
+      return () => {
+        el.removeEventListener('mousedown', isolate);
+        el.removeEventListener('pointerdown', isolate);
+        el.removeEventListener('touchstart', isolate);
+      };
+    }, [drawingEnabled]);
 
     // ── Expose imperative handles ─────────────────────────────────────────
     useImperativeHandle(
@@ -226,6 +301,15 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
           canvas.loadFromJSON(json, () => {
             canvas.renderAll();
             isRemoteLoadRef.current = false;
+            applyToolToCanvas(
+              canvas,
+              annPropsRef.current.tool,
+              annPropsRef.current.color,
+              annPropsRef.current.brushSize,
+              emitSync,
+              annPropsRef.current.drawingEnabled,
+              fabricLibRef.current,
+            );
           });
         },
 
@@ -239,6 +323,15 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
             canvas.renderAll();
             isRemoteLoadRef.current = false;
             syncNow(canvas);
+            applyToolToCanvas(
+              canvas,
+              annPropsRef.current.tool,
+              annPropsRef.current.color,
+              annPropsRef.current.brushSize,
+              emitSync,
+              annPropsRef.current.drawingEnabled,
+              fabricLibRef.current,
+            );
           });
         },
 
@@ -265,6 +358,15 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
           if (!canvas) return;
           if (typeof canvas.calcOffset === 'function') canvas.calcOffset();
           canvas.requestRenderAll();
+          applyToolToCanvas(
+            canvas,
+            annPropsRef.current.tool,
+            annPropsRef.current.color,
+            annPropsRef.current.brushSize,
+            emitSync,
+            annPropsRef.current.drawingEnabled,
+            fabricLibRef.current,
+          );
         },
       }),
       [emitSync, cancelPendingDebouncedSync, syncNow],
@@ -275,7 +377,8 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
         ref={containerRef}
         className={`absolute inset-0 z-10 ${drawingEnabled ? 'pointer-events-auto' : 'pointer-events-none'}`}
         style={{
-          cursor: drawingEnabled ? (tool === 'eraser' ? 'cell' : 'crosshair') : 'default',
+          cursor: cursorForTool(tool, drawingEnabled),
+          touchAction: drawingEnabled ? 'none' : 'auto',
         }}
       >
         <canvas ref={canvasElRef} className="absolute inset-0" />

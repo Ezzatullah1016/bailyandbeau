@@ -2,8 +2,17 @@
     deploy/run-deploy.ps1 — deploy the latest origin/main onto EC2.
 
     Usage (PowerShell, from repo root):
-        ./deploy/run-deploy.ps1                   # default: ubuntu@16.16.146.231
+        ./deploy/run-deploy.ps1                   # ubuntu@16.16.146.231 + PEM (see below)
         ./deploy/run-deploy.ps1 -Push             # also git push first
+        ./deploy/run-deploy.ps1 -Pem path\to\key.pem   # optional explicit key
+        ./deploy/run-deploy.ps1 -User ubuntu       # default SSH user (Ubuntu EC2 AMI)
+
+    SSH user defaults to "ubuntu" (standard Ubuntu cloud images). Use -User only if your server uses another account.
+
+    PEM resolution (repo root = parent of deploy/):
+      1) -Pem if passed and exists (relative to repo root or absolute)
+      2) backend/keys/deployment.pem
+      3) baileyandbeauco-key.pem in repo root
 
     Server contract (already provisioned, see deploy/update.sh):
       - /home/ubuntu/app  is a clone of this repo, branch main
@@ -21,8 +30,27 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$Pem = (Resolve-Path -LiteralPath $Pem).Path
-if (-not (Test-Path -LiteralPath $Pem)) { throw "PEM not found at $Pem" }
+$RepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
+function Resolve-DeployPemPath {
+  param([string]$PemArg, [string]$Root)
+  $tryPaths = @()
+  if ([System.IO.Path]::IsPathRooted($PemArg)) {
+    $tryPaths += $PemArg
+  } else {
+    $tryPaths += (Join-Path $Root ($PemArg -replace '/', [IO.Path]::DirectorySeparatorChar))
+  }
+  $fallback = Join-Path $Root 'baileyandbeauco-key.pem'
+  foreach ($p in $tryPaths) {
+    if (Test-Path -LiteralPath $p) { return (Resolve-Path -LiteralPath $p).Path }
+  }
+  if ((Test-Path -LiteralPath $fallback) -and ($tryPaths[0] -ne $fallback)) {
+    Write-Host "[deploy] Using baileyandbeauco-key.pem (backend/keys/deployment.pem not found)"
+    return (Resolve-Path -LiteralPath $fallback).Path
+  }
+  throw "PEM not found. Tried: $($tryPaths -join ', ') and $fallback"
+}
+
+$Pem = Resolve-DeployPemPath -PemArg $Pem -Root $RepoRoot
 
 # OpenSSH on Windows refuses world-readable keys; tighten to current user only.
 icacls $Pem /inheritance:r 2>&1 | Out-Null
@@ -31,6 +59,8 @@ icacls $Pem /remove:g "BUILTIN\Users" "Authenticated Users" "Everyone" 2>&1 | Ou
 
 $Target  = "$User@$ServerIp"
 $SshOpts = @('-i', $Pem, '-o', 'StrictHostKeyChecking=accept-new')
+
+Write-Host "[deploy] SSH user: $User | key: $Pem"
 
 if ($Push) {
     Write-Host '[deploy] git push origin HEAD'

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   BookOpen, Check, Copy, Eraser, Gamepad2, Highlighter,
   Mic, MicOff, Pencil, Phone, Trash2, Undo2, Users, Video, VideoOff,
@@ -45,15 +46,90 @@ interface AnnotationToolbarProps {
   onEndSession: () => void;
   role: 'host' | 'guest';
   participantCount: number;
+  /** Merged onto the root wrapper (e.g. `items-start` for left-aligned stacks). */
   className?: string;
 }
 
-/** Tooltip shown above a button */
-function Tip({ children }: { children: React.ReactNode }) {
+/**
+ * Fixed tooltip portaled to document.body (above the trigger) so it does not
+ * expand scrollable overflow from ancestors (e.g. toolbar row uses
+ * overflow-x-auto, which forces overflow-y to compute to auto).
+ */
+export function DockTip({
+  label,
+  children,
+}: {
+  label: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [rect, setRect] = useState<DOMRect | null>(null);
+
+  const measure = useCallback(() => {
+    const root = wrapRef.current;
+    if (!root) return;
+    const el = root.querySelector('button, [role="slider"]') ?? root;
+    setRect((el as HTMLElement).getBoundingClientRect());
+  }, []);
+
+  const show = useCallback(() => {
+    setOpen(true);
+    measure();
+  }, [measure]);
+
+  const hide = useCallback(() => {
+    setOpen(false);
+    setRect(null);
+  }, []);
+
+  const onBlurWrap = useCallback(() => {
+    requestAnimationFrame(() => {
+      const root = wrapRef.current;
+      if (!root?.contains(document.activeElement)) hide();
+    });
+  }, [hide]);
+
+  useEffect(() => {
+    if (!open) return;
+    measure();
+    const onScrollOrResize = () => measure();
+    window.addEventListener('scroll', onScrollOrResize, true);
+    window.addEventListener('resize', onScrollOrResize);
+    return () => {
+      window.removeEventListener('scroll', onScrollOrResize, true);
+      window.removeEventListener('resize', onScrollOrResize);
+    };
+  }, [open, measure]);
+
   return (
-    <div className="pointer-events-none absolute bottom-full left-1/2 z-[70] mb-2 -translate-x-1/2 rounded-md bg-stone-950 px-2 py-1 text-[10px] font-semibold whitespace-nowrap text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-      <div className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-stone-950" />
+    <div
+      ref={wrapRef}
+      className="relative"
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      onFocusCapture={show}
+      onBlurCapture={onBlurWrap}
+    >
       {children}
+      {open && rect && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              className="pointer-events-none rounded-md bg-stone-950 px-2 py-1 text-[10px] font-semibold whitespace-nowrap text-white shadow-lg"
+              style={{
+                position: 'fixed',
+                left: rect.left + rect.width / 2,
+                top: rect.top - 8,
+                transform: 'translate(-50%, -100%)',
+                zIndex: 10000,
+              }}
+            >
+              <div className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-stone-950" aria-hidden />
+              {label}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
@@ -83,6 +159,7 @@ export function AnnotationToolbar({
   onEndSession,
   role,
   participantCount,
+  className,
 }: AnnotationToolbarProps) {
   const drawing = interactionMode !== 'book';
   const brushPct = ((brushSize - MIN_BRUSH) / (MAX_BRUSH - MIN_BRUSH)) * 100;
@@ -164,14 +241,16 @@ export function AnnotationToolbar({
     : 'border-white/10 text-stone-400 hover:bg-white/10 hover:text-white';
 
   return (
-    <div className="pointer-events-auto relative flex flex-col items-center gap-3">
+    <div
+      className={`pointer-events-auto relative flex flex-col items-center gap-3 overflow-visible ${className ?? ''}`}
+    >
       {/* ── Sub-panel (above the main bar) ─────────────────────────── */}
       {subPanel === 'draw' && (
         <div className="flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-white/10 bg-stone-950/95 px-4 py-3 shadow-2xl backdrop-blur-xl">
           {/* Colors */}
           <div className="flex items-center gap-1.5">
             {COLORS.map((c) => (
-              <div key={c.value} className="group relative">
+              <DockTip key={c.value} label={c.label}>
                 <button
                   type="button"
                   aria-label={`${c.label} colour${color === c.value ? ' (selected)' : ''}`}
@@ -179,8 +258,7 @@ export function AnnotationToolbar({
                   onClick={() => onColorChange(c.value)}
                   className={`h-8 w-8 cursor-pointer rounded-full ${c.cls} transition-all touch-manipulation select-none ${color === c.value ? 'ring-2 ring-white/70 scale-110' : 'ring-2 ring-transparent opacity-70 hover:opacity-100'}`}
                 />
-                <Tip>{c.label}</Tip>
-              </div>
+              </DockTip>
             ))}
           </div>
 
@@ -220,7 +298,7 @@ export function AnnotationToolbar({
           <div className="h-8 w-px shrink-0 bg-white/10" aria-hidden />
 
           {/* Undo */}
-          <div className="group relative">
+          <DockTip label="Undo">
             <button
               type="button"
               aria-label="Undo last stroke"
@@ -229,11 +307,10 @@ export function AnnotationToolbar({
             >
               <Undo2 className="h-5 w-5" aria-hidden />
             </button>
-            <Tip>Undo</Tip>
-          </div>
+          </DockTip>
 
           {/* Clear */}
-          <div className="group relative">
+          <DockTip label="Clear">
             <button
               type="button"
               aria-label="Clear canvas"
@@ -242,15 +319,14 @@ export function AnnotationToolbar({
             >
               <Trash2 className="h-5 w-5" aria-hidden />
             </button>
-            <Tip>Clear</Tip>
-          </div>
+          </DockTip>
         </div>
       )}
 
       {subPanel === 'react' && (
         <div className="flex flex-wrap items-center justify-center gap-1 rounded-2xl border border-white/10 bg-stone-950/95 px-4 py-3 shadow-2xl backdrop-blur-xl sm:gap-2">
           {REACTIONS.map((e) => (
-            <div key={e} className="group relative">
+            <DockTip key={e} label={e}>
               <button
                 type="button"
                 aria-label={`Send reaction ${e}`}
@@ -259,8 +335,7 @@ export function AnnotationToolbar({
               >
                 {e}
               </button>
-              <Tip>{e}</Tip>
-            </div>
+            </DockTip>
           ))}
         </div>
       )}
@@ -269,63 +344,58 @@ export function AnnotationToolbar({
       <div
         role="toolbar"
         aria-label="Reading and session controls"
-        className="flex max-w-full items-center gap-1.5 overflow-x-auto rounded-full border border-white/10 bg-stone-950/90 px-3 py-2.5 shadow-2xl backdrop-blur-xl sm:gap-2 sm:px-5 sm:py-3"
+        className="flex max-w-full items-center gap-1.5 overflow-x-auto overflow-y-hidden rounded-full border border-white/10 bg-stone-950/90 px-3 py-2.5 shadow-2xl backdrop-blur-xl sm:gap-2 sm:px-5 sm:py-3"
       >
         {/* Book mode */}
-        <div className="group relative">
+        <DockTip label="Book">
           <button type="button" aria-label="Book mode — flip pages" aria-pressed={interactionMode === 'book'}
             onClick={() => handleToolClick('book')}
             className={`${btnBase} ${btnMd} ${ringBook}`}>
             <BookOpen className="h-6 w-6 sm:h-7 sm:w-7" aria-hidden />
           </button>
-          <Tip>Book</Tip>
-        </div>
+        </DockTip>
 
         {/* Pen */}
-        <div className="group relative">
+        <DockTip label="Pen">
           <button type="button" aria-label="Pen tool" aria-pressed={interactionMode === 'pen'}
             onClick={() => handleToolClick('pen')}
             className={`${btnBase} ${btnMd} ${ringTool('pen')}`}>
             <Pencil className="h-6 w-6 sm:h-7 sm:w-7" aria-hidden />
           </button>
-          <Tip>Pen</Tip>
-        </div>
+        </DockTip>
 
         {/* Highlighter */}
-        <div className="group relative">
+        <DockTip label="Highlight">
           <button type="button" aria-label="Highlighter tool" aria-pressed={interactionMode === 'highlighter'}
             onClick={() => handleToolClick('highlighter')}
             className={`${btnBase} ${btnMd} ${ringTool('highlighter')}`}>
             <Highlighter className="h-6 w-6 sm:h-7 sm:w-7" aria-hidden />
           </button>
-          <Tip>Highlight</Tip>
-        </div>
+        </DockTip>
 
         {/* Eraser */}
-        <div className="group relative">
+        <DockTip label="Eraser">
           <button type="button" aria-label="Eraser tool" aria-pressed={interactionMode === 'eraser'}
             onClick={() => handleToolClick('eraser')}
             className={`${btnBase} ${btnMd} ${ringTool('eraser')}`}>
             <Eraser className="h-6 w-6 sm:h-7 sm:w-7" aria-hidden />
           </button>
-          <Tip>Eraser</Tip>
-        </div>
+        </DockTip>
 
         {/* Reactions */}
-        <div className="group relative">
+        <DockTip label="React">
           <button type="button" aria-label="Send a reaction" aria-pressed={subPanel === 'react'}
             onClick={handleReactClick}
             className={`${btnBase} ${btnMd} ${ringReact}`}>
             <span className="text-xl" aria-hidden>😊</span>
           </button>
-          <Tip>React</Tip>
-        </div>
+        </DockTip>
 
         {/* Divider */}
         <div className="mx-0.5 h-10 w-px shrink-0 bg-white/10 sm:mx-1.5" aria-hidden />
 
         {/* Mic */}
-        <div className="group relative">
+        <DockTip label={isMicEnabled ? 'Mute' : 'Unmute'}>
           <button type="button"
             aria-label={isMicEnabled ? 'Mute microphone' : 'Unmute microphone'}
             aria-pressed={!isMicEnabled}
@@ -333,11 +403,10 @@ export function AnnotationToolbar({
             className={`${btnBase} ${btnMd} ${isMicEnabled ? 'border-[#3b85a6] bg-[#3b85a6]/25 text-white shadow-[0_0_20px_rgba(59,133,166,0.35)]' : 'border-red-500/60 bg-red-950/40 text-red-200'}`}>
             {isMicEnabled ? <Mic className="h-6 w-6 sm:h-7 sm:w-7" aria-hidden /> : <MicOff className="h-6 w-6 sm:h-7 sm:w-7" aria-hidden />}
           </button>
-          <Tip>{isMicEnabled ? 'Mute' : 'Unmute'}</Tip>
-        </div>
+        </DockTip>
 
         {/* Camera */}
-        <div className="group relative">
+        <DockTip label={isCameraEnabled ? 'Camera off' : 'Camera on'}>
           <button type="button"
             aria-label={isCameraEnabled ? 'Turn off camera' : 'Turn on camera'}
             aria-pressed={!isCameraEnabled}
@@ -345,25 +414,23 @@ export function AnnotationToolbar({
             className={`${btnBase} ${btnMd} ${isCameraEnabled ? 'border-[#3b85a6] bg-[#3b85a6]/25 text-white shadow-[0_0_20px_rgba(59,133,166,0.35)]' : 'border-red-500/60 bg-red-950/40 text-red-200'}`}>
             {isCameraEnabled ? <Video className="h-6 w-6 sm:h-7 sm:w-7" aria-hidden /> : <VideoOff className="h-6 w-6 sm:h-7 sm:w-7" aria-hidden />}
           </button>
-          <Tip>{isCameraEnabled ? 'Camera off' : 'Camera on'}</Tip>
-        </div>
+        </DockTip>
 
         {/* Divider */}
         <div className="mx-0.5 h-10 w-px shrink-0 bg-white/10 sm:mx-1.5" aria-hidden />
 
         {/* Copy invite (host only) */}
         {onCopyInvite && (
-          <div className="group relative">
+          <DockTip label={linkCopied ? 'Copied!' : 'Copy invite'}>
             <button type="button" aria-label="Copy invite link" onClick={onCopyInvite}
               className={`${btnBase} ${btnSm} border-teal-500/40 bg-teal-950/40 text-teal-200 hover:bg-teal-900/50`}>
               {linkCopied ? <Check className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden /> : <Copy className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden />}
             </button>
-            <Tip>{linkCopied ? 'Copied!' : 'Copy invite'}</Tip>
-          </div>
+          </DockTip>
         )}
 
         {/* Participants */}
-        <div className="group relative">
+        <DockTip label="People">
           <button type="button" aria-label="Open participants and video" onClick={onOpenParticipants}
             className={`${btnBase} ${btnSm} relative border-orange-400/45 bg-orange-950/35 text-orange-200 hover:bg-orange-900/45`}>
             <Users className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden />
@@ -371,30 +438,27 @@ export function AnnotationToolbar({
               {participantCount}
             </span>
           </button>
-          <Tip>People</Tip>
-        </div>
+        </DockTip>
 
         {/* Activities (host only) */}
         {onOpenActivities && (
-          <div className="group relative">
+          <DockTip label="Activities">
             <button type="button" aria-label="Open activities" onClick={onOpenActivities}
               className={`${btnBase} ${btnSm} border-pink-400/45 bg-pink-950/35 text-pink-200 hover:bg-pink-900/40`}>
               <Gamepad2 className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden />
             </button>
-            <Tip>Activities</Tip>
-          </div>
+          </DockTip>
         )}
 
         {/* End / Leave session */}
-        <div className="group relative">
+        <DockTip label={role === 'host' ? 'End session' : 'Leave'}>
           <button type="button"
             aria-label={role === 'host' ? 'End session' : 'Leave session'}
             onClick={onEndSession}
             className={`${btnBase} ${btnSm} border-red-500/50 bg-red-950/50 text-red-200 hover:bg-red-900/60`}>
             <Phone className="h-5 w-5 sm:h-6 sm:w-6 rotate-[135deg]" aria-hidden />
           </button>
-          <Tip>{role === 'host' ? 'End session' : 'Leave'}</Tip>
-        </div>
+        </DockTip>
       </div>
     </div>
   );

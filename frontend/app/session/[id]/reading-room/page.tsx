@@ -2,14 +2,13 @@
 
 import dynamic from 'next/dynamic';
 import {
-  forwardRef,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from 'react';
-import type { ComponentType, PropsWithChildren, RefAttributes } from 'react';
+import type { MutableRefObject } from 'react';
 import { usePlaceholderPdf } from '@/lib/usePlaceholderPdf';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -38,13 +37,16 @@ import {
 import { MAX_LIVEKIT_ROOM_PARTICIPANTS } from '@/lib/sessionLimits';
 import ActivityRoom from '@/components/activity/ActivityRoom';
 import type { ActivityConfigData } from '@/components/activity/types';
-import { AnnotationToolbar, type ReadingInteractionMode } from '@/components/annotation/AnnotationToolbar';
+import { AnnotationToolbar, DockTip, type ReadingInteractionMode } from '@/components/annotation/AnnotationToolbar';
 import type { AnnotationCanvasHandle } from '@/components/annotation/AnnotationCanvas';
+import { SpreadBookViewer } from '@/components/reading/SpreadBookViewer';
 import { TransformComponent, TransformWrapper, type ReactZoomPanPinchContentRef } from 'react-zoom-pan-pinch';
 import {
   AlarmClock,
   BookMarked,
   BookOpen,
+  ChevronLeft,
+  ChevronRight,
   Check,
   Clock,
   Copy,
@@ -71,33 +73,16 @@ import {
   LayoutGrid,
   ShieldCheck,
   Gamepad2,
+  GripVertical,
   Phone,
   MoreHorizontal,
 } from 'lucide-react';
-
-type PageFlipController = {
-  turnToPage?: (n: number) => void;
-  flipNext?: (c: 'top' | 'bottom') => void;
-  flipPrev?: (c: 'top' | 'bottom') => void;
-  getCurrentPageIndex?: () => number;
-};
-
-type FlipBookImperativeHandle = {
-  pageFlip: () => PageFlipController | undefined;
-};
 
 // Dynamic import for Fabric canvas (SSR-unsafe)
 const AnnotationCanvas = dynamic(
   () => import('@/components/annotation/AnnotationCanvas'),
   { ssr: false },
 );
-
-const HTMLFlipBook = dynamic(
-  () => import('react-pageflip').then((m) => m.default),
-  { ssr: false },
-) as unknown as ComponentType<
-  PropsWithChildren<Record<string, unknown>> & RefAttributes<FlipBookImperativeHandle>
->;
 
 // ─── Sync message format ──────────────────────────────────────────────────────
 
@@ -110,6 +95,34 @@ interface SyncMessage {
 function buildMsg(type: string, payload: Record<string, unknown>): Uint8Array {
   const json = JSON.stringify({ type, payload, ts: new Date().toISOString() } satisfies SyncMessage);
   return new TextEncoder().encode(json);
+}
+
+const ANNOTATION_SNAPSHOT_VERSION = 1 as const;
+
+function buildAnnotationSnapshot(bySpread: Record<string, string>): Record<string, unknown> {
+  return { v: ANNOTATION_SNAPSHOT_VERSION, bySpread: { ...bySpread } };
+}
+
+function mergeHydratedAnnotationIntoSpreadMap(
+  spreadInkRef: MutableRefObject<Record<string, string>>,
+  raw: unknown,
+) {
+  if (!raw || typeof raw !== 'object') return;
+  const ann = raw as Record<string, unknown>;
+  const bs = ann.bySpread;
+  if (ann.v === ANNOTATION_SNAPSHOT_VERSION && bs && typeof bs === 'object' && !Array.isArray(bs)) {
+    for (const [k, v] of Object.entries(bs as Record<string, unknown>)) {
+      if (typeof v === 'string') spreadInkRef.current[k] = v;
+    }
+    return;
+  }
+  // Legacy: snapshot stored/fabric JSON object for a single canvas
+  try {
+    const keys = Object.keys(ann);
+    if (keys.length > 0) spreadInkRef.current['0'] = JSON.stringify(ann);
+  } catch {
+    /* ignore */
+  }
 }
 
 // ─── Timer helpers ────────────────────────────────────────────────────────────
@@ -355,64 +368,7 @@ function SessionTimerRing({
   );
 }
 
-// ─── Book page ────────────────────────────────────────────────────────────────
-
-function BookPageImage({ url, pageNumber }: { url: string; pageNumber: number }) {
-  const [loaded, setLoaded] = useState(false);
-  return (
-    <div className="relative w-full h-full bg-white">
-      {!loaded && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <Loader2 className="w-12 h-12 text-stone-300 animate-spin" />
-        </div>
-      )}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        key={url}
-        src={url}
-        alt={`Page ${pageNumber}`}
-        className={`w-full h-full object-contain transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
-        onLoad={() => setLoaded(true)}
-        onError={() => setLoaded(true)}
-      />
-    </div>
-  );
-}
-
-/** One StPageFlip leaf per two-up spread (forwardRef required by react-pageflip). */
-const FlipBookSpreadPage = forwardRef<
-  HTMLDivElement,
-  { left: BookPageData | null; right: BookPageData | null; leftPageNumber: number }
->(function FlipBookSpreadPage({ left, right, leftPageNumber }, ref) {
-  return (
-    <div ref={ref} className="flex h-full w-full overflow-hidden bg-white">
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-        {left ? (
-          <BookPageImage url={left.image_url} pageNumber={leftPageNumber} />
-        ) : (
-          <div className="h-full w-full bg-white" />
-        )}
-        {left && (
-          <div className="pointer-events-none absolute bottom-4 left-4 z-20">
-            <span className="font-karla text-[10px] text-stone-400">Page {leftPageNumber}</span>
-          </div>
-        )}
-      </div>
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col border-l border-stone-100">
-        {right ? (
-          <BookPageImage url={right.image_url} pageNumber={leftPageNumber + 1} />
-        ) : (
-          <div className="h-full w-full bg-white" />
-        )}
-        {right && (
-          <div className="pointer-events-none absolute bottom-4 right-4 z-20 text-right">
-            <span className="font-karla text-[10px] text-stone-400">Page {leftPageNumber + 1}</span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-});
+// ─── Book spreads (two-up) ───────────────────────────────────────────────────
 
 function bookSpreadItems(pages: BookPageData[]) {
   const items: { left: BookPageData | null; right: BookPageData | null; leftPageNumber: number }[] = [];
@@ -627,12 +583,19 @@ function RoomContent({
   const pages = backendPages.length > 0 ? backendPages : placeholderPages;
   const spreadItems = useMemo(() => bookSpreadItems(pages), [pages]);
   const [currentPage, setCurrentPage] = useState(0);
+  const clampedSpreadIndex = useMemo(
+    () => Math.min(Math.max(0, Math.floor(currentPage / 2)), Math.max(0, spreadItems.length - 1)),
+    [currentPage, spreadItems.length],
+  );
+  const activeSpread = spreadItems[clampedSpreadIndex];
   const [activeTab, setActiveTab] = useState<'video' | 'tools' | 'participants' | 'chat' | 'settings'>('video');
   const [roomPanelOpen, setRoomPanelOpen] = useState(false);
 
   // ── Timer ─────────────────────────────────────────────────────────────────
   const [timerActive, setTimerActive] = useState(false);
   const [remaining, setRemaining] = useState(SESSION_DURATION_S);
+  const remainingRef = useRef(remaining);
+  remainingRef.current = remaining;
   const timerStartedAtRef = useRef<number | null>(null);
   const [showExtendModal, setShowExtendModal] = useState(false);
   const extendCountdownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -648,18 +611,11 @@ function RoomContent({
   const transformRecalcTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentPageRef = useRef(0);
   currentPageRef.current = currentPage;
+  const spreadInkRef = useRef<Record<string, string>>({});
+  const annotationPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [bookRect, setBookRect] = useState({ w: 720, h: 540 });
   const bookMeasureRef = useRef<HTMLDivElement>(null);
-  const flipRef = useRef<FlipBookImperativeHandle | null>(null);
-  const suppressFlipSideEffectsRef = useRef(false);
-  const [bookFlipVisualState, setBookFlipVisualState] = useState('read');
-  /** Defer mounting StPageFlip until after hydration — avoids ref/DOM races with next/dynamic + strict mode */
-  const [flipBookClientReady, setFlipBookClientReady] = useState(false);
-  useEffect(() => {
-    setFlipBookClientReady(true);
-  }, []);
-
   const scheduleCanvasRecalcAfterTransform = useCallback(() => {
     if (transformRecalcTimerRef.current) clearTimeout(transformRecalcTimerRef.current);
     transformRecalcTimerRef.current = setTimeout(() => {
@@ -681,7 +637,11 @@ function RoomContent({
     const update = () => {
       const r = el.getBoundingClientRect();
       const rw = Math.max(280, Math.floor(Math.min(r.width, 1200)));
-      const rh = Math.floor((rw * 3) / 4);
+      const vh = typeof window !== 'undefined' ? window.innerHeight : 900;
+      const chromeReserve = 200;
+      const rhCapByVh = Math.floor(Math.min(vh * 0.8, Math.max(0, vh - chromeReserve)));
+      const rhByAspect = Math.floor((rw * 3) / 4);
+      const rh = Math.max(240, Math.min(rhCapByVh, rhByAspect));
       setBookRect((prev) => (prev.w !== rw || prev.h !== rh ? { w: rw, h: rh } : prev));
     };
     update();
@@ -689,6 +649,209 @@ function RoomContent({
     ro.observe(el);
     return () => ro.disconnect();
   }, [loadingPages, spreadItems.length]);
+
+  /** Page/zoom pill: anchored bottom-right; x increases `right` (moves bar left). */
+  const bookHudStorageKey = `bb_reading_pagebar_${sessionId}`;
+  const [bookHudOffset, setBookHudOffset] = useState({ x: 0, y: 0 });
+  const bookHudOffsetRef = useRef(bookHudOffset);
+  bookHudOffsetRef.current = bookHudOffset;
+  const hudDragSessionRef = useRef<{ startX: number; startY: number; ox: number; oy: number } | null>(
+    null,
+  );
+  const bookHudRestoredRef = useRef(false);
+
+  /** Bottom AnnotationToolbar: anchored bottom-left; persisted via sessionStorage. */
+  const dockHudStorageKey = `bb_reading_dock_${sessionId}`;
+  const [dockHudOffset, setDockHudOffset] = useState({ x: 0, y: 0 });
+  const dockHudOffsetRef = useRef(dockHudOffset);
+  dockHudOffsetRef.current = dockHudOffset;
+  const dockHudDragSessionRef = useRef<{ startX: number; startY: number; ox: number; oy: number } | null>(null);
+  const dockHudRestoredRef = useRef(false);
+  const readingHudBoundsRef = useRef<HTMLDivElement>(null);
+  const [readingHudSize, setReadingHudSize] = useState({ w: 0, h: 0 });
+
+  useEffect(() => {
+    const el = readingHudBoundsRef.current;
+    if (!el) return;
+    const update = () => {
+      const r = el.getBoundingClientRect();
+      setReadingHudSize({ w: Math.floor(r.width), h: Math.floor(r.height) });
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const clampBookHud = useCallback(
+    (x: number, y: number) => {
+      const W = readingHudSize.w;
+      const H = readingHudSize.h;
+      if (W < 64 || H < 64) {
+        return { x, y };
+      }
+      const barReserve = 140;
+      const maxRightOffset = Math.max(48, W - barReserve);
+      const minRightOffset = -48;
+      const maxYup = Math.max(56, H - 28);
+      return {
+        x: Math.min(maxRightOffset, Math.max(minRightOffset, x)),
+        y: Math.min(maxYup, Math.max(-Math.min(100, H * 0.2), y)),
+      };
+    },
+    [readingHudSize.w, readingHudSize.h],
+  );
+
+  const clampDockHud = useCallback((x: number, y: number) => {
+    if (typeof window === 'undefined') return { x, y };
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const pad = 10;
+    return {
+      x: Math.min(vw - pad - 64, Math.max(-vw * 0.4, x)),
+      y: Math.min(vh - pad - 56, Math.max(-vh * 0.35, y)),
+    };
+  }, []);
+
+  useEffect(() => {
+    if (bookHudRestoredRef.current || readingHudSize.w < 80 || readingHudSize.h < 80) return;
+    bookHudRestoredRef.current = true;
+    try {
+      const raw = sessionStorage.getItem(bookHudStorageKey);
+      if (!raw) return;
+      const p = JSON.parse(raw) as { x?: unknown; y?: unknown };
+      if (typeof p.x === 'number' && typeof p.y === 'number') {
+        const next = clampBookHud(p.x, p.y);
+        bookHudOffsetRef.current = next;
+        setBookHudOffset(next);
+      }
+    } catch {
+      /* ok */
+    }
+  }, [bookHudStorageKey, readingHudSize.w, readingHudSize.h, clampBookHud]);
+
+  useEffect(() => {
+    if (dockHudRestoredRef.current) return;
+    dockHudRestoredRef.current = true;
+    try {
+      const raw = sessionStorage.getItem(dockHudStorageKey);
+      if (!raw) return;
+      const p = JSON.parse(raw) as { x?: unknown; y?: unknown };
+      if (typeof p.x === 'number' && typeof p.y === 'number') {
+        const next = clampDockHud(p.x, p.y);
+        dockHudOffsetRef.current = next;
+        setDockHudOffset(next);
+      }
+    } catch {
+      /* ok */
+    }
+  }, [dockHudStorageKey, clampDockHud]);
+
+  useEffect(() => {
+    setBookHudOffset((o) => {
+      const c = clampBookHud(o.x, o.y);
+      bookHudOffsetRef.current = c;
+      return c;
+    });
+  }, [clampBookHud]);
+
+  useEffect(() => {
+    setDockHudOffset((o) => {
+      const c = clampDockHud(o.x, o.y);
+      dockHudOffsetRef.current = c;
+      return c;
+    });
+  }, [clampDockHud]);
+
+  const onBookHudGripDown = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      const o = bookHudOffsetRef.current;
+      hudDragSessionRef.current = { startX: e.clientX, startY: e.clientY, ox: o.x, oy: o.y };
+      const move = (ev: PointerEvent) => {
+        const s = hudDragSessionRef.current;
+        if (!s) return;
+        const dx = ev.clientX - s.startX;
+        const dy = s.startY - ev.clientY;
+        const next = clampBookHud(s.ox - dx, s.oy + dy);
+        bookHudOffsetRef.current = next;
+        setBookHudOffset(next);
+      };
+      const up = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        window.removeEventListener('pointercancel', up);
+        hudDragSessionRef.current = null;
+        try {
+          sessionStorage.setItem(bookHudStorageKey, JSON.stringify(bookHudOffsetRef.current));
+        } catch {
+          /* ok */
+        }
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+      window.addEventListener('pointercancel', up);
+    },
+    [bookHudStorageKey, clampBookHud],
+  );
+
+  const resetBookHudPosition = useCallback(() => {
+    const z = { x: 0, y: 0 };
+    bookHudOffsetRef.current = z;
+    setBookHudOffset(z);
+    try {
+      sessionStorage.removeItem(bookHudStorageKey);
+    } catch {
+      /* ok */
+    }
+  }, [bookHudStorageKey]);
+
+  const onDockHudGripDown = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      const o = dockHudOffsetRef.current;
+      dockHudDragSessionRef.current = { startX: e.clientX, startY: e.clientY, ox: o.x, oy: o.y };
+      const move = (ev: PointerEvent) => {
+        const s = dockHudDragSessionRef.current;
+        if (!s) return;
+        const dx = ev.clientX - s.startX;
+        const dy = s.startY - ev.clientY;
+        const next = clampDockHud(s.ox + dx, s.oy + dy);
+        dockHudOffsetRef.current = next;
+        setDockHudOffset(next);
+      };
+      const up = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        window.removeEventListener('pointercancel', up);
+        dockHudDragSessionRef.current = null;
+        try {
+          sessionStorage.setItem(dockHudStorageKey, JSON.stringify(dockHudOffsetRef.current));
+        } catch {
+          /* ok */
+        }
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+      window.addEventListener('pointercancel', up);
+    },
+    [dockHudStorageKey, clampDockHud],
+  );
+
+  const resetDockHudPosition = useCallback(() => {
+    const z = { x: 0, y: 0 };
+    dockHudOffsetRef.current = z;
+    setDockHudOffset(z);
+    try {
+      sessionStorage.removeItem(dockHudStorageKey);
+    } catch {
+      /* ok */
+    }
+  }, [dockHudStorageKey]);
 
   // ── Reactions overlay ─────────────────────────────────────────────────────
   const [reactions, setReactions] = useState<{ id: number; emoji: string; x: number }[]>([]);
@@ -724,6 +887,41 @@ function RoomContent({
   );
   const activitySnapshotRef = useRef<Record<string, unknown>>({});
 
+  const flushCurrentSpreadInk = useCallback(() => {
+    const fi = Math.floor(currentPageRef.current / 2);
+    const c = canvasRef.current;
+    if (!c) return;
+    try {
+      spreadInkRef.current[String(fi)] = c.getJSON();
+    } catch {
+      /* ok */
+    }
+  }, []);
+
+  const scheduleAnnotationPersist = useCallback(() => {
+    if (role !== 'host') return;
+    if (annotationPersistTimerRef.current) clearTimeout(annotationPersistTimerRef.current);
+    annotationPersistTimerRef.current = setTimeout(() => {
+      annotationPersistTimerRef.current = null;
+      flushCurrentSpreadInk();
+      updateSnapshot(
+        sessionId,
+        participantId,
+        currentPageRef.current + 1,
+        { remaining_seconds: remainingRef.current },
+        buildAnnotationSnapshot(spreadInkRef.current),
+        activitySnapshotRef.current as object,
+      ).catch(() => {});
+    }, 400);
+  }, [role, sessionId, participantId, flushCurrentSpreadInk]);
+
+  useEffect(
+    () => () => {
+      if (annotationPersistTimerRef.current) clearTimeout(annotationPersistTimerRef.current);
+    },
+    [],
+  );
+
   const decoder = useRef(new TextDecoder()).current;
 
   // ── Fetch pages ───────────────────────────────────────────────────────────
@@ -746,6 +944,7 @@ function RoomContent({
   useEffect(() => {
     getSnapshot(sessionId, participantId)
       .then((snap) => {
+        if (snap?.annotation_state) mergeHydratedAnnotationIntoSpreadMap(spreadInkRef, snap.annotation_state);
         if (snap && typeof snap.page_number === 'number' && snap.page_number > 0) {
           setCurrentPage(snap.page_number - 1);
         }
@@ -773,6 +972,31 @@ function RoomContent({
       })
       .catch(() => {});
   }, [sessionId, participantId]);
+
+  /** Guests follow the host's page from the shared session snapshot as well as LiveKit PAGE_TURN.
+   *  Polling covers cases where data packets are delayed or dropped, so spreads still advance. */
+  useEffect(() => {
+    if (role !== 'guest') return;
+    let cancelled = false;
+    const syncPageFromSession = () => {
+      if (cancelled) return;
+      getSnapshot(sessionId, participantId)
+        .then((snap) => {
+          if (cancelled || !snap || typeof snap.page_number !== 'number' || snap.page_number < 1) return;
+          const serverIndex0 = snap.page_number - 1;
+          if (serverIndex0 === currentPageRef.current) return;
+          if (snap.annotation_state) mergeHydratedAnnotationIntoSpreadMap(spreadInkRef, snap.annotation_state);
+          setCurrentPage(serverIndex0);
+        })
+        .catch(() => {});
+    };
+    syncPageFromSession();
+    const id = window.setInterval(syncPageFromSession, 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [role, sessionId, participantId]);
 
   // ── Timer countdown ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -810,31 +1034,38 @@ function RoomContent({
             const left = msg.payload.page;
             const maxFi = Math.max(0, Math.ceil(pages.length / 2) - 1);
             const fi = Math.min(Math.max(0, Math.floor(left / 2)), maxFi);
+            const spreadCanvas =
+              typeof msg.payload.spread_canvas === 'string'
+                ? msg.payload.spread_canvas
+                : spreadInkRef.current[String(fi)] ?? '{}';
+            spreadInkRef.current[String(fi)] = spreadCanvas;
             setCurrentPage(left);
-            canvasRef.current?.clearCanvas(false);
-            suppressFlipSideEffectsRef.current = true;
-            requestAnimationFrame(() => {
-              try {
-                flipRef.current?.pageFlip()?.turnToPage?.(fi);
-              } catch {
-                /* ok */
-              }
-              requestAnimationFrame(() => {
-                suppressFlipSideEffectsRef.current = false;
-              });
-            });
           }
           break;
 
-        case 'CANVAS_SYNC':
+        case 'CANVAS_SYNC': {
+          const si =
+            typeof msg.payload.spread_index === 'number' ? msg.payload.spread_index : undefined;
+          const curFi = Math.floor(currentPageRef.current / 2);
+          if (si !== undefined && si !== curFi) break;
           if (typeof msg.payload.json === 'string') {
             canvasRef.current?.loadRemoteJSON(msg.payload.json);
+            if (si !== undefined) spreadInkRef.current[String(si)] = msg.payload.json;
           }
           break;
+        }
 
-        case 'CANVAS_CLEAR':
+        case 'CANVAS_CLEAR': {
+          const si =
+            typeof msg.payload.spread_index === 'number'
+              ? msg.payload.spread_index
+              : Math.floor(currentPageRef.current / 2);
+          const curFi = Math.floor(currentPageRef.current / 2);
+          if (si !== curFi) break;
+          delete spreadInkRef.current[String(si)];
           canvasRef.current?.clearCanvas(false);
           break;
+        }
 
         case 'TIMER_START': {
           const ts = msg.payload.started_at as number ?? Date.now();
@@ -929,127 +1160,86 @@ function RoomContent({
 
   // ── Broadcast page turn ───────────────────────────────────────────────────
   const broadcastPageTurn = useCallback(
-    async (index: number) => {
+    async (left: number, spreadCanvasForGuests: string) => {
       if (role !== 'host') return;
-      room.localParticipant.publishData(buildMsg('PAGE_TURN', { page: index }), { reliable: true });
-      try { await localParticipant.setMetadata(JSON.stringify({ page: index, role: 'host' })); } catch { /* ok */ }
-      const annotationJson = canvasRef.current ? (() => { try { return JSON.parse(canvasRef.current.getJSON()); } catch { return {}; } })() : {};
-      updateSnapshot(sessionId, participantId, index + 1, undefined, annotationJson).catch(() => {});
+      const fi = Math.floor(left / 2);
+      spreadInkRef.current[String(fi)] = spreadCanvasForGuests;
+      room.localParticipant.publishData(
+        buildMsg('PAGE_TURN', { page: left, spread_index: fi, spread_canvas: spreadCanvasForGuests }),
+        { reliable: true },
+      );
+      try {
+        await localParticipant.setMetadata(JSON.stringify({ page: left, role: 'host' }));
+      } catch {
+        /* ok */
+      }
+      updateSnapshot(sessionId, participantId, left + 1, undefined, buildAnnotationSnapshot(spreadInkRef.current)).catch(
+        () => {},
+      );
     },
     [role, room, localParticipant, sessionId, participantId],
   );
 
-  const onBookFlip = useCallback(
-    (e: unknown) => {
-      if (suppressFlipSideEffectsRef.current) return;
-      const raw =
-        typeof e === 'number'
-          ? e
-          : e &&
-              typeof e === 'object' &&
-              e !== null &&
-              'data' in e &&
-              (e as { data: unknown }).data !== undefined
-            ? (e as { data: unknown }).data
-            : undefined;
-      const fi = typeof raw === 'number' ? raw : parseInt(String(raw ?? ''), 10);
-      if (Number.isNaN(fi)) return;
-      const left = Math.max(0, fi * 2);
+  const goToSpreadIndex = useCallback(
+    (nextFi: number) => {
+      const maxFi = Math.max(0, spreadItems.length - 1);
+      const fi = Math.min(Math.max(0, nextFi), maxFi);
+      const left = fi * 2;
+      const prevFi = Math.floor(currentPageRef.current / 2);
+      if (role === 'host' && canvasRef.current) {
+        try {
+          spreadInkRef.current[String(prevFi)] = canvasRef.current.getJSON();
+        } catch {
+          /* ok */
+        }
+      }
       setCurrentPage(left);
-      if (role !== 'host') return;
-      broadcastPageTurn(left);
-      canvasRef.current?.clearCanvas(false);
-      try {
-        room.localParticipant.publishData(buildMsg('CANVAS_CLEAR', {}), { reliable: true });
-      } catch {
-        /* e.g. disconnecting */
+      if (role === 'host') {
+        const loadJson = spreadInkRef.current[String(fi)] ?? '{}';
+        broadcastPageTurn(left, loadJson);
       }
     },
-    [role, broadcastPageTurn, room],
-  );
-
-  const onBookInit = useCallback(() => {
-    const maxIdx = Math.max(0, spreadItems.length - 1);
-    const fi = Math.min(Math.max(0, Math.floor(currentPageRef.current / 2)), maxIdx);
-    suppressFlipSideEffectsRef.current = true;
-    try {
-      flipRef.current?.pageFlip()?.turnToPage?.(fi);
-    } catch {
-      /* ignore */
-    }
-    requestAnimationFrame(() => {
-      suppressFlipSideEffectsRef.current = false;
-    });
-  }, [spreadItems.length]);
-
-  const onBookChangeState = useCallback(
-    (e: unknown) => {
-      const raw =
-        typeof e === 'string'
-          ? e
-          : e &&
-              typeof e === 'object' &&
-              e !== null &&
-              'data' in e &&
-              (e as { data: unknown }).data !== undefined
-            ? (e as { data: unknown }).data
-            : undefined;
-      const d = typeof raw === 'string' ? raw : raw != null ? String(raw) : 'read';
-      const allowed = ['flipping', 'read', 'user_fold', 'fold_corner'];
-      setBookFlipVisualState(allowed.includes(d) ? d : 'read');
-      if (d === 'read') {
-        scheduleCanvasRecalcAfterTransform();
-      }
-    },
-    [scheduleCanvasRecalcAfterTransform],
+    [role, spreadItems.length, broadcastPageTurn],
   );
 
   const hostFlipPrev = useCallback(() => {
     if (role !== 'host') return;
-    flipRef.current?.pageFlip()?.flipPrev?.('top');
-  }, [role]);
+    const fi = Math.floor(currentPageRef.current / 2);
+    if (fi <= 0) return;
+    goToSpreadIndex(fi - 1);
+  }, [role, goToSpreadIndex]);
 
   const hostFlipNext = useCallback(() => {
     if (role !== 'host') return;
-    flipRef.current?.pageFlip()?.flipNext?.('top');
-  }, [role]);
+    const maxFi = Math.max(0, spreadItems.length - 1);
+    const fi = Math.floor(currentPageRef.current / 2);
+    if (fi >= maxFi) return;
+    goToSpreadIndex(fi + 1);
+  }, [role, spreadItems.length, goToSpreadIndex]);
 
   useEffect(() => {
     if (loadingPages || spreadItems.length === 0) return;
-    if (bookFlipVisualState === 'flipping') return;
+    const fi = Math.min(Math.max(0, Math.floor(currentPage / 2)), spreadItems.length - 1);
+    const json = spreadInkRef.current[String(fi)] ?? '{}';
     const id = requestAnimationFrame(() => {
-      const api = flipRef.current?.pageFlip?.();
-      if (!api?.getCurrentPageIndex) return;
-      const fi = Math.min(Math.max(0, Math.floor(currentPage / 2)), spreadItems.length - 1);
-      let cur: number;
-      try {
-        cur = api.getCurrentPageIndex();
-      } catch {
-        return;
-      }
-      if (cur === fi) return;
-      suppressFlipSideEffectsRef.current = true;
-      try {
-        api.turnToPage?.(fi);
-      } catch {
-        /* ok */
-      }
-      requestAnimationFrame(() => {
-        suppressFlipSideEffectsRef.current = false;
-      });
+      canvasRef.current?.loadRemoteJSON(json);
+      scheduleCanvasRecalcAfterTransform();
     });
     return () => cancelAnimationFrame(id);
-  }, [currentPage, spreadItems.length, loadingPages, bookFlipVisualState]);
+  }, [currentPage, spreadItems.length, loadingPages, scheduleCanvasRecalcAfterTransform]);
 
   // ── Annotation sync callback ──────────────────────────────────────────────
   const handleCanvasSync = useCallback(
     (json: string) => {
+      const fi = Math.floor(currentPageRef.current / 2);
+      spreadInkRef.current[String(fi)] = json;
       room.localParticipant.publishData(
-        buildMsg('CANVAS_SYNC', { json }),
+        buildMsg('CANVAS_SYNC', { json, spread_index: fi }),
         { reliable: false },
       );
+      if (role === 'host') scheduleAnnotationPersist();
     },
-    [room],
+    [room, role, scheduleAnnotationPersist],
   );
 
   const handleClearCanvas = useCallback(() => {
@@ -1059,9 +1249,16 @@ function RoomContent({
     ) {
       return;
     }
+    const fi = Math.floor(currentPageRef.current / 2);
+    delete spreadInkRef.current[String(fi)];
     canvasRef.current?.clearCanvas(true);
-    room.localParticipant.publishData(buildMsg('CANVAS_CLEAR', {}), { reliable: true });
-  }, [room]);
+    try {
+      room.localParticipant.publishData(buildMsg('CANVAS_CLEAR', { spread_index: fi }), { reliable: true });
+    } catch {
+      /* ok */
+    }
+    if (role === 'host') scheduleAnnotationPersist();
+  }, [room, role, scheduleAnnotationPersist]);
 
   const handleReaction = useCallback((emoji: string) => {
     spawnReaction(emoji);
@@ -1158,8 +1355,8 @@ function RoomContent({
   ];
 
   const hostIdentity = role === 'host' ? room.localParticipant.identity : undefined;
-  const blockZoomGesturesWhileDrawing =
-    drawingEnabled && (interactionMode === 'pen' || interactionMode === 'highlighter');
+  /** Block left-drag pan + pinch on the book transform while annotating (avoids fighting the pen). Wheel zoom stays enabled. */
+  const blockTransformPanPinchWhileDrawing = drawingEnabled;
 
   return (
     <>
@@ -1175,7 +1372,15 @@ function RoomContent({
           activitySnapshotRef.current = closed;
           if (role === 'host') {
             room.localParticipant.publishData(buildMsg('ACTIVITY_CLOSE', {}), { reliable: true });
-            updateSnapshot(sessionId, participantId, currentPage + 1, remaining, {}, closed).catch(() => {});
+            flushCurrentSpreadInk();
+            updateSnapshot(
+              sessionId,
+              participantId,
+              currentPage + 1,
+              remaining,
+              buildAnnotationSnapshot(spreadInkRef.current),
+              closed,
+            ).catch(() => {});
           }
         }}
         onActivityStateSync={(activityState) => {
@@ -1188,7 +1393,15 @@ function RoomContent({
               : activityStateByActivity;
           setActivityIndex(idx);
           setActivityStateByActivity(stateBy);
-          updateSnapshot(sessionId, participantId, currentPage + 1, remaining, {}, activityState).catch(() => {});
+          flushCurrentSpreadInk();
+          updateSnapshot(
+            sessionId,
+            participantId,
+            currentPage + 1,
+            remaining,
+            buildAnnotationSnapshot(spreadInkRef.current),
+            activityState,
+          ).catch(() => {});
         }}
       />
 
@@ -1525,7 +1738,7 @@ function RoomContent({
             </div>
           )}
           {/* ── Main area ────────────────────────────────────────────────────── */}
-          <section className="relative ml-0 flex min-h-0 flex-1 flex-col overflow-hidden bg-[#0F0F0F] pb-40 md:pb-44 md:pr-72">
+          <section className="relative ml-0 flex min-h-0 flex-1 flex-col overflow-hidden bg-[#0F0F0F] pb-36 md:pb-40 md:pr-72">
             <ConnectionBanner />
             <TimerWarning remaining={remaining} />
 
@@ -1566,9 +1779,12 @@ function RoomContent({
               </div>
             )}
 
-            {/* Book viewer + bottom navigation (read-along layout) */}
+            {/* Book viewer + on-book controls */}
             <div className="flex min-h-0 flex-1 flex-col">
-              <div className="relative flex min-h-0 flex-1 items-center justify-center px-3 py-4 sm:px-5 sm:py-5">
+              <div
+                ref={readingHudBoundsRef}
+                className="relative flex min-h-0 flex-1 items-center justify-center px-3 py-4 sm:px-5 sm:py-5"
+              >
                 <TransformWrapper
                   ref={transformRef}
                   initialScale={1}
@@ -1578,10 +1794,10 @@ function RoomContent({
                   wheel={{
                     step: 0.12,
                     smoothStep: 0.02,
-                    disabled: blockZoomGesturesWhileDrawing,
+                    disabled: false,
                   }}
-                  pinch={{ disabled: blockZoomGesturesWhileDrawing }}
-                  panning={{ disabled: blockZoomGesturesWhileDrawing }}
+                  pinch={{ disabled: blockTransformPanPinchWhileDrawing }}
+                  panning={{ disabled: blockTransformPanPinchWhileDrawing }}
                   doubleClick={{ disabled: true }}
                   onTransformed={scheduleCanvasRecalcAfterTransform}
                   onInit={scheduleCanvasRecalcAfterTransform}
@@ -1590,7 +1806,13 @@ function RoomContent({
                     wrapperClass="w-full max-w-5xl !overflow-visible"
                     contentClass="w-full"
                   >
-                    <div className="group relative flex aspect-[4/3] w-full overflow-hidden rounded-2xl bg-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.7)]">
+                    <div
+                      className={`group relative flex w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.7)] ${
+                        loadingPages || pages.length === 0
+                          ? 'min-h-[min(80vh,calc(100dvh-14rem))]'
+                          : ''
+                      }`}
+                    >
 
                       {loadingPages ? (
                         <div className="flex flex-1 items-center justify-center bg-stone-100">
@@ -1609,60 +1831,30 @@ function RoomContent({
                       ) : (
                         <div
                           ref={bookMeasureRef}
-                          className="relative flex min-h-0 w-full flex-1 items-stretch justify-center overflow-hidden"
+                          className="relative box-border flex w-full shrink-0 justify-center overflow-hidden"
+                          style={
+                            bookRect.w < 64 || bookRect.h < 48
+                              ? { minHeight: 240 }
+                              : { height: bookRect.h, maxHeight: bookRect.h }
+                          }
                         >
-                          {!flipBookClientReady || bookRect.w < 64 || bookRect.h < 48 ? (
-                            <div className="flex min-h-[240px] w-full flex-1 items-center justify-center bg-white">
+                          {bookRect.w < 64 || bookRect.h < 48 ? (
+                            <div className="flex min-h-[240px] w-full flex-col items-center justify-center bg-white">
                               <Loader2 className="h-10 w-10 animate-spin text-stone-300" aria-hidden />
                               <span className="sr-only">Preparing book viewer…</span>
                             </div>
-                          ) : (
+                          ) : activeSpread ? (
                             <>
-                              <HTMLFlipBook
-                                ref={flipRef}
-                                className="touch-none"
-                                style={{}}
+                              <SpreadBookViewer
+                                spread={activeSpread}
                                 width={bookRect.w}
                                 height={bookRect.h}
-                                size="fixed"
-                                minWidth={bookRect.w}
-                                maxWidth={bookRect.w}
-                                minHeight={bookRect.h}
-                                maxHeight={bookRect.h}
-                                startPage={0}
-                                drawShadow
-                                flippingTime={650}
-                                usePortrait={false}
-                                startZIndex={0}
-                                autoSize={false}
-                                maxShadowOpacity={0.42}
-                                showCover={false}
-                                mobileScrollSupport={false}
-                                clickEventForward
-                                useMouseEvents={role === 'host'}
-                                swipeDistance={30}
-                                showPageCorners={role === 'host'}
-                                disableFlipByClick={false}
-                                onFlip={onBookFlip}
-                                onInit={onBookInit}
-                                onChangeState={onBookChangeState}
-                              >
-                                {spreadItems.map((sp) => (
-                                  <FlipBookSpreadPage
-                                    key={sp.leftPageNumber}
-                                    left={sp.left}
-                                    right={sp.right}
-                                    leftPageNumber={sp.leftPageNumber}
-                                  />
-                                ))}
-                              </HTMLFlipBook>
-                              <div
-                                className={`absolute inset-0 z-[15] transition-opacity duration-150 ${
-                                  bookFlipVisualState === 'flipping'
-                                    ? 'pointer-events-none opacity-0'
-                                    : 'opacity-100'
-                                }`}
-                              >
+                                transitionKey={clampedSpreadIndex}
+                                swipeEnabled={role === 'host' && interactionMode === 'book'}
+                                onSwipePrev={hostFlipPrev}
+                                onSwipeNext={hostFlipNext}
+                              />
+                              <div className="absolute inset-0 z-[15] opacity-100">
                                 <AnnotationCanvas
                                   ref={canvasRef}
                                   tool={annTool}
@@ -1672,8 +1864,30 @@ function RoomContent({
                                   onSync={handleCanvasSync}
                                 />
                               </div>
+                              {role === 'host' && (
+                                <>
+                                  <button
+                                    type="button"
+                                    aria-label="Previous spread"
+                                    onClick={hostFlipPrev}
+                                    disabled={currentPage <= 0}
+                                    className="pointer-events-auto absolute left-1.5 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-stone-400/50 bg-white/95 text-stone-800 shadow-md transition-all hover:bg-white disabled:cursor-not-allowed disabled:opacity-35 sm:left-2 sm:h-10 sm:w-10"
+                                  >
+                                    <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    aria-label="Next spread"
+                                    onClick={hostFlipNext}
+                                    disabled={currentPage >= pageCount - 2}
+                                    className="pointer-events-auto absolute right-1.5 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-stone-400/50 bg-white/95 text-stone-800 shadow-md transition-all hover:bg-white disabled:cursor-not-allowed disabled:opacity-35 sm:right-2 sm:h-10 sm:w-10"
+                                  >
+                                    <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden />
+                                  </button>
+                                </>
+                              )}
                             </>
-                          )}
+                          ) : null}
                         </div>
                       )}
 
@@ -1681,81 +1895,69 @@ function RoomContent({
                     </div>
                   </TransformComponent>
                 </TransformWrapper>
-              </div>
 
-              <nav
-                aria-label="Book navigation"
-                className="shrink-0 border-t border-white/5 bg-gradient-to-t from-[#0c0c0c] to-[#141414] px-3 py-3 sm:px-5"
-              >
-                <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {role === 'host' ? (
+                {!loadingPages && pages.length > 0 && activeSpread && bookRect.w >= 64 && bookRect.h >= 48 ? (
+                  <div
+                    className="pointer-events-none absolute z-[30]"
+                    style={{
+                      right: `${12 + bookHudOffset.x}px`,
+                      bottom: `${12 + bookHudOffset.y}px`,
+                    }}
+                  >
+                    <div
+                      className="pointer-events-auto flex max-w-[calc(100vw-2rem)] items-center gap-0.5 rounded-full border border-stone-400/55 bg-white/95 py-1 pl-1 pr-1.5 text-stone-800 shadow-[0_8px_30px_rgba(0,0,0,0.35)] backdrop-blur-sm sm:gap-1 sm:py-1.5 sm:pl-1.5 sm:pr-2.5"
+                      role="toolbar"
+                      aria-label="Book page and zoom controls"
+                    >
                       <button
                         type="button"
-                        onClick={hostFlipPrev}
-                        disabled={currentPage <= 0}
-                        className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-bold text-stone-200 transition-all hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
+                        aria-label="Drag to reposition toolbar. Double-click to reset position."
+                        title="Drag to move · Double-click to reset position"
+                        className="touch-none cursor-grab active:cursor-grabbing rounded-full p-1.5 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-700"
+                        onPointerDown={onBookHudGripDown}
+                        onDoubleClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          resetBookHudPosition();
+                        }}
                       >
-                        Previous
+                        <GripVertical className="h-4 w-4 sm:h-[18px] sm:w-[18px]" aria-hidden />
                       </button>
-                    ) : (
-                      <span className="text-[11px] font-medium text-stone-500">Host turns pages</span>
-                    )}
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-center gap-2">
-                    <div className="rounded-full border border-stone-700/80 bg-stone-950/50 px-4 py-2 text-xs font-semibold text-stone-300">
-                      {pages[currentPage + 1] ? (
-                        <>Pages {currentPage + 1}–{currentPage + 2} of {pageCount}</>
-                      ) : (
-                        <>Page {currentPage + 1} of {pageCount}</>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      aria-label="Fit page to view"
-                      onClick={() => {
-                        transformRef.current?.resetTransform(200);
-                        setTimeout(() => scheduleCanvasRecalcAfterTransform(), 220);
-                      }}
-                      className="flex h-10 w-10 items-center justify-center rounded-full border border-stone-700/80 bg-stone-900/60 text-stone-300 transition-colors hover:bg-stone-800 hover:text-white"
-                    >
-                      <LayoutGrid className="h-4 w-4" />
-                    </button>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-end gap-2">
-                    <div className="flex items-center gap-0.5 rounded-full border border-stone-800/80 bg-stone-950/60 p-1">
+                      <span className="max-w-[min(46vw,200px)] truncate px-1 text-center font-karla text-[10px] font-semibold tabular-nums text-stone-600 sm:max-w-[240px] sm:px-1.5 sm:text-xs">
+                        {pages[currentPage + 1]
+                          ? `Pages ${currentPage + 1}–${currentPage + 2} of ${pageCount}`
+                          : `Page ${currentPage + 1} of ${pageCount}`}
+                      </span>
+                      <div className="mx-0.5 h-5 w-px shrink-0 bg-stone-300/80 sm:mx-1" aria-hidden />
                       <button
                         type="button"
                         aria-label="Zoom out"
-                        onClick={() => transformRef.current?.zoomOut(0.15, 200)}
-                        className="flex h-9 w-9 items-center justify-center rounded-full text-stone-400 transition-colors hover:bg-stone-800 hover:text-stone-100"
+                        className="rounded-full p-1.5 text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 disabled:opacity-40"
+                        onClick={() => transformRef.current?.zoomOut()}
                       >
-                        <ZoomOut className="h-4 w-4" />
+                        <ZoomOut className="h-4 w-4 sm:h-[18px] sm:w-[18px]" aria-hidden />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Fit book to view"
+                        title="Fit to view"
+                        className="rounded-full p-1.5 text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 disabled:opacity-40"
+                        onClick={() => transformRef.current?.resetTransform(220)}
+                      >
+                        <LayoutGrid className="h-4 w-4 sm:h-[18px] sm:w-[18px]" aria-hidden />
                       </button>
                       <button
                         type="button"
                         aria-label="Zoom in"
-                        onClick={() => transformRef.current?.zoomIn(0.15, 200)}
-                        className="flex h-9 w-9 items-center justify-center rounded-full text-stone-400 transition-colors hover:bg-stone-800 hover:text-stone-100"
+                        className="rounded-full p-1.5 text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 disabled:opacity-40"
+                        onClick={() => transformRef.current?.zoomIn()}
                       >
-                        <ZoomIn className="h-4 w-4" />
+                        <ZoomIn className="h-4 w-4 sm:h-[18px] sm:w-[18px]" aria-hidden />
                       </button>
                     </div>
-                    {role === 'host' && (
-                      <button
-                        type="button"
-                        onClick={hostFlipNext}
-                        disabled={currentPage >= pageCount - 2}
-                        className="rounded-full bg-[#764f84] px-6 py-2.5 text-xs font-extrabold uppercase tracking-wide text-white shadow-lg shadow-[#764f84]/25 transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-35"
-                      >
-                        Next
-                      </button>
-                    )}
                   </div>
-                </div>
-              </nav>
+                ) : null}
+              </div>
             </div>
           </section>
 
@@ -1805,26 +2007,51 @@ function RoomContent({
           </aside>
         </main>
 
-        {/* Fixed bottom: unified circular controls */}
-        <div className="pointer-events-none fixed bottom-5 left-1/2 z-[58] flex w-full max-w-[calc(100vw-1rem)] -translate-x-1/2 flex-col items-center gap-2">
-          <UnifiedBar
-            interactionMode={interactionMode}
-            onInteractionModeChange={setInteractionMode}
-            color={annColor}
-            brushSize={annBrush}
-            onColorChange={setAnnColor}
-            onBrushSizeChange={setAnnBrush}
-            onClear={handleClearCanvas}
-            onUndo={() => canvasRef.current?.undo()}
-            onReaction={handleReaction}
-            role={role}
-            participantCount={participants.length}
-            onOpenParticipants={() => { setRoomPanelOpen(true); setActiveTab('video'); }}
-            onOpenActivities={role === 'host' ? () => router.push(`/session/${sessionId}/activity?bookId=${bookId}`) : undefined}
-            onCopyInvite={role === 'host' && inviteToken ? handleCopyInviteLink : undefined}
-            linkCopied={linkCopied}
-            onEndSession={() => handleEndSession(false)}
-          />
+        {/* Fixed bottom: unified controls — default bottom-left; drag handle persists position */}
+        <div
+          className="pointer-events-none fixed z-[95] max-w-[calc(100vw-0.75rem)]"
+          style={{
+            left: `calc(0.75rem + ${dockHudOffset.x}px)`,
+            bottom: `calc(1.25rem + ${dockHudOffset.y}px)`,
+          }}
+        >
+          <div className="pointer-events-auto flex items-end gap-2">
+            <button
+              type="button"
+              aria-label="Drag toolbar. Double-click to reset position."
+              title="Drag to move · Double-click to reset position"
+              className="mb-1 shrink-0 touch-none cursor-grab rounded-full border border-white/15 bg-stone-950/92 p-2 text-stone-400 shadow-lg backdrop-blur-xl hover:bg-stone-900 hover:text-stone-200 active:cursor-grabbing sm:mb-1.5"
+              onPointerDown={onDockHudGripDown}
+              onDoubleClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                resetDockHudPosition();
+              }}
+            >
+              <GripVertical className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden />
+            </button>
+            <div className="min-w-0 flex-1">
+              <UnifiedBar
+                className="items-start"
+                interactionMode={interactionMode}
+                onInteractionModeChange={setInteractionMode}
+                color={annColor}
+                brushSize={annBrush}
+                onColorChange={setAnnColor}
+                onBrushSizeChange={setAnnBrush}
+                onClear={handleClearCanvas}
+                onUndo={() => canvasRef.current?.undo()}
+                onReaction={handleReaction}
+                role={role}
+                participantCount={participants.length}
+                onOpenParticipants={() => { setRoomPanelOpen(true); setActiveTab('video'); }}
+                onOpenActivities={role === 'host' ? () => router.push(`/session/${sessionId}/activity?bookId=${bookId}`) : undefined}
+                onCopyInvite={role === 'host' && inviteToken ? handleCopyInviteLink : undefined}
+                linkCopied={linkCopied}
+                onEndSession={() => handleEndSession(false)}
+              />
+            </div>
+          </div>
         </div>
 
         {/* Reading progress bar */}
