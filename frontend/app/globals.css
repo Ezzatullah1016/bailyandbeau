@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Nunito:ital,wght@0,200..1000;1,200..1000&display=swap');
+/* Fonts: self-hosted via @fontsource* imports in app/layout.tsx (no Google fetch at build time). */
 @import "tailwindcss";
 
 /* ─── Reading room body reset (applied via JS class on mount) ────────────── */
@@ -45,12 +45,12 @@ body.reading-room {
 }
 
 @theme {
-  --font-headline: "Newsreader", serif;
-  --font-serif:    var(--font-cormorant), serif;
-  --font-body:     var(--font-jakarta), sans-serif;
-  --font-jost:     var(--font-jost), sans-serif;
-  --font-baloo:    var(--font-baloo), sans-serif;
-  --font-karla:    var(--font-karla), sans-serif;
+  --font-headline: "Newsreader Variable", "Newsreader", serif;
+  --font-serif:    "Cormorant Garamond", serif;
+  --font-body:     "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-jost:     "Jost", sans-serif;
+  --font-baloo:    "Baloo 2", sans-serif;
+  --font-karla:    "Karla", sans-serif;
 }
 
 .font-baloo { font-family: var(--font-baloo); }
@@ -75,7 +75,7 @@ body.reading-room {
 }
 
 html {
-  font-family: var(--font-karla), "Karla", system-ui, sans-serif;
+  font-family: var(--font-karla), system-ui, sans-serif;
 }
 
 body {

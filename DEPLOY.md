@@ -29,6 +29,19 @@ The EC2 box is already provisioned. Deploys are **just**: push code → SSH in �
 7. `pm2 restart bailyandbeau-frontend`
 8. `sudo systemctl reload nginx`
 
+### Subdomain + HTTPS (`reading-room.baileyandbeauco.com`)
+
+If the subdomain **times out** but SSH works:
+
+1. **Route 53 / DNS:** `reading-room` **A** record → **`51.21.140.88`** (same Elastic IP as the app server).
+2. **Security group** (`baileyandbeauco-sg` or equivalent): inbound **TCP 80** and **TCP 443** from **`0.0.0.0/0`** (and **`::/0`** if you use IPv6).
+3. **nginx:** add a `server { server_name reading-room.baileyandbeauco.com; ... }` that mirrors your main TLS site (proxy `/api`, `/admin`, `/super-admin`, `/webhooks` → gunicorn; `/` → `127.0.0.1:3001`). Copy from **`deploy/nginx-reading-room.baileyandbeauco.conf.example`**, set real **`ssl_certificate`** paths, then `sudo nginx -t && sudo systemctl reload nginx`.
+4. **TLS:** e.g. `sudo certbot --nginx -d reading-room.baileyandbeauco.com` if using Let’s Encrypt.
+
+### Frontend production build (offline‑friendly)
+
+Fonts are **self‑hosted** (`@fontsource/*` in `app/layout.tsx`), so `npm run build` on the server does **not** need to reach `fonts.googleapis.com` / `fonts.gstatic.com`.
+
 ---
 
 ## One‑command deploy from your laptop
