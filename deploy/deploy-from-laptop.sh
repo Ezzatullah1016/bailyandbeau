@@ -10,10 +10,19 @@ SERVER_IP="${SERVER_IP:-51.21.140.88}"
 USER_NAME="${USER_NAME:-ubuntu}"
 PEM="${PEM:-backend/keys/deployment.pem}"
 APP_DIR="${APP_DIR:-/home/ubuntu/app}"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 if [[ ! -f "$PEM" ]]; then
-    echo "PEM not found at $PEM" >&2
-    exit 1
+    if [[ -f "$REPO_ROOT/baileyandbeauco-key.pem" ]]; then
+        PEM="$REPO_ROOT/baileyandbeauco-key.pem"
+        echo "[deploy] Using $PEM" >&2
+    elif [[ -f "$REPO_ROOT/baileyandbeaukey.pem" ]]; then
+        PEM="$REPO_ROOT/baileyandbeaukey.pem"
+        echo "[deploy] Using $PEM" >&2
+    else
+        echo "PEM not found at $PEM (nor baileyandbeauco-key.pem / baileyandbeaukey.pem in repo root)" >&2
+        exit 1
+    fi
 fi
 chmod 400 "$PEM" || true
 

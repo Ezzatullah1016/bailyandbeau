@@ -12,7 +12,8 @@
     PEM resolution (repo root = parent of deploy/):
       1) -Pem if passed and exists (relative to repo root or absolute)
       2) backend/keys/deployment.pem
-      3) baileyandbeauco-key.pem in repo root
+      3) baileyandbeauco-key.pem in repo root (typical EC2 key pair name)
+      4) baileyandbeaukey.pem in repo root
 
     Server contract (already provisioned, see deploy/update.sh):
       - /home/ubuntu/app  is a clone of this repo, branch main
@@ -33,21 +34,26 @@ $ErrorActionPreference = 'Stop'
 $RepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 function Resolve-DeployPemPath {
   param([string]$PemArg, [string]$Root)
-  $tryPaths = @()
-  if ([System.IO.Path]::IsPathRooted($PemArg)) {
-    $tryPaths += $PemArg
+  $primary = if ([System.IO.Path]::IsPathRooted($PemArg)) {
+    $PemArg
   } else {
-    $tryPaths += (Join-Path $Root ($PemArg -replace '/', [IO.Path]::DirectorySeparatorChar))
+    (Join-Path $Root ($PemArg -replace '/', [IO.Path]::DirectorySeparatorChar))
   }
-  $fallback = Join-Path $Root 'baileyandbeauco-key.pem'
-  foreach ($p in $tryPaths) {
-    if (Test-Path -LiteralPath $p) { return (Resolve-Path -LiteralPath $p).Path }
+  $candidates = [System.Collections.Generic.List[string]]::new()
+  foreach ($p in @(
+      $primary,
+      (Join-Path $Root 'baileyandbeauco-key.pem'),
+      (Join-Path $Root 'baileyandbeaukey.pem')
+    )) {
+    if (-not $candidates.Contains($p)) { [void]$candidates.Add($p) }
   }
-  if ((Test-Path -LiteralPath $fallback) -and ($tryPaths[0] -ne $fallback)) {
-    Write-Host "[deploy] Using baileyandbeauco-key.pem (backend/keys/deployment.pem not found)"
-    return (Resolve-Path -LiteralPath $fallback).Path
+  foreach ($p in $candidates) {
+    if (Test-Path -LiteralPath $p) {
+      if ($p -ne $primary) { Write-Host "[deploy] Using PEM: $p" }
+      return (Resolve-Path -LiteralPath $p).Path
+    }
   }
-  throw "PEM not found. Tried: $($tryPaths -join ', ') and $fallback"
+  throw "PEM not found. Tried: $($candidates -join ', ')"
 }
 
 $Pem = Resolve-DeployPemPath -PemArg $Pem -Root $RepoRoot
