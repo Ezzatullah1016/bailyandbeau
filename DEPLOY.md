@@ -74,6 +74,30 @@ If you only want to redeploy without pushing (e.g. you already pushed via GitHub
 
 ---
 
+## GitHub Actions deploy
+
+After **`main` is on GitHub**, you can deploy from the **Actions** tab without your laptop PEM:
+
+1. In the repo on GitHub: **Settings → Secrets and variables → Actions → New repository secret**, add:
+
+| Secret | Required | Description |
+|--------|----------|-------------|
+| `DEPLOY_HOST` | Yes | EC2 public host, e.g. `51.21.140.88` |
+| `DEPLOY_SSH_PRIVATE_KEY` | Yes | Full **private** PEM (same key that can SSH as `ubuntu`; never commit this file) |
+| `SSH_KNOWN_HOSTS` | Yes | Run **`ssh-keyscan -H YOUR_HOST`** locally and paste the whole output (one or more lines) |
+| `DEPLOY_USER` | No | SSH login; defaults to **`ubuntu`** if unset |
+
+2. **Run the workflow:** **Actions → "Deploy to EC2" → Run workflow**. The job SSHs in and runs `bash /home/ubuntu/app/deploy/update.sh` (which resets to `origin/main` and rebuilds).
+
+3. **EC2 prerequisites (or the job will fail):**
+   - **`ubuntu` must be able to run `sudo` non-interactively** for `systemctl restart gunicorn` and `systemctl reload nginx`. Check on the server: `sudo -n true` (should exit `0`).
+   - Outbound **HTTPS to `github.com`** so `git fetch` works inside `update.sh`.
+   - **Security group inbound TCP 22:** GitHub-hosted runners use **dynamic** egress IPs, so SSH cannot be limited to a single GitHub IP unless you use a **self-hosted runner**, **AWS SSM**, or a VPN/bastion. Many teams allow **`0.0.0.0/0` on port 22** and rely on key-only auth (tighten with `fail2ban` or a bastion if you need stricter access).
+
+4. **Order of operations:** Push your commits to **`main`** first — the workflow only triggers the server script; **`update.sh` pulls whatever is latest on `origin/main`**.
+
+---
+
 ## Manual deploy (no helpers)
 
 ```bash

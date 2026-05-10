@@ -1,0 +1,39 @@
+# Deploy production on EC2 by SSH — runs the same script as deploy/run-deploy.ps1.
+# Needs repository Action secrets (see DEPLOY.md → "GitHub Actions deploy").
+name: Deploy to EC2
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-ec2-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH deploy (update.sh on server)
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DEPLOY_HOST:-}" ] || [ -z "${SSH_PRIVATE_KEY:-}" ] || [ -z "${SSH_KNOWN_HOSTS:-}" ]; then
+            echo "::error::Missing required Action secrets: DEPLOY_HOST, DEPLOY_SSH_PRIVATE_KEY, SSH_KNOWN_HOSTS"
+            exit 1
+          fi
+          USER_NAME="${DEPLOY_USER:-ubuntu}"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KNOWN_HOSTS" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+          umask 077
+          printf '%s' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_ec2
+          ssh -i ~/.ssh/deploy_ec2 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "${USER_NAME}@${DEPLOY_HOST}" \
+            'bash /home/ubuntu/app/deploy/update.sh'
