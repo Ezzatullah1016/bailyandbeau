@@ -1,6 +1,5 @@
 from urllib.parse import urlparse
 
-import boto3
 from django.conf import settings as django_settings
 from django.contrib.auth import authenticate, get_user_model
 from django.utils.text import slugify
@@ -355,12 +354,9 @@ class BookPageSerializer(serializers.ModelSerializer):
             else:
                 object_key = image_url.lstrip("/")
 
-            signed_url = boto3.client(
-                "s3",
-                aws_access_key_id=getattr(django_settings, "AWS_ACCESS_KEY_ID", ""),
-                aws_secret_access_key=getattr(django_settings, "AWS_SECRET_ACCESS_KEY", ""),
-                region_name=getattr(django_settings, "AWS_S3_REGION_NAME", "") or None,
-            ).generate_presigned_url(
+            from core.s3_presign import s3_client_for_media
+
+            signed_url = s3_client_for_media().generate_presigned_url(
                 "get_object",
                 Params={"Bucket": bucket_name, "Key": object_key},
                 ExpiresIn=getattr(django_settings, "AWS_QUERYSTRING_EXPIRE", 3600),

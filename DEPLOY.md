@@ -111,6 +111,12 @@ After **`main` is on GitHub**, you can deploy from the **Actions** tab without y
 
 ---
 
+## SFTP / FileZilla (GUI upload)
+
+Step-by-step (key conversion to `.ppk`, remote path `/home/ubuntu/app`, exclusions, post-upload `update.sh`): **[`docs/DEPLOY_AWS_FILEZILLA.md`](docs/DEPLOY_AWS_FILEZILLA.md)**. Prefer **git push + SSH `update.sh`** when possible.
+
+---
+
 ## Manual deploy (no helpers)
 
 ```bash

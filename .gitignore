@@ -34,6 +34,8 @@ Thumbs.db
 !DEPLOY.md
 !NGROK.md
 !README.md
+!docs/CLIENT_ACCESS.md
+!docs/DEPLOY_AWS_FILEZILLA.md
 
 # ─── Deploy (local only — never commit keys) ─────────────────────────────────
 deploy/.env
