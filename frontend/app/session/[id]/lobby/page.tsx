@@ -43,6 +43,20 @@ function isValidLiveKitUrl(url: string): boolean {
   }
 }
 
+function parseParticipantMetadata(metadata: string | undefined): { role?: string } {
+  try {
+    if (!metadata) return {};
+    return JSON.parse(metadata) as { role?: string };
+  } catch {
+    return {};
+  }
+}
+
+function participantLooksLikeHost(metadata: string | undefined): boolean {
+  const r = (parseParticipantMetadata(metadata).role ?? '').toString().toLowerCase();
+  return r.includes('host');
+}
+
 // ─── Lobby page ────────────────────────────────────────────────────────────────
 
 function LobbyPageContent() {
@@ -62,6 +76,7 @@ function LobbyPageContent() {
   const [guestReady, setGuestReady] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [mediaError, setMediaError] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -83,19 +98,37 @@ function LobbyPageContent() {
     if (!navigator.mediaDevices?.getUserMedia) {
       setCamReady(false);
       setMicReady(false);
+      setMediaError('This browser cannot access camera or microphone.');
       return;
     }
+    setMediaError(null);
     navigator.mediaDevices
       .getUserMedia({ video: true, audio: true })
       .then((stream) => {
         streamRef.current = stream;
-        if (videoRef.current) videoRef.current.srcObject = stream;
+        const v = videoRef.current;
+        if (v) {
+          v.srcObject = stream;
+          void v.play().catch(() => {
+            /* autoplay quirks — stream still attaches */
+          });
+        }
         setCamReady(true);
         setMicReady(true);
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        streamRef.current = null;
         setCamReady(false);
         setMicReady(false);
+        const name =
+          err && typeof err === 'object' && 'name' in err ? String((err as DOMException).name) : '';
+        if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+          setMediaError('Camera and microphone permission was denied. Allow access in browser settings and refresh this page to preview your setup.');
+        } else if (name === 'NotFoundError') {
+          setMediaError('No camera or microphone was found on this device.');
+        } else {
+          setMediaError('Could not start camera preview. Joining may still work from the reading room.');
+        }
       });
 
     return () => {
@@ -112,33 +145,81 @@ function LobbyPageContent() {
 
   // ── Connect to LiveKit lobby room and exchange PARTICIPANT_READY ───────────
   const connectToLobby = useCallback(
-    async (token: string, url: string, participantId: string, role: 'host' | 'guest') => {
+    async (token: string, url: string, participantId: string, role: 'host' | 'guest', sessionIdForNav: string) => {
       const { Room, RoomEvent } = await import('livekit-client');
       const room = new Room();
       livekitRoomRef.current = room;
+
+      let navigatedAway = false;
+      let sessionStartCommitted = false;
+
+      const goReadingRoom = () => {
+        if (navigatedAway) return;
+        navigatedAway = true;
+        setPhase('starting');
+        setTimeout(() => router.push(`/session/${sessionIdForNav}/reading-room`), 400);
+      };
+
+      const publishSessionStartAndGo = async () => {
+        if (sessionStartCommitted || navigatedAway || role !== 'host') return;
+        sessionStartCommitted = true;
+        setGuestReady(true);
+        try {
+          await room.localParticipant.publishData(
+            buildMsg('SESSION_START', {
+              initiator: participantId,
+              session_id: sessionIdForNav,
+            }),
+            { reliable: true },
+          );
+        } catch {
+          /* still transition so host is not stranded */
+        }
+        goReadingRoom();
+      };
+
+      const hostReconcileRemotes = async () => {
+        if (role !== 'host' || navigatedAway) return;
+        if (room.remoteParticipants.size < 1) return;
+        await publishSessionStartAndGo();
+      };
+
+      const guestReconcileRemotes = () => {
+        if (role !== 'guest' || navigatedAway) return;
+        for (const rp of room.remoteParticipants.values()) {
+          if (participantLooksLikeHost(rp.metadata)) {
+            goReadingRoom();
+            return;
+          }
+        }
+      };
 
       room.on(RoomEvent.DataReceived, (data: Uint8Array) => {
         const msg = parseMsg(data);
         if (!msg) return;
 
         if (msg.type === 'PARTICIPANT_READY' && role === 'host') {
-          setGuestReady(true);
-          room.localParticipant
-            .publishData(buildMsg('SESSION_START', { initiator: participantId }), { reliable: true })
-            .then(() => {
-              setPhase('starting');
-              setTimeout(() => router.push(`/session/${id}/reading-room`), 400);
-            })
-            .catch(() => {
-              setPhase('starting');
-              router.push(`/session/${id}/reading-room`);
-            });
+          const prRole =
+            typeof msg.payload.role === 'string' ? msg.payload.role.toLowerCase() : '';
+          if (prRole !== 'guest') return;
+          void publishSessionStartAndGo();
+          return;
         }
 
         if (msg.type === 'SESSION_START' && role === 'guest') {
-          const sessionId = (msg.payload.session_id as string) || id;
+          const sid = (typeof msg.payload.session_id === 'string' && msg.payload.session_id) || sessionIdForNav;
+          if (navigatedAway) return;
+          navigatedAway = true;
           setPhase('starting');
-          setTimeout(() => router.push(`/session/${sessionId}/reading-room`), 400);
+          setTimeout(() => router.push(`/session/${sid}/reading-room`), 400);
+        }
+      });
+
+      room.on(RoomEvent.ParticipantConnected, (remote) => {
+        if (role === 'host') {
+          void hostReconcileRemotes();
+        } else if (role === 'guest' && participantLooksLikeHost(remote.metadata)) {
+          goReadingRoom();
         }
       });
 
@@ -148,8 +229,11 @@ function LobbyPageContent() {
         buildMsg('PARTICIPANT_READY', { participantId, role }),
         { reliable: true },
       );
+
+      if (role === 'host') void hostReconcileRemotes();
+      else guestReconcileRemotes();
     },
-    [id, router],
+    [router],
   );
 
   // ── Host: ready → get token → connect to lobby ────────────────────────────
@@ -178,7 +262,7 @@ function LobbyPageContent() {
       }
 
       setPhase('waiting');
-      await connectToLobby(data.realtime_token, data.livekit_url, storedParticipantId, 'host');
+      await connectToLobby(data.realtime_token, data.livekit_url, storedParticipantId, 'host', String(data.session_id));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to get ready.');
       setPhase('check');
@@ -212,7 +296,7 @@ function LobbyPageContent() {
       }
 
       setPhase('waiting');
-      await connectToLobby(data.realtime_token, data.livekit_url, data.participant.id, 'guest');
+      await connectToLobby(data.realtime_token, data.livekit_url, data.participant.id, 'guest', String(data.session_id));
     } catch (e) {
       const msg = e instanceof Error ? e.message : '';
       const soft = /expired|invalid|invite/i.test(msg);
@@ -230,7 +314,7 @@ function LobbyPageContent() {
     if (!livekitRoomRef.current || !storedParticipantId) return;
     try {
       await livekitRoomRef.current.localParticipant.publishData(
-        buildMsg('SESSION_START', { initiator: storedParticipantId }),
+        buildMsg('SESSION_START', { initiator: storedParticipantId, session_id: id }),
         { reliable: true },
       );
     } catch { /* non-fatal */ }
@@ -256,10 +340,10 @@ function LobbyPageContent() {
 
   return (
     <>
-      <main className="flex flex-col md:flex-row h-screen w-full overflow-hidden font-karla text-[#1d1b16] antialiased">
+      <main className="flex flex-col md:flex-row h-[100dvh] min-h-0 w-full overflow-hidden font-karla text-[#1d1b16] antialiased pb-[env(safe-area-inset-bottom,0px)]">
 
         {/* ── LEFT COLUMN ──────────────────────────────────────────────────── */}
-        <section className="w-full md:w-1/2 bg-[#faf7f6] p-8 md:p-12 flex flex-col justify-between overflow-y-auto">
+        <section className="flex min-h-0 w-full flex-col justify-between overflow-y-auto bg-[#faf7f6] px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(2rem,env(safe-area-inset-top))] sm:px-8 md:w-1/2 md:p-12">
           <div>
             <div className="mb-12">
               <span className="font-baloo text-2xl font-bold text-[#3d3b62] tracking-tight">
@@ -267,13 +351,13 @@ function LobbyPageContent() {
               </span>
             </div>
 
-            <div className="max-w-md mx-auto space-y-8">
-              <h2 className="font-baloo text-4xl font-bold text-[#3d3b62] tracking-tight">
+            <div className="max-w-md mx-auto flex flex-col gap-8">
+              <h2 className="order-10 font-baloo text-4xl font-bold text-[#3d3b62] tracking-tight">
                 Ready to Read Together?
               </h2>
 
               {/* Session info / Today's Book card */}
-              <div className="bg-white rounded-xl p-6 border border-[#eccdca] shadow-[0_6px_18px_rgba(0,0,0,0.08)]">
+              <div className="order-30 rounded-xl md:order-20 bg-white p-6 border border-[#eccdca] shadow-[0_6px_18px_rgba(0,0,0,0.08)]">
                 <div className="flex flex-col gap-1 mb-4">
                   <span className="font-karla uppercase tracking-widest text-[11px] font-bold text-[#764f84]">
                     TODAY&apos;S BOOK
@@ -307,7 +391,7 @@ function LobbyPageContent() {
 
               {/* Invite link (host only) */}
               {inviteUrl && (
-                <div className="bg-white rounded-xl p-4 border border-[#eccdca] shadow-[0_6px_18px_rgba(0,0,0,0.08)]">
+                <div className="order-40 rounded-xl md:order-30 bg-white p-4 border border-[#eccdca] shadow-[0_6px_18px_rgba(0,0,0,0.08)]">
                   <span className="font-karla block text-[11px] font-bold uppercase tracking-widest text-[#764f84] mb-2">
                     Invite Link
                   </span>
@@ -333,7 +417,7 @@ function LobbyPageContent() {
 
               {/* Guest display name input */}
               {isGuestMode && phase === 'check' && (
-                <div className="space-y-2">
+                <div className="order-50 md:order-40 space-y-2">
                   <label className="font-karla text-sm font-bold uppercase tracking-wider text-[#43493d]">
                     Your name
                   </label>
@@ -347,18 +431,23 @@ function LobbyPageContent() {
                 </div>
               )}
 
-              {/* Tech check */}
-              <div className="space-y-4">
+              {/* Tech check — bumped before the session card on small screens so preview is visible without scrolling */}
+              <div className="order-20 space-y-4 md:order-50">
                 <h4 className="font-karla text-sm font-bold uppercase tracking-wider text-[#43493d]">
                   Check your camera &amp; microphone
                 </h4>
-                <div className="relative aspect-video bg-[#3d3b62] rounded-[12px] overflow-hidden flex items-center justify-center">
+                <div className="relative aspect-video max-h-[40vh] bg-[#3d3b62] rounded-[12px] overflow-hidden flex items-center justify-center sm:max-h-none">
                   {camReady ? (
                     <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
                   ) : (
-                    <div className="flex flex-col items-center">
+                    <div className="flex flex-col items-center px-4 text-center">
                       <VideoOff className="w-10 h-10 text-white mb-2" />
                       <span className="font-karla text-white/70 text-xs font-medium tracking-wide">Camera Preview</span>
+                      {mediaError ? (
+                        <span className="font-karla mt-3 text-[11px] leading-snug text-amber-200/95">{mediaError}</span>
+                      ) : (
+                        <span className="font-karla mt-2 text-[10px] text-white/55">Connecting to hardware…</span>
+                      )}
                     </div>
                   )}
                   <div className="absolute bottom-4 right-4 bg-[#c84a71] px-3 py-1 rounded-full text-[10px] text-white font-karla font-bold">
@@ -381,26 +470,27 @@ function LobbyPageContent() {
                 </div>
               </div>
 
-              {error && <p className="font-karla text-sm text-[#ba1a1a] font-medium">{error}</p>}
+              {error && <p className="order-[70] font-karla text-sm text-[#ba1a1a] font-medium">{error}</p>}
 
               {/* CTA */}
               {phase === 'check' && (
-                <>
+                <div className="order-[60] flex flex-col gap-2">
                   <button
+                    type="button"
                     onClick={isGuestMode ? handleGuestReady : handleHostReady}
                     disabled={isLoading}
-                    className="font-baloo w-full py-4 bg-[#3d3b62] hover:bg-[#764f84] text-white rounded-lg font-bold text-lg transition-all hover:scale-[1.01] active:scale-95 shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="font-baloo w-full rounded-lg bg-[#3d3b62] py-4 text-lg font-bold text-white shadow-lg transition-all hover:scale-[1.01] hover:bg-[#764f84] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {isGuestMode ? "I'm Ready — Join Session" : "I'm Ready — Join Session"}
                   </button>
-                  <p className="font-karla text-center text-xs text-[#43493d]/60 italic">
+                  <p className="text-center font-karla text-xs italic text-[#43493d]/60">
                     Both participants must be ready before the session starts.
                   </p>
-                </>
+                </div>
               )}
 
               {phase === 'waiting' && (
-                <div className="flex flex-col items-center gap-4 py-4">
+                <div className="order-[60] flex flex-col items-center gap-4 py-4">
                   <div className="w-8 h-8 border-4 border-[#764f84] border-t-transparent rounded-full animate-spin" />
                   <p className="font-karla text-sm text-[#43493d] font-medium">
                     {isGuestMode
@@ -429,7 +519,7 @@ function LobbyPageContent() {
               )}
 
               {phase === 'starting' && (
-                <div className="flex flex-col items-center gap-3 py-4">
+                <div className="order-[60] flex flex-col items-center gap-3 py-4">
                   <Rocket className="w-10 h-10 text-[#764f84] animate-pulse" />
                   <p className="font-karla text-sm text-[#3d3b62] font-bold">Session starting…</p>
                 </div>
@@ -446,7 +536,7 @@ function LobbyPageContent() {
         </section>
 
         {/* ── RIGHT COLUMN ─────────────────────────────────────────────────── */}
-        <section className="hidden md:flex w-full md:w-1/2 bg-gradient-to-b from-[#3d3b62] to-[#764f84] p-12 relative items-center justify-center overflow-hidden">
+        <section className="relative hidden min-h-0 items-center justify-center overflow-hidden bg-gradient-to-b from-[#3d3b62] to-[#764f84] p-12 pb-[max(3rem,env(safe-area-inset-bottom))] md:flex md:h-[100dvh] md:w-1/2">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 blur-[120px] rounded-full -mr-32 -mt-32" />
           <div className="absolute bottom-0 left-0 w-64 h-64 bg-white/5 blur-[120px] rounded-full -ml-32 -mb-32" />
 
@@ -495,7 +585,7 @@ export default function LobbyPage() {
   return (
     <Suspense
       fallback={(
-        <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#3d3b62] to-[#764f84]">
+        <div className="flex min-h-[100dvh] items-center justify-center bg-gradient-to-br from-[#3d3b62] to-[#764f84] px-6 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]">
           <BookOpen className="h-12 w-12 animate-pulse text-white/80" aria-hidden />
         </div>
       )}

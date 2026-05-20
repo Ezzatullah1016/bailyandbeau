@@ -117,6 +117,30 @@ Step-by-step (key conversion to `.ppk`, remote path `/home/ubuntu/app`, exclusio
 
 ---
 
+## Elastic Beanstalk (optional — separate backend host)
+
+The primary production setup is EC2 + nginx + `update.sh`. If you experiment with EB for Django only:
+
+1. **CLI tools:** Install into `backend\.venv`: `pip install awscli awsebcli gunicorn`  
+   Session helper: `.\\deploy\\eb-use-venv.ps1` (adds venv Scripts to `PATH`)
+
+2. **AWS CLI on Windows:** If `winget` is unavailable, use the pip install above instead of MSI. If `aws.cmd` fails with “module not found”, run:
+   ```powershell
+   backend\.venv\Scripts\python.exe -m awscli --version
+   backend\.venv\Scripts\python.exe -m awscli configure   # IAM keys interactive
+   ```
+   Region: **`eu-north-1`** · output **`json`** (as you chose).
+
+3. **App root:** Run **`eb init`** / **`eb create`** from **`backend\\`** — WSGI is **`config.wsgi:application`** (not `core.wsgi`). Repo includes **`backend/Procfile`** and **`requirements.txt`** with **gunicorn**.
+
+4. **Settings:** Prefer env vars (`DJANGO_DEBUG=false`, `DJANGO_ALLOWED_HOSTS=your-env.eu-north-1.elasticbeanstalk.com,...`). Do **not** hard‑code **`ALLOWED_HOSTS = ['*']`** unless you intentionally accept every host header.
+
+5. **Database:** Provision **RDS Postgres** or set env **`POSTGRES_*`** on the EB environment to match **`config/settings.py`**.
+
+6. **Interactive steps** (credentials + VPC choices) cannot be scripted here — run **`eb init`** then **`eb create bailey-beau-backend-env`** locally after `aws configure`.
+
+---
+
 ## Manual deploy (no helpers)
 
 ```bash

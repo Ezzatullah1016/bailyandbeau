@@ -19,7 +19,7 @@ import {
   useTracks,
   useParticipants,
 } from '@livekit/components-react';
-import { ConnectionState, Track } from 'livekit-client';
+import { ConnectionState, RoomEvent, Track, type Room } from 'livekit-client';
 import { useSession } from '@/contexts/SessionContext';
 import {
   completeSession,
@@ -36,6 +36,7 @@ import {
 } from '@/lib/api';
 import { MAX_LIVEKIT_ROOM_PARTICIPANTS } from '@/lib/sessionLimits';
 import ActivityRoom from '@/components/activity/ActivityRoom';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import type { ActivityConfigData } from '@/components/activity/types';
 import { AnnotationToolbar, DockTip, type ReadingInteractionMode } from '@/components/annotation/AnnotationToolbar';
 import type { AnnotationCanvasHandle } from '@/components/annotation/AnnotationCanvas';
@@ -133,6 +134,25 @@ function fmtTime(secs: number) {
   const m = Math.floor(Math.max(0, secs) / 60);
   const s = Math.max(0, secs) % 60;
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function roleFromParticipantMetadata(metadata: string | undefined): string {
+  try {
+    if (!metadata) return '';
+    const o = JSON.parse(metadata) as { role?: unknown };
+    return String(o.role ?? '').toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function resolveHostParticipantIdentity(room: Room, viewerRole: 'host' | 'guest'): string | undefined {
+  if (viewerRole === 'host') return room.localParticipant.identity;
+  for (const p of room.remoteParticipants.values()) {
+    const r = roleFromParticipantMetadata(p.metadata);
+    if (r.includes('host')) return p.identity;
+  }
+  return undefined;
 }
 
 // ─── Connection banner ────────────────────────────────────────────────────────
@@ -357,7 +377,7 @@ function SessionTimerRing({
         <div className="relative z-10 flex flex-col items-center text-center">
           <span className="font-baloo text-xl font-bold tabular-nums text-white">{fmtTime(remaining)}</span>
           <span className="text-[9px] font-semibold uppercase tracking-wider text-stone-400">
-            {timerActive ? 'remaining' : role === 'host' ? 'tap to start' : 'waiting'}
+            {timerActive ? 'remaining' : role === 'host' ? 'starts live' : 'waiting'}
           </span>
         </div>
       </div>
@@ -596,6 +616,10 @@ function RoomContent({
   const [remaining, setRemaining] = useState(SESSION_DURATION_S);
   const remainingRef = useRef(remaining);
   remainingRef.current = remaining;
+  const timerActiveRef = useRef(timerActive);
+  timerActiveRef.current = timerActive;
+  /** Host publishes TIMER_START automatically once after connect so guests stay in sync; manual start also sets this. */
+  const hostTimerAutoKickRef = useRef(false);
   const timerStartedAtRef = useRef<number | null>(null);
   const [showExtendModal, setShowExtendModal] = useState(false);
   const extendCountdownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -880,6 +904,30 @@ function RoomContent({
   const [sessionDurationSecs, setSessionDurationSecs] = useState(0);
 
   const [activities, setActivities] = useState<ActivityConfigData[]>([]);
+  const spreadCoverPrefsKey = `bb_spread_cover_${sessionId}`;
+  const [spreadPageCover, setSpreadPageCover] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const v = localStorage.getItem(spreadCoverPrefsKey);
+      setSpreadPageCover(v === '1');
+    } catch {
+      /* ok */
+    }
+  }, [spreadCoverPrefsKey]);
+
+  const setSpreadPageCoverPersisted = useCallback(
+    (v: boolean) => {
+      setSpreadPageCover(v);
+      try {
+        localStorage.setItem(spreadCoverPrefsKey, v ? '1' : '0');
+      } catch {
+        /* ok */
+      }
+    },
+    [spreadCoverPrefsKey],
+  );
+
   const [activityOpen, setActivityOpen] = useState(false);
   const [activityIndex, setActivityIndex] = useState(0);
   const [activityStateByActivity, setActivityStateByActivity] = useState<Record<string, Record<string, unknown>>>(
@@ -1068,10 +1116,12 @@ function RoomContent({
         }
 
         case 'TIMER_START': {
-          const ts = msg.payload.started_at as number ?? Date.now();
+          const raw = msg.payload.started_at;
+          const ts = typeof raw === 'number' && Number.isFinite(raw) ? raw : Date.now();
           timerStartedAtRef.current = ts;
           setTimerActive(true);
-          setRemaining(SESSION_DURATION_S);
+          const elapsed = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+          setRemaining(Math.max(0, SESSION_DURATION_S - elapsed));
           break;
         }
 
@@ -1278,18 +1328,56 @@ function RoomContent({
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
-  // ── Host: start timer ─────────────────────────────────────────────────────
-  const handleStartTimer = useCallback(() => {
-    if (role !== 'host' || timerActive) return;
+  const bumpLocalMediaTracks = useCallback(async () => {
+    try {
+      await localParticipant.setCameraEnabled(true);
+      await localParticipant.setMicrophoneEnabled(true);
+    } catch {
+      /* hardware / permission — controls still usable */
+    }
+  }, [localParticipant]);
+
+  const publishHostTimerKick = useCallback(() => {
     const now = Date.now();
     timerStartedAtRef.current = now;
     setTimerActive(true);
     setRemaining(SESSION_DURATION_S);
-    room.localParticipant.publishData(
+    void room.localParticipant.publishData(
       buildMsg('TIMER_START', { started_at: now }),
       { reliable: true },
     );
-  }, [role, timerActive, room]);
+  }, [room]);
+
+  useEffect(() => {
+    function onConnected() {
+      void bumpLocalMediaTracks();
+      if (role !== 'host') return;
+      if (timerActiveRef.current) {
+        hostTimerAutoKickRef.current = true;
+        return;
+      }
+      if (hostTimerAutoKickRef.current) return;
+      hostTimerAutoKickRef.current = true;
+      publishHostTimerKick();
+    }
+
+    room.on(RoomEvent.Connected, onConnected);
+    room.on(RoomEvent.Reconnected, bumpLocalMediaTracks);
+    if (room.state === ConnectionState.Connected) {
+      void onConnected();
+    }
+    return () => {
+      room.off(RoomEvent.Connected, onConnected);
+      room.off(RoomEvent.Reconnected, bumpLocalMediaTracks);
+    };
+  }, [room, role, bumpLocalMediaTracks, publishHostTimerKick]);
+
+  // ── Host: start timer ─────────────────────────────────────────────────────
+  const handleStartTimer = useCallback(() => {
+    if (role !== 'host' || timerActive) return;
+    hostTimerAutoKickRef.current = true;
+    publishHostTimerKick();
+  }, [role, timerActive, publishHostTimerKick]);
 
   // ── End / complete session ────────────────────────────────────────────────
   async function fetchBadgesAndShow(durationSecs: number) {
@@ -1354,7 +1442,27 @@ function RoomContent({
     { id: 'settings' as const, label: 'Settings', hint: 'Timer & host' },
   ];
 
-  const hostIdentity = role === 'host' ? room.localParticipant.identity : undefined;
+  const [hostIdentity, setHostIdentity] = useState<string | undefined>(() =>
+    resolveHostParticipantIdentity(room, role),
+  );
+  useEffect(() => {
+    function syncHostIdentity() {
+      setHostIdentity((prev) => {
+        const next = resolveHostParticipantIdentity(room, role);
+        return prev !== next ? next : prev;
+      });
+    }
+    syncHostIdentity();
+    room.on(RoomEvent.ParticipantConnected, syncHostIdentity);
+    room.on(RoomEvent.ParticipantDisconnected, syncHostIdentity);
+    room.on(RoomEvent.Connected, syncHostIdentity);
+    return () => {
+      room.off(RoomEvent.ParticipantConnected, syncHostIdentity);
+      room.off(RoomEvent.ParticipantDisconnected, syncHostIdentity);
+      room.off(RoomEvent.Connected, syncHostIdentity);
+    };
+  }, [room, role]);
+
   /** Block left-drag pan + pinch on the book transform while annotating (avoids fighting the pen). Wheel zoom stays enabled. */
   const blockTransformPanPinchWhileDrawing = drawingEnabled;
 
@@ -1431,18 +1539,18 @@ function RoomContent({
         </div>
       )}
 
-      <div className="h-screen w-screen flex flex-col bg-gradient-to-br from-[#3d3b62] to-[#764f84] text-[#e5e2e1] overflow-hidden">
+      <div className="relative isolate flex h-[100dvh] min-h-0 w-screen flex-col overflow-hidden bg-gradient-to-br from-[#3a3028] via-[#382f42] to-[#2c2636] pb-[env(safe-area-inset-bottom,0px)] text-[#e5e2e1]">
+        {/* Warm ambient layers */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_0%,rgba(255,219,164,0.12),transparent_55%)]"
+        />
+        <div aria-hidden className="pointer-events-none absolute inset-0 shadow-[inset_0_0_120px_rgba(10,8,14,0.55)]" />
 
         {/* ── Top nav — read-along style header ─────────────────────────────── */}
-        <header className="fixed top-0 z-50 flex h-16 w-full items-center justify-between border-b border-white/5 bg-[#2a2838]/95 px-4 shadow-lg backdrop-blur-xl sm:px-6">
+        <header className="fixed left-0 right-0 top-0 z-50 flex w-full items-center justify-between border-b border-white/5 bg-[#2a2838]/95 px-4 pb-2 pt-[max(8px,env(safe-area-inset-top))] shadow-lg backdrop-blur-xl sm:px-6">
           <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-5">
-            <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#764f84] to-[#3d3b62] shadow-md sm:flex">
-              <BookOpen className="h-6 w-6 text-white" aria-hidden />
-            </div>
-            <div className="min-w-0">
-              <p className="font-baloo truncate text-lg font-bold leading-tight text-white sm:text-xl">Bailey &amp; Beau</p>
-              <p className="font-karla hidden truncate text-[11px] text-stone-400 sm:block">Reading together, growing together</p>
-            </div>
+            <BrandLogo variant="light" className="h-7 shrink-0 max-sm:max-w-[140px] sm:h-9" />
             <div className="mx-1 hidden h-9 w-px shrink-0 bg-white/10 sm:block" aria-hidden />
             <div className="flex min-w-0 max-w-[min(40vw,280px)] items-center gap-3 sm:max-w-[320px]">
               {!loadingPages && coverUrl ? (
@@ -1481,7 +1589,11 @@ function RoomContent({
             {/* Timer chip — mobile / when right panel hidden */}
             <div
               className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition-all lg:hidden ${remaining <= 2 * 60 ? 'border-red-500/30 bg-red-950/40' : 'border-[#ffb955]/25 bg-[#644000]/35'}`}
-              title={role === 'host' && !timerActive ? 'Tap to start timer' : undefined}
+              title={
+                role === 'host' && !timerActive
+                  ? 'Session timer — starts automatically when connected; tap if you paused it.'
+                  : undefined
+              }
               onClick={role === 'host' && !timerActive ? handleStartTimer : undefined}
               style={role === 'host' && !timerActive ? { cursor: 'pointer' } : undefined}
             >
@@ -1545,7 +1657,7 @@ function RoomContent({
           </div>
         </header>
 
-        <main className="relative flex h-full flex-1 overflow-hidden pt-16">
+        <main className="relative flex h-full flex-1 overflow-hidden pt-[max(5rem,calc(4rem+env(safe-area-inset-top,0px)))]">
 
           {roomPanelOpen && (
             <button
@@ -1684,6 +1796,20 @@ function RoomContent({
                 {activeTab === 'settings' && (
                   <div className="space-y-3 px-1">
                     <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-stone-400">Session settings</p>
+                    <label className="flex cursor-pointer items-start gap-3 rounded-xl bg-stone-800/35 px-3 py-3 text-sm text-stone-200 hover:bg-stone-800/50">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 h-4 w-4 shrink-0 rounded border-stone-500 bg-stone-900 text-[#3b85a6] focus:ring-[#3b85a6]"
+                        checked={spreadPageCover}
+                        onChange={(e) => setSpreadPageCoverPersisted(e.target.checked)}
+                      />
+                      <span>
+                        <span className="font-semibold text-stone-100">Fill spread to frame</span>
+                        <span className="mt-1 block text-xs leading-relaxed text-stone-500">
+                          Zooms pages to fill the spread area; margins may be cropped instead of showing letterboxing. Saved on this device only.
+                        </span>
+                      </span>
+                    </label>
                     <p className="text-xs leading-relaxed text-stone-500">
                       Up to {MAX_LIVEKIT_ROOM_PARTICIPANTS} people can be in this live room at once (including the host).
                     </p>
@@ -1738,7 +1864,7 @@ function RoomContent({
             </div>
           )}
           {/* ── Main area ────────────────────────────────────────────────────── */}
-          <section className="relative ml-0 flex min-h-0 flex-1 flex-col overflow-hidden bg-[#0F0F0F] pb-36 md:pb-40 md:pr-72">
+          <section className="relative ml-0 flex min-h-0 flex-1 flex-col overflow-hidden bg-[#171210]/95 pb-[calc(11rem+env(safe-area-inset-bottom,0px))] shadow-[inset_0_0_80px_rgba(0,0,0,0.35)] backdrop-blur-[1px] md:pb-[calc(12rem+env(safe-area-inset-bottom,0px))] md:pr-72">
             <ConnectionBanner />
             <TimerWarning remaining={remaining} />
 
@@ -1807,7 +1933,7 @@ function RoomContent({
                     contentClass="w-full"
                   >
                     <div
-                      className={`group relative flex w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.7)] ${
+                      className={`group relative flex w-full max-w-5xl flex-col overflow-hidden rounded-[1.65rem] border border-black/50 bg-gradient-to-b from-[#e8dfd4] via-[#faf6ee] to-[#e6ded4] shadow-[0_52px_100px_-22px_rgba(5,5,12,0.88)] ${
                         loadingPages || pages.length === 0
                           ? 'min-h-[min(80vh,calc(100dvh-14rem))]'
                           : ''
@@ -1850,6 +1976,7 @@ function RoomContent({
                                 width={bookRect.w}
                                 height={bookRect.h}
                                 transitionKey={clampedSpreadIndex}
+                                coverPages={spreadPageCover}
                                 swipeEnabled={role === 'host' && interactionMode === 'book'}
                                 onSwipePrev={hostFlipPrev}
                                 onSwipeNext={hostFlipNext}
@@ -1891,7 +2018,8 @@ function RoomContent({
                         </div>
                       )}
 
-                      <div className="pointer-events-none absolute inset-y-0 left-1/2 z-[5] w-6 -translate-x-1/2 bg-gradient-to-r from-stone-900/5 via-stone-900/12 to-stone-900/5" />
+                      <div className="pointer-events-none absolute inset-y-0 left-1/2 z-[5] w-7 -translate-x-1/2 bg-gradient-to-r from-transparent via-black/45 to-transparent opacity-85" />
+
                     </div>
                   </TransformComponent>
                 </TransformWrapper>

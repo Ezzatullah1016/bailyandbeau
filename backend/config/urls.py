@@ -39,7 +39,10 @@ urlpatterns = [
     path('super-admin/live-sessions/', views.admin_live_sessions, name='admin_live_sessions'),
     path('super-admin/logs/', views.admin_logs, name='admin_logs'),
     path('super-admin/settings/', views.admin_settings, name='admin_settings'),
-    path('admin/', admin.site.urls),
+    # /admin/ → super admin UI; Django's stock admin lives at /django-admin/
+    path('admin/<path:path>', views.redirect_admin_to_django_admin),
+    path('admin/', views.redirect_admin_root),
+    path('django-admin/', admin.site.urls),
     path('api/v1/', include('core.api_urls')),
 ]
 

@@ -50,9 +50,12 @@ class SuperAdminDashboardTests(TestCase):
         response = self.client.get(reverse("super_admin_dashboard"))
 
         self.assertEqual(response.status_code, 302)
-        self.assertIn("/admin/login/", response.url)
+        self.assertIn(reverse("admin:login"), response.url)
 
-    def test_admin_login_page_uses_dashboard_theme_and_validation(self):
+    def test_public_admin_url_redirects_to_super_admin_dashboard(self):
+        response = self.client.get("/admin/", follow=False)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("super_admin_dashboard"))
         response = self.client.get(reverse("admin:login"))
 
         self.assertEqual(response.status_code, 200)

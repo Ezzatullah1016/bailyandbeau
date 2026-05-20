@@ -38,6 +38,20 @@ from .serializers import ActivityConfigSerializer, BookSerializer, LoginSerializ
 User = get_user_model()
 
 
+def redirect_admin_root(request):
+    """Public ``/admin/`` opens the custom super admin dashboard instead of Django admin."""
+    return redirect("super_admin_dashboard")
+
+
+def redirect_admin_to_django_admin(request, path):
+    """Legacy ``/admin/...`` URLs (e.g. bookmarks) forward to ``/django-admin/...``."""
+    target = f"/django-admin/{path}"
+    qs = request.META.get("QUERY_STRING", "")
+    if qs:
+        target = f"{target}?{qs}"
+    return redirect(target)
+
+
 def _normalize_cover_image_url(raw_url):
     """Convert common pasted search URLs into a direct image URL."""
     url = (raw_url or "").strip()
