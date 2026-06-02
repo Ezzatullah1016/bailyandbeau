@@ -23,6 +23,14 @@ frontend/public/pdf.worker.min.js
 frontend/.env.local
 frontend/.env.production.local
 
+# ─── Environment files (real secrets — never commit; only *.example is tracked) ─
+.env.*
+!.env.example
+!.env.local.example
+frontend/.env.production
+backend/.env.bak.*
+frontend/.env.production.bak.*
+
 # ─── IDE & OS ─────────────────────────────────────────────────────────────────
 .vscode/
 .DS_Store
