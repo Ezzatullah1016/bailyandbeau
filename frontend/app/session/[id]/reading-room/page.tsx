@@ -1466,6 +1466,31 @@ function RoomContent({
   /** Block left-drag pan + pinch on the book transform while annotating (avoids fighting the pen). Wheel zoom stays enabled. */
   const blockTransformPanPinchWhileDrawing = drawingEnabled;
 
+  /** Open the in-room activity modal (reuses the live LiveKit connection — no navigation, no timer reset).
+   *  Host broadcasts ACTIVITY_OPEN so guests follow, and persists the open state to the session snapshot. */
+  const handleOpenActivities = () => {
+    if (activities.length === 0) return;
+    setActivityOpen(true);
+    const openState = {
+      activity_open: true,
+      activity_index: activityIndex,
+      state_by_activity: activityStateByActivity,
+    };
+    activitySnapshotRef.current = openState;
+    if (role === 'host') {
+      room.localParticipant.publishData(buildMsg('ACTIVITY_OPEN', openState), { reliable: true });
+      flushCurrentSpreadInk();
+      updateSnapshot(
+        sessionId,
+        participantId,
+        currentPage + 1,
+        remaining,
+        buildAnnotationSnapshot(spreadInkRef.current),
+        openState,
+      ).catch(() => {});
+    }
+  };
+
   return (
     <>
       <ActivityRoom
@@ -2124,7 +2149,7 @@ function RoomContent({
               {activities.length > 0 && role === 'host' && (
                 <button
                   type="button"
-                  onClick={() => router.push(`/session/${sessionId}/activity?bookId=${bookId}`)}
+                  onClick={handleOpenActivities}
                   className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-white/10 py-2.5 text-[11px] font-bold text-white transition-colors hover:bg-white/15"
                 >
                   <Gamepad2 className="h-4 w-4" />
@@ -2173,7 +2198,7 @@ function RoomContent({
                 role={role}
                 participantCount={participants.length}
                 onOpenParticipants={() => { setRoomPanelOpen(true); setActiveTab('video'); }}
-                onOpenActivities={role === 'host' ? () => router.push(`/session/${sessionId}/activity?bookId=${bookId}`) : undefined}
+                onOpenActivities={role === 'host' ? handleOpenActivities : undefined}
                 onCopyInvite={role === 'host' && inviteToken ? handleCopyInviteLink : undefined}
                 linkCopied={linkCopied}
                 onEndSession={() => handleEndSession(false)}
