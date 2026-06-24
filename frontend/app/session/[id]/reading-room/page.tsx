@@ -24,7 +24,7 @@ import { useSession } from '@/contexts/SessionContext';
 import {
   completeSession,
   getBookActivities,
-  getBookPages,
+  getBookPagesWithMeta,
   getGuestToken,
   getSession,
   getSnapshot,
@@ -596,10 +596,13 @@ function RoomContent({
 
   // ── Pages ─────────────────────────────────────────────────────────────────
   const [backendPages, setBackendPages] = useState<BookPageData[]>([]);
+  const [bookPdfUrl, setBookPdfUrl] = useState('');
   const [loadingPages, setLoadingPages] = useState(true);
-  const placeholderPages = usePlaceholderPdf(
-    loadingPages || backendPages.length > 0 ? '' : '/Book-lulu.pdf',
-  );
+  // When the book has no pre-rendered image pages, render its own PDF client-side.
+  // Fall back to the bundled sample only if the book has no PDF either.
+  const pdfToRender =
+    loadingPages || backendPages.length > 0 ? '' : bookPdfUrl || '/Book-lulu.pdf';
+  const placeholderPages = usePlaceholderPdf(pdfToRender);
   const pages = backendPages.length > 0 ? backendPages : placeholderPages;
   const spreadItems = useMemo(() => bookSpreadItems(pages), [pages]);
   const [currentPage, setCurrentPage] = useState(0);
@@ -975,8 +978,11 @@ function RoomContent({
   // ── Fetch pages ───────────────────────────────────────────────────────────
   useEffect(() => {
     const guestPid = role === 'guest' ? participantId : undefined;
-    getBookPages(bookId, guestPid)
-      .then(setBackendPages)
+    getBookPagesWithMeta(bookId, guestPid)
+      .then(({ pages, pdfViewUrl }) => {
+        setBackendPages(pages);
+        setBookPdfUrl(pdfViewUrl);
+      })
       .catch(() => {})
       .finally(() => setLoadingPages(false));
   }, [bookId, participantId, role]);

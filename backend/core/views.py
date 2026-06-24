@@ -5,8 +5,8 @@ from urllib.parse import parse_qs, unquote, urlencode, urlparse
 from django.conf import settings as django_settings
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.contrib.admin.views.decorators import staff_member_required
-from django.contrib.auth import get_user_model, login as auth_login
+from django.contrib.admin.views.decorators import staff_member_required as _django_staff_member_required
+from django.contrib.auth import get_user_model, login as auth_login, logout as auth_logout
 from django.core.files.storage import default_storage
 from django.db.models import Count, Max, Q
 from django.shortcuts import get_object_or_404, redirect, render
@@ -36,6 +36,11 @@ from . import portal_settings as portal_conf
 from .serializers import ActivityConfigSerializer, BookSerializer, LoginSerializer, RegisterSerializer
 
 User = get_user_model()
+
+
+def staff_member_required(view_func):
+    """Like Django's, but unauthenticated/non-staff users go to our portal /login (not /django-admin/login)."""
+    return _django_staff_member_required(login_url="login")(view_func)
 
 
 def redirect_admin_root(request):
@@ -86,7 +91,18 @@ def _normalize_cover_image_url(raw_url):
 
 
 def home(request):
-    return render(request, "core/home.html")
+    # Staff entry point: the backend root lands on the super-admin dashboard.
+    # Unauthenticated users hit staff_member_required there and are sent to /login.
+    if request.user.is_authenticated and not request.user.is_staff:
+        # Customer accounts have no Django UI — send them to the app frontend.
+        return redirect(getattr(django_settings, "FRONTEND_URL", "") or reverse("login"))
+    return redirect("super_admin_dashboard")
+
+
+def logout_view(request):
+    """Log out of the staff portal and return to the login screen (not Django's logged-out page)."""
+    auth_logout(request)
+    return redirect("login")
 
 
 def _auth_redirect_target(request, user=None):

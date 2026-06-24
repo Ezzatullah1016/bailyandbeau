@@ -4,13 +4,14 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowRight, Bell, BookOpen, BookMarked, CalendarDays, CheckSquare,
+  ArrowRight, BookOpen, BookMarked, CalendarDays, CheckSquare,
   CreditCard, DoorOpen, Lock, Medal, MoreHorizontal, Play, RefreshCw, Settings,
   X,
 } from 'lucide-react';
 import { apiRequest, createSession, type UserBadgeData } from '@/lib/api';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { HeaderProfileAvatar } from '@/components/dashboard/AccountAvatar';
+import { NotificationBell, type NotificationItem } from '@/components/dashboard/NotificationBell';
 import { usePathname } from 'next/navigation';
 import { Icon } from '@/components/ui/Icon';
 
@@ -285,6 +286,25 @@ function DashboardInner() {
   const firstName = me?.first_name || me?.username || 'there';
   const sessionsLeft = (entitlement?.sessions_remaining ?? 0) + (entitlement?.pack_sessions_remaining ?? 0);
 
+  const notifications: NotificationItem[] = [
+    ...badges.map((b) => ({
+      id: `badge-${b.id}`,
+      kind: 'badge' as const,
+      title: `Badge earned: ${b.badge_name}`,
+      detail: `${b.child_name} unlocked ${b.badge_name} ${BADGE_ICONS[b.badge_code] ?? '🏅'}`,
+      at: b.earned_at,
+    })),
+    ...(dash?.recent_sessions ?? [])
+      .filter((s) => s.status === 'completed' && s.ended_at)
+      .map((s) => ({
+        id: `session-${s.id}`,
+        kind: 'session' as const,
+        title: 'Reading session completed',
+        detail: `${s.child_name} finished “${s.book_title}”`,
+        at: s.ended_at as string,
+      })),
+  ];
+
   if (loading) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-[#faf7f6]">
@@ -346,10 +366,7 @@ function DashboardInner() {
       <header className="flex justify-between items-center w-full pl-16 pr-8 md:px-8 h-16 sticky top-0 z-40 bg-[#faf7f6]/80 backdrop-blur-xl shadow-sm border-b border-[#3d3b62]/10">
         <div className="font-baloo text-xl font-bold text-[#3d3b62]">Dashboard</div>
         <div className="flex items-center gap-4">
-          <button type="button" className="relative group">
-            <Bell className="w-5 h-5 text-stone-500 group-hover:text-[#3d3b62] transition-colors" />
-            <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full border-2 border-white" />
-          </button>
+          <NotificationBell items={notifications} />
           <HeaderProfileAvatar me={me} />
         </div>
       </header>

@@ -215,15 +215,10 @@ def _livekit_is_configured():
     )
 
 
-async def _ensure_livekit_room_async(room_name):
-    if not _livekit_is_configured() or not room_name:
-        return False
-
-    client = livekit_api.LiveKitAPI(
-        _livekit_server_url(),
-        portal_conf.effective_livekit_api_key(),
-        portal_conf.effective_livekit_api_secret(),
-    )
+async def _ensure_livekit_room_async(server_url, api_key, api_secret, room_name):
+    # Config values are resolved by the sync caller — never touch the DB here
+    # (PortalSettings lookups raise SynchronousOnlyOperation inside async context).
+    client = livekit_api.LiveKitAPI(server_url, api_key, api_secret)
     try:
         await client.room.create_room(
             livekit_api.CreateRoomRequest(name=room_name, empty_timeout=10 * 60, max_participants=6)
@@ -244,22 +239,21 @@ def ensure_livekit_room(session):
         return False
     if not _livekit_is_configured():
         return False
+    # Resolve config (DB-backed) in sync context, then pass into the async helper.
+    server_url = _livekit_server_url()
+    api_key = portal_conf.effective_livekit_api_key()
+    api_secret = portal_conf.effective_livekit_api_secret()
     try:
-        return async_to_sync(_ensure_livekit_room_async)(session.livekit_room_name)
+        return async_to_sync(_ensure_livekit_room_async)(
+            server_url, api_key, api_secret, session.livekit_room_name
+        )
     except Exception as exc:  # noqa: BLE001
         logger.warning("LiveKit room ensure failed for %s: %s", session.livekit_room_name, exc)
         return False
 
 
-async def _delete_livekit_room_async(room_name):
-    if not _livekit_is_configured() or not room_name:
-        return False
-
-    client = livekit_api.LiveKitAPI(
-        _livekit_server_url(),
-        portal_conf.effective_livekit_api_key(),
-        portal_conf.effective_livekit_api_secret(),
-    )
+async def _delete_livekit_room_async(server_url, api_key, api_secret, room_name):
+    client = livekit_api.LiveKitAPI(server_url, api_key, api_secret)
     try:
         await client.room.delete_room(livekit_api.DeleteRoomRequest(room=room_name))
         return True
@@ -276,8 +270,13 @@ async def _delete_livekit_room_async(room_name):
 def delete_livekit_room(session):
     if not getattr(session, "livekit_room_name", "") or not _livekit_is_configured():
         return False
+    server_url = _livekit_server_url()
+    api_key = portal_conf.effective_livekit_api_key()
+    api_secret = portal_conf.effective_livekit_api_secret()
     try:
-        return async_to_sync(_delete_livekit_room_async)(session.livekit_room_name)
+        return async_to_sync(_delete_livekit_room_async)(
+            server_url, api_key, api_secret, session.livekit_room_name
+        )
     except Exception as exc:  # noqa: BLE001
         logger.warning("LiveKit room cleanup failed for %s: %s", session.livekit_room_name, exc)
         return False
@@ -908,7 +907,11 @@ class BookListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        books = Book.objects.filter(published=True)
+        # Staff/admin can preview unpublished (draft) books; customers see published only.
+        if request.user and request.user.is_staff:
+            books = Book.objects.all()
+        else:
+            books = Book.objects.filter(published=True)
 
         room_type = request.query_params.get("room_type")
         age_band = request.query_params.get("age_band")
@@ -1064,7 +1067,11 @@ class BookDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, pk):
-        book = Book.objects.filter(pk=pk, published=True).first()
+        # Staff/admin can preview unpublished (draft) books; customers see published only.
+        if request.user and request.user.is_staff:
+            book = Book.objects.filter(pk=pk).first()
+        else:
+            book = Book.objects.filter(pk=pk, published=True).first()
         if not book:
             return Response(
                 {"data": None, "meta": {}, "error": {"code": "not_found", "message": "Book not found."}},
@@ -1158,9 +1165,16 @@ class BookPagesView(APIView):
 
         pages = book.pages.order_by("page_number")
         serializer = BookPageSerializer(pages, many=True)
+        from .serializers import resolve_media_url
+        pdf_view_url = resolve_media_url(book.s3_key) if book.asset_type == Book.AssetType.PDF else ""
         return Response({
             "data": serializer.data,
-            "meta": {"count": pages.count(), "page_count": book.page_count, "asset_type": book.asset_type},
+            "meta": {
+                "count": pages.count(),
+                "page_count": book.page_count,
+                "asset_type": book.asset_type,
+                "pdf_view_url": pdf_view_url,
+            },
             "error": None,
         })
 
