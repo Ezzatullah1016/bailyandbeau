@@ -7,7 +7,7 @@ import { apiRequest } from '@/lib/api';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { usePathname } from 'next/navigation';
 
-interface Plan { code: string; name: string; price_monthly: number; sessions_per_month: number; description: string; }
+interface Plan { code: string; name: string; price_gbp: string; interval: string; sessions_included: number; }
 interface Entitlement {
   subscription_status: string;
   plan_code: string;
@@ -129,11 +129,18 @@ export default function BillingPage() {
                       <span className="inline-block px-3 py-0.5 bg-[#3d3b62] text-white text-[10px] font-bold rounded-full uppercase tracking-wider mb-4">Current Plan</span>
                     )}
                     <h4 className="font-baloo text-xl font-bold text-[#3d3b62] mb-1">{plan.name}</h4>
-                    <p className="text-stone-400 text-sm mb-4">{plan.description}</p>
-                    <p className="font-baloo text-3xl font-bold text-[#3d3b62] mb-1">
-                      £{plan.price_monthly}<span className="text-base font-normal text-stone-400">/mo</span>
+                    <p className="text-stone-400 text-sm mb-4">
+                      {plan.interval === 'one_off' ? 'One-off session pack' : 'Monthly subscription'}
                     </p>
-                    <p className="text-sm text-stone-500 mb-6">{plan.sessions_per_month} sessions per month</p>
+                    <p className="font-baloo text-3xl font-bold text-[#3d3b62] mb-1">
+                      £{plan.price_gbp}
+                      <span className="text-base font-normal text-stone-400">
+                        {plan.interval === 'one_off' ? ' one-off' : '/mo'}
+                      </span>
+                    </p>
+                    <p className="text-sm text-stone-500 mb-6">
+                      {plan.sessions_included} sessions{plan.interval === 'one_off' ? '' : ' per month'}
+                    </p>
                     <button
                       disabled={isCurrent || checkoutLoading === plan.code}
                       onClick={() => !isCurrent && handleUpgrade(plan.code)}

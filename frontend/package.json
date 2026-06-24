@@ -7,7 +7,8 @@
     "dev:lan": "next dev -H 0.0.0.0 -p 3000",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "postinstall": "node -e \"try{require('fs').copyFileSync('node_modules/pdfjs-dist/build/pdf.worker.min.js','public/pdf.worker.min.js');console.log('pdf.worker.min.js pinned')}catch(e){console.warn('pdf worker copy skipped:',e.message)}\""
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -577,10 +577,14 @@ function RoomContent({
   // ── Pages ─────────────────────────────────────────────────────────────────
   const [backendPages, setBackendPages] = useState<BookPageData[]>([]);
   const [loadingPages, setLoadingPages] = useState(true);
-  const placeholderPages = usePlaceholderPdf(
+  const { pages: placeholderPages, settled: placeholderSettled } = usePlaceholderPdf(
     loadingPages || backendPages.length > 0 ? '' : '/Book-lulu.pdf',
   );
   const pages = backendPages.length > 0 ? backendPages : placeholderPages;
+  // True once we know there is genuinely nothing to show (backend returned no
+  // pages AND the placeholder load attempt has finished with none).
+  const noPagesAvailable =
+    !loadingPages && backendPages.length === 0 && placeholderSettled && placeholderPages.length === 0;
   const spreadItems = useMemo(() => bookSpreadItems(pages), [pages]);
   const [currentPage, setCurrentPage] = useState(0);
   const clampedSpreadIndex = useMemo(
@@ -1824,8 +1828,18 @@ function RoomContent({
                       ) : pages.length === 0 ? (
                         <div className="flex flex-1 items-center justify-center bg-stone-50">
                           <div className="flex flex-col items-center gap-3 p-12 text-center text-stone-400">
-                            <Loader2 className="h-12 w-12 animate-spin" />
-                            <p className="font-medium text-stone-500">Loading placeholder book…</p>
+                            {noPagesAvailable ? (
+                              <>
+                                <BookOpen className="h-12 w-12 text-stone-300" aria-hidden />
+                                <p className="font-medium text-stone-500">No pages have been added to this book yet.</p>
+                                <p className="text-xs text-stone-400">Ask an admin to upload pages, then reopen the session.</p>
+                              </>
+                            ) : (
+                              <>
+                                <Loader2 className="h-12 w-12 animate-spin" />
+                                <p className="font-medium text-stone-500">Loading book…</p>
+                              </>
+                            )}
                           </div>
                         </div>
                       ) : (

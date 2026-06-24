@@ -56,6 +56,9 @@ log "Backend: running migrations"
 cd "$BACKEND_DIR"
 "$VENV_DIR/bin/python" manage.py migrate --noinput
 
+log "Backend: seeding placeholder book pages (idempotent — skips books that already have pages)"
+"$VENV_DIR/bin/python" manage.py seed_book_pages || true
+
 log "Backend: collecting static files"
 "$VENV_DIR/bin/python" manage.py collectstatic --noinput
 

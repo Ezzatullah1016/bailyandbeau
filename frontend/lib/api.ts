@@ -115,9 +115,15 @@ async function refreshAccessToken(): Promise<string | null> {
       body: JSON.stringify({ refresh }),
     });
     if (!res.ok) return null;
-    const data = await res.json() as { access: string; refresh?: string };
-    storeTokens(data.access, data.refresh ?? refresh);
-    return data.access;
+    // The refresh endpoint returns the standard envelope: {data:{access}, ...}.
+    // Tolerate both the enveloped and bare shapes.
+    const body = await res.json() as
+      | { data?: { access?: string; refresh?: string }; access?: string; refresh?: string };
+    const access = body?.data?.access ?? body?.access;
+    const newRefresh = body?.data?.refresh ?? body?.refresh ?? refresh;
+    if (!access) return null;
+    storeTokens(access, newRefresh);
+    return access;
   } catch {
     return null;
   }
