@@ -39,8 +39,13 @@ User = get_user_model()
 
 
 def staff_member_required(view_func):
-    """Like Django's, but unauthenticated/non-staff users go to our portal /login (not /django-admin/login)."""
-    return _django_staff_member_required(login_url="login")(view_func)
+    """Like Django's, but unauthenticated/non-staff users go to our portal login.
+
+    Redirect to ``super_admin_login`` (/super-admin/login/), which nginx routes to
+    Django. The bare ``/login`` path is served by the Next.js customer app, so
+    sending staff there would land them on the customer sign-in page.
+    """
+    return _django_staff_member_required(login_url="super_admin_login")(view_func)
 
 
 def redirect_admin_root(request):
@@ -102,14 +107,15 @@ def home(request):
 def logout_view(request):
     """Log out of the staff portal and return to the login screen (not Django's logged-out page)."""
     auth_logout(request)
-    return redirect("login")
+    return redirect("super_admin_login")
 
 
 def _auth_redirect_target(request, user=None):
     default_target = reverse("super_admin_dashboard") if user and user.is_staff else reverse("home")
     candidate = request.POST.get("next") or request.GET.get("next") or default_target
 
-    if candidate in {"/login", "/login/", reverse("login")}:
+    if candidate in {"/login", "/login/", "/super-admin/login/",
+                     reverse("login"), reverse("super_admin_login")}:
         candidate = default_target
 
     if candidate and url_has_allowed_host_and_scheme(

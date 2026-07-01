@@ -23,7 +23,11 @@ from core import views
 
 urlpatterns = [
     path('', views.home, name='home'),
-    path('login/', views.auth_portal, name='login'),
+    # Canonical staff-portal login. Lives under /super-admin/ so nginx proxies it
+    # to Django (gunicorn); the bare /login route is owned by the Next.js customer app.
+    path('super-admin/login/', views.auth_portal, name='super_admin_login'),
+    path('login/', views.auth_portal, name='login'),  # legacy alias, still Django-served
+    path('super-admin/logout/', views.logout_view, name='super_admin_logout'),
     path('logout/', views.logout_view, name='logout'),
     path('super-admin/dashboard/', views.super_admin_dashboard, name='super_admin_dashboard'),
     path('super-admin/sessions/', views.admin_session_monitor, name='admin_session_monitor'),

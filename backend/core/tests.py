@@ -50,7 +50,16 @@ class SuperAdminDashboardTests(TestCase):
         response = self.client.get(reverse("super_admin_dashboard"))
 
         self.assertEqual(response.status_code, 302)
-        self.assertIn(reverse("admin:login"), response.url)
+        # Unauthenticated staff must be sent to the Django-served portal login
+        # (/super-admin/login/), NOT the bare /login owned by the Next.js app.
+        self.assertIn(reverse("super_admin_login"), response.url)
+        self.assertEqual(reverse("super_admin_login"), "/super-admin/login/")
+
+    def test_super_admin_login_serves_django_portal_form(self):
+        response = self.client.get(reverse("super_admin_login"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-validate-form="login-form"')
 
     def test_public_admin_url_redirects_to_super_admin_dashboard(self):
         response = self.client.get("/admin/", follow=False)

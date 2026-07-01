@@ -140,7 +140,7 @@
                     </div>
                 </div>
             </div>
-            <form method="post" action="{% url 'logout' %}">
+            <form method="post" action="{% url 'super_admin_logout' %}">
                 {% csrf_token %}
                 <button type="submit" class="flex w-full items-center gap-2 rounded-xl px-4 py-2 text-sm text-stone-400 transition-colors hover:bg-white/5 hover:text-white">
                     <span class="material-symbols-outlined" style="font-size:18px">logout</span>
