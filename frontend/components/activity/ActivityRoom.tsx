@@ -13,6 +13,8 @@ interface Props {
   initialStateByActivity?: Record<string, Record<string, unknown>>;
   onClose: () => void;
   onActivityStateSync?: (state: Record<string, unknown>) => void;
+  /** When true, render as a full-screen panel (no modal chrome, no close button). */
+  fullscreen?: boolean;
 }
 
 type Line = { points: number[]; color: string; width: number; eraser?: boolean };
@@ -30,6 +32,7 @@ export default function ActivityRoom({
   initialStateByActivity,
   onClose,
   onActivityStateSync,
+  fullscreen = false,
 }: Props) {
   const room = useRoomContext();
 
@@ -129,8 +132,20 @@ export default function ActivityRoom({
   const payload = current.config.payload;
 
   return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-[#3d3b62]/95 backdrop-blur-md p-4">
-      <div className="w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl bg-[#eccdca] shadow-2xl flex flex-col border border-[#764f84]/40">
+    <div
+      className={
+        fullscreen
+          ? 'absolute inset-0 z-[80] flex flex-col bg-[#3d3b62]'
+          : 'fixed inset-0 z-[150] flex items-center justify-center bg-[#3d3b62]/95 backdrop-blur-md p-4'
+      }
+    >
+      <div
+        className={
+          fullscreen
+            ? 'w-full h-full overflow-hidden rounded-none bg-[#eccdca] shadow-2xl flex flex-col border border-[#764f84]/40'
+            : 'w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl bg-[#eccdca] shadow-2xl flex flex-col border border-[#764f84]/40'
+        }
+      >
         <header className="flex items-start justify-between gap-4 px-6 py-4 bg-[#3d3b62] text-[#eccdca]">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest text-[#eccdca]/70">
@@ -172,7 +187,7 @@ export default function ActivityRoom({
                 </button>
               </>
             )}
-            {role === 'host' ? (
+            {role === 'host' && !fullscreen ? (
               <button
                 type="button"
                 onClick={() => {
