@@ -1612,6 +1612,7 @@ class InviteJoinView(APIView):
                 "data": {
                     "session_id": str(session.id),
                     "room_name": session.livekit_room_name,
+                    "room_type": session.room_type,
                     "livekit_url": getattr(django_settings, "LIVEKIT_URL", ""),
                     "participant": SessionParticipantSerializer(participant).data,
                     "realtime_token": build_realtime_token(session, participant),

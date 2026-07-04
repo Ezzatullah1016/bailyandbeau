@@ -93,6 +93,15 @@ function LobbyPageContent() {
       .catch(() => {});
   }, [id, isGuestMode]);
 
+  // Room type for guests (host learns it from getSession → sessionData; guests
+  // get it from the invite-join response).
+  const [guestRoomType, setGuestRoomType] = useState<string | null>(null);
+
+  // Destination room slug: activity sessions go to the Activity Room, everything
+  // else to the Reading Room. Falls back to reading until session data loads.
+  const effectiveRoomType = sessionData?.room_type ?? guestRoomType ?? 'reading';
+  const roomSlug = effectiveRoomType === 'activity' ? 'activity' : 'reading-room';
+
   // ── Camera preview ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -157,7 +166,7 @@ function LobbyPageContent() {
         if (navigatedAway) return;
         navigatedAway = true;
         setPhase('starting');
-        setTimeout(() => router.push(`/session/${sessionIdForNav}/reading-room`), 400);
+        setTimeout(() => router.push(`/session/${sessionIdForNav}/${roomSlug}`), 400);
       };
 
       const publishSessionStartAndGo = async () => {
@@ -211,7 +220,7 @@ function LobbyPageContent() {
           if (navigatedAway) return;
           navigatedAway = true;
           setPhase('starting');
-          setTimeout(() => router.push(`/session/${sid}/reading-room`), 400);
+          setTimeout(() => router.push(`/session/${sid}/${roomSlug}`), 400);
         }
       });
 
@@ -257,7 +266,7 @@ function LobbyPageContent() {
       if (!canUseLiveKit) {
         // Local fallback: allow development flow to continue without realtime transport.
         setPhase('starting');
-        router.push(`/session/${id}/reading-room`);
+        router.push(`/session/${id}/${roomSlug}`);
         return;
       }
 
@@ -278,6 +287,7 @@ function LobbyPageContent() {
     setError('');
     try {
       const data = await joinViaInvite(inviteToken, displayName.trim());
+      if (data.room_type) setGuestRoomType(data.room_type);
       localStorage.setItem(`bb_participant_${data.session_id}`, data.participant.id);
       setSession({
         sessionId: data.session_id,
@@ -291,7 +301,7 @@ function LobbyPageContent() {
       if (!canUseLiveKit) {
         // Local fallback: allow development flow to continue without realtime transport.
         setPhase('starting');
-        router.push(`/session/${data.session_id}/reading-room`);
+        router.push(`/session/${data.session_id}/${roomSlug}`);
         return;
       }
 
@@ -319,7 +329,7 @@ function LobbyPageContent() {
       );
     } catch { /* non-fatal */ }
     setPhase('starting');
-    router.push(`/session/${id}/reading-room`);
+    router.push(`/session/${id}/${roomSlug}`);
   }
 
   // ── Copy invite link ──────────────────────────────────────────────────────

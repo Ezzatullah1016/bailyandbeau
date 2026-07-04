@@ -204,6 +204,7 @@ export interface StartSessionData {
 export interface JoinSessionData {
   session_id: string;
   room_name: string;
+  room_type?: string;
   livekit_url: string;
   participant: SessionParticipantData;
   realtime_token: string;
