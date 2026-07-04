@@ -1501,13 +1501,14 @@ function RoomContent({
     }
   };
 
-  return (
-    <>
+  // One activity element, rendered either as the reading-mode popup (modal) or,
+  // in activity mode, as the in-flow card that sits in the center stage.
+  const activityElement = (activities.length > 0) ? (
       <ActivityRoom
         role={role}
         activities={activities}
         open={isActivityMode ? true : activityOpen}
-        fullscreen={isActivityMode}
+        variant={isActivityMode ? 'stage' : 'modal'}
         initialIndex={activityIndex}
         initialStateByActivity={activityStateByActivity}
         onClose={() => {
@@ -1548,6 +1549,13 @@ function RoomContent({
           ).catch(() => {});
         }}
       />
+  ) : null;
+
+  return (
+    <>
+      {/* Reading mode: activities are an optional popup. Activity mode renders the
+          activity in the center stage (below), not here. */}
+      {!isActivityMode && activityElement}
 
       {showComplete && (
         <CompletionOverlay
@@ -1947,6 +1955,9 @@ function RoomContent({
                 ref={readingHudBoundsRef}
                 className="relative flex min-h-0 flex-1 items-center justify-center px-3 py-4 sm:px-5 sm:py-5"
               >
+                {isActivityMode ? (
+                  activityElement
+                ) : (
                 <TransformWrapper
                   ref={transformRef}
                   initialScale={1}
@@ -2059,6 +2070,7 @@ function RoomContent({
                     </div>
                   </TransformComponent>
                 </TransformWrapper>
+                )}
 
                 {!isActivityMode && !loadingPages && pages.length > 0 && activeSpread && bookRect.w >= 64 && bookRect.h >= 48 ? (
                   <div
@@ -2153,15 +2165,19 @@ function RoomContent({
                 You are the {role === 'host' ? 'host' : 'guest'}
               </p>
               <p className="mt-2 text-[11px] leading-relaxed text-stone-300">
-                {role === 'host'
-                  ? 'You control page turns and the session timer. Guests follow along; they can use Pen mode to draw on the spread.'
-                  : 'Follow the host’s page turns. Use Book mode to focus on the page; tap Pen when you want to doodle.'}
+                {isActivityMode
+                  ? role === 'host'
+                    ? 'You lead the activities — Reset, Previous and Next control what everyone sees.'
+                    : 'Follow along with the host as they move through the activities.'
+                  : role === 'host'
+                    ? 'You control page turns and the session timer. Guests follow along; they can use Pen mode to draw on the spread.'
+                    : 'Follow the host’s page turns. Use Book mode to focus on the page; tap Pen when you want to doodle.'}
               </p>
-              {activities.length > 0 && role === 'host' && (
+              {!isActivityMode && activities.length > 0 && role === 'host' && (
                 <button
                   type="button"
                   onClick={handleOpenActivities}
-                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-white/10 py-2.5 text-[11px] font-bold text-white transition-colors hover:bg-white/15"
+                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-white/10 py-2.5 text-[11px] font-bold text-white transition-colors hover:bg-white/15 cursor-pointer"
                 >
                   <Gamepad2 className="h-4 w-4" />
                   Activities
