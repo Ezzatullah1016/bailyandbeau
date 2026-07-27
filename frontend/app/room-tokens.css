@@ -207,11 +207,18 @@
 /* ── Idle fade ─────────────────────────────────────────────────────────────
    Chrome recedes while reading and returns on interaction, so the book is the
    only thing competing for attention. */
+/* Chrome dims rather than disappears: it must stay findable (and clickable —
+   opacity alone does not remove it from the hit-test) so ending a session is
+   never a hunt. Hovering or focusing anything inside brings it fully back. */
 .room-recede {
   transition: opacity var(--dur-base) var(--ease-calm);
 }
 .room-root[data-idle="true"] .room-recede {
-  opacity: 0.28;
+  opacity: 0.45;
+}
+.room-root[data-idle="true"] .room-recede:hover,
+.room-root[data-idle="true"] .room-recede:focus-within {
+  opacity: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -45,6 +45,7 @@ import type {
 } from '@/components/annotation/AnnotationCanvas';
 import { SpreadBookViewer, usePreloadSpreads } from '@/components/reading/SpreadBookViewer';
 import { useRoomTheme } from '@/lib/useRoomTheme';
+import { useRoomIdle, useRoomSounds } from '@/lib/useRoomSounds';
 import type { BookThemeData } from '@/lib/api';
 import { TransformComponent, TransformWrapper, type ReactZoomPanPinchContentRef } from 'react-zoom-pan-pinch';
 import {
@@ -78,6 +79,8 @@ import {
   GripVertical,
   Phone,
   MoreHorizontal,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 
 // Dynamic import for Fabric canvas (SSR-unsafe).
@@ -547,6 +550,21 @@ function RoomContent({
   // Warm the pages either side of the spread so a page turn paints instantly
   // instead of showing blank paper while the next images download.
   usePreloadSpreads(pages, currentPage);
+
+  const sounds = useRoomSounds();
+  // Let the chrome recede while reading so the book is the only thing asking
+  // for attention. Activities need their controls, so idle only applies to
+  // reading mode.
+  const readerIdle = useRoomIdle();
+
+  // Cue the page turn from the spread index rather than the host's click, so
+  // guests following along hear it too.
+  const soundedSpreadRef = useRef(clampedSpreadIndex);
+  useEffect(() => {
+    if (soundedSpreadRef.current === clampedSpreadIndex) return;
+    soundedSpreadRef.current = clampedSpreadIndex;
+    sounds.play('page-turn');
+  }, [clampedSpreadIndex, sounds]);
   const [activeTab, setActiveTab] = useState<'video' | 'tools' | 'participants' | 'chat' | 'settings'>('video');
   const [roomPanelOpen, setRoomPanelOpen] = useState(false);
 
@@ -1359,6 +1377,24 @@ function RoomContent({
   // ── Host transfer ─────────────────────────────────────────────────────────
   const participants = useParticipants();
 
+  // Someone arriving or leaving is worth hearing when your eyes are on the book.
+  const participantCountRef = useRef(participants.length);
+  useEffect(() => {
+    const previous = participantCountRef.current;
+    participantCountRef.current = participants.length;
+    if (participants.length > previous) sounds.play('participant-join');
+    else if (participants.length < previous) sounds.play('participant-leave');
+  }, [participants.length, sounds]);
+
+  // One gentle nudge as the session nears its end — not a countdown.
+  const warnedRef = useRef(false);
+  useEffect(() => {
+    if (!timerActive || remaining > 2 * 60 || remaining <= 0) return;
+    if (warnedRef.current) return;
+    warnedRef.current = true;
+    sounds.play('time-warning');
+  }, [timerActive, remaining, sounds]);
+
   async function handleTransferHost(newParticipantId: string) {
     setTransferring(true);
     try {
@@ -1530,12 +1566,13 @@ function RoomContent({
         className="room-root room-sky relative isolate flex h-[100dvh] min-h-0 w-screen flex-col overflow-hidden pb-[env(safe-area-inset-bottom,0px)]"
         data-backdrop={roomTheme.backdrop}
         data-chrome={roomTheme.chrome}
+        data-idle={!isActivityMode && readerIdle ? 'true' : 'false'}
         style={roomTheme.style}
       >
 
         {/* ── Top nav — read-along style header ─────────────────────────────── */}
         <header
-          className="fixed left-0 right-0 top-0 z-50 flex w-full items-center justify-between px-4 pb-2 pt-[max(8px,env(safe-area-inset-top))] sm:px-6"
+          className="room-recede fixed left-0 right-0 top-0 z-50 flex w-full items-center justify-between px-4 pb-2 pt-[max(8px,env(safe-area-inset-top))] sm:px-6"
           style={{
             background: 'var(--room-chrome)',
             borderBottom: '1px solid var(--room-chrome-line)',
@@ -1610,6 +1647,22 @@ function RoomContent({
 
             {/* The role chip duplicated the "You are the host" card in the rail. */}
 
+            <button
+              type="button"
+              onClick={sounds.toggleMuted}
+              title={sounds.muted ? 'Turn sounds on' : 'Turn sounds off'}
+              aria-label={sounds.muted ? 'Turn room sounds on' : 'Turn room sounds off'}
+              aria-pressed={!sounds.muted}
+              className="room-tap cursor-pointer rounded-full"
+              style={{ color: 'var(--room-ink-soft)' }}
+            >
+              {sounds.muted ? (
+                <VolumeX className="h-[18px] w-[18px]" aria-hidden />
+              ) : (
+                <Volume2 className="h-[18px] w-[18px]" aria-hidden />
+              )}
+            </button>
+
             {role === 'host' && inviteToken && (
               <button
                 type="button"
@@ -1652,7 +1705,7 @@ function RoomContent({
                 <button
                   type="button"
                   onClick={() => handleEndSession(false)}
-                  className="rounded-full bg-[#93000a] px-3 py-1.5 text-[11px] font-bold text-[#ffdad6] transition-all hover:bg-[#93000a]/80 active:scale-95"
+                  className="room-tap cursor-pointer rounded-full bg-[#93000a] px-4 text-[11px] font-bold text-[#ffdad6] transition-all hover:bg-[#93000a]/80 active:scale-95"
                 >
                   End
                 </button>
@@ -1660,7 +1713,7 @@ function RoomContent({
                 <button
                   type="button"
                   onClick={() => handleEndSession(false)}
-                  className="rounded-full bg-stone-800 px-3 py-1.5 text-[11px] font-bold text-stone-200 transition-all hover:bg-stone-700 active:scale-95"
+                  className="room-tap cursor-pointer rounded-full bg-stone-800 px-4 text-[11px] font-bold text-stone-200 transition-all hover:bg-stone-700 active:scale-95"
                 >
                   Leave
                 </button>
@@ -2042,18 +2095,22 @@ function RoomContent({
                                     aria-label="Previous spread"
                                     onClick={hostFlipPrev}
                                     disabled={currentPage <= 0}
-                                    className="pointer-events-auto absolute left-1.5 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-stone-400/50 bg-white/95 text-stone-800 shadow-md transition-all hover:bg-white disabled:cursor-not-allowed disabled:opacity-35 sm:left-2 sm:h-10 sm:w-10"
+                                    className="group pointer-events-auto absolute left-0 top-1/2 z-20 flex h-[52%] w-14 -translate-y-1/2 cursor-pointer items-center justify-center rounded-r-2xl text-stone-800 opacity-45 transition-opacity hover:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-0 sm:w-16"
                                   >
-                                    <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden />
+                                    <span className="grid h-11 w-11 place-items-center rounded-full bg-white/95 shadow-md ring-1 ring-stone-400/40 transition-transform group-hover:scale-105">
+                                      <ChevronLeft className="h-6 w-6" aria-hidden />
+                                    </span>
                                   </button>
                                   <button
                                     type="button"
                                     aria-label="Next spread"
                                     onClick={hostFlipNext}
                                     disabled={currentPage >= pageCount - 2}
-                                    className="pointer-events-auto absolute right-1.5 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-stone-400/50 bg-white/95 text-stone-800 shadow-md transition-all hover:bg-white disabled:cursor-not-allowed disabled:opacity-35 sm:right-2 sm:h-10 sm:w-10"
+                                    className="group pointer-events-auto absolute right-0 top-1/2 z-20 flex h-[52%] w-14 -translate-y-1/2 cursor-pointer items-center justify-center rounded-l-2xl text-stone-800 opacity-45 transition-opacity hover:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-0 sm:w-16"
                                   >
-                                    <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden />
+                                    <span className="grid h-11 w-11 place-items-center rounded-full bg-white/95 shadow-md ring-1 ring-stone-400/40 transition-transform group-hover:scale-105">
+                                      <ChevronRight className="h-6 w-6" aria-hidden />
+                                    </span>
                                   </button>
                                 </>
                               )}
@@ -2086,7 +2143,7 @@ function RoomContent({
                         type="button"
                         aria-label="Drag to reposition toolbar. Double-click to reset position."
                         title="Drag to move · Double-click to reset position"
-                        className="touch-none cursor-grab active:cursor-grabbing rounded-full p-1.5 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-700"
+                        className="room-tap touch-none cursor-grab rounded-full text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-700 active:cursor-grabbing"
                         onPointerDown={onBookHudGripDown}
                         onDoubleClick={(e) => {
                           e.preventDefault();
@@ -2105,7 +2162,7 @@ function RoomContent({
                       <button
                         type="button"
                         aria-label="Zoom out"
-                        className="rounded-full p-1.5 text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 disabled:opacity-40"
+                        className="room-tap cursor-pointer rounded-full text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 disabled:opacity-40"
                         onClick={() => transformRef.current?.zoomOut()}
                       >
                         <ZoomOut className="h-4 w-4 sm:h-[18px] sm:w-[18px]" aria-hidden />
@@ -2114,7 +2171,7 @@ function RoomContent({
                         type="button"
                         aria-label="Fit book to view"
                         title="Fit to view"
-                        className="rounded-full p-1.5 text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 disabled:opacity-40"
+                        className="room-tap cursor-pointer rounded-full text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 disabled:opacity-40"
                         onClick={() => transformRef.current?.resetTransform(220)}
                       >
                         <LayoutGrid className="h-4 w-4 sm:h-[18px] sm:w-[18px]" aria-hidden />
@@ -2122,7 +2179,7 @@ function RoomContent({
                       <button
                         type="button"
                         aria-label="Zoom in"
-                        className="rounded-full p-1.5 text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 disabled:opacity-40"
+                        className="room-tap cursor-pointer rounded-full text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 disabled:opacity-40"
                         onClick={() => transformRef.current?.zoomIn()}
                       >
                         <ZoomIn className="h-4 w-4 sm:h-[18px] sm:w-[18px]" aria-hidden />
@@ -2214,7 +2271,7 @@ function RoomContent({
               type="button"
               aria-label="Drag toolbar. Double-click to reset position."
               title="Drag to move · Double-click to reset position"
-              className="mb-1 shrink-0 touch-none cursor-grab rounded-full border border-white/15 bg-stone-950/92 p-2 text-stone-400 shadow-lg backdrop-blur-xl hover:bg-stone-900 hover:text-stone-200 active:cursor-grabbing sm:mb-1.5"
+              className="room-tap mb-1 shrink-0 touch-none cursor-grab rounded-full border border-white/15 bg-[#2b2a3f]/92 text-stone-400 shadow-lg backdrop-blur-xl hover:bg-stone-900 hover:text-stone-200 active:cursor-grabbing sm:mb-1.5"
               onPointerDown={onDockHudGripDown}
               onDoubleClick={(e) => {
                 e.preventDefault();

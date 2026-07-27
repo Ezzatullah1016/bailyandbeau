@@ -82,7 +82,9 @@ function LobbyPageContent() {
   const streamRef = useRef<MediaStream | null>(null);
   const livekitRoomRef = useRef<any>(null);
   const connectingRef = useRef(false);
-  const leavingRef = useRef(false);
+  // Set just before navigating into the session so the unmount cleanup knows
+  // not to tear down a LiveKit connection the room page is about to reuse.
+  const enteringRoomRef = useRef(false);
 
   const storedParticipantId =
     typeof localStorage !== 'undefined' ? localStorage.getItem(`bb_participant_${id}`) : null;
@@ -147,15 +149,28 @@ function LobbyPageContent() {
     };
   }, []);
 
-  // ── Disconnect livekit when the lobby is really gone ──────────────────────
-  // Navigating into the room unmounts this page; the room page opens its own
-  // connection, so tearing this one down is correct. `leavingRef` suppresses
-  // the teardown for React StrictMode's simulated unmount, which would
-  // otherwise kill the connection the second mount is still using.
+  // Warm the room route's JS while the user is still in the lobby. Without
+  // this the navigation starts downloading the room chunk and the page unloads
+  // mid-download, which surfaces as ChunkLoadError -> full browser navigation
+  // -> the LiveKit engine torn down mid-negotiation.
+  // Both room routes are warmed because the session's room type arrives
+  // asynchronously; prefetching only the current guess leaves the other route
+  // cold and the navigation aborts its chunk mid-download.
+  useEffect(() => {
+    if (!id) return;
+    router.prefetch(`/session/${id}/reading-room`);
+    router.prefetch(`/session/${id}/activity`);
+  }, [id, router]);
+
+  // ── Release the lobby's LiveKit room ──────────────────────────────────────
+  // Disconnect only when the user is leaving for good (back, close). When they
+  // are heading into the session, the room page is already opening its own
+  // connection to the same LiveKit room, and tearing this one down at that
+  // moment aborts the in-flight negotiation — the "cannot negotiate on closed
+  // engine" error. `enteringRoomRef` marks that case.
   useEffect(() => {
     return () => {
-      if (leavingRef.current) livekitRoomRef.current?.disconnect();
-      leavingRef.current = true;
+      if (!enteringRoomRef.current) livekitRoomRef.current?.disconnect();
     };
   }, []);
 
@@ -177,6 +192,7 @@ function LobbyPageContent() {
         if (navigatedAway) return;
         navigatedAway = true;
         setPhase('starting');
+        enteringRoomRef.current = true;
         setTimeout(() => router.push(`/session/${sessionIdForNav}/${roomSlug}`), 400);
       };
 
@@ -231,6 +247,7 @@ function LobbyPageContent() {
           if (navigatedAway) return;
           navigatedAway = true;
           setPhase('starting');
+          enteringRoomRef.current = true;
           setTimeout(() => router.push(`/session/${sid}/${roomSlug}`), 400);
         }
       });
@@ -286,6 +303,7 @@ function LobbyPageContent() {
       if (!canUseLiveKit) {
         // Local fallback: allow development flow to continue without realtime transport.
         setPhase('starting');
+        enteringRoomRef.current = true;
         router.push(`/session/${id}/${roomSlug}`);
         return;
       }
@@ -321,6 +339,7 @@ function LobbyPageContent() {
       if (!canUseLiveKit) {
         // Local fallback: allow development flow to continue without realtime transport.
         setPhase('starting');
+        enteringRoomRef.current = true;
         router.push(`/session/${data.session_id}/${roomSlug}`);
         return;
       }
@@ -345,16 +364,26 @@ function LobbyPageContent() {
       setError('Session participant not found. Please recreate the session.');
       return;
     }
-    // The lobby LiveKit room may still be connecting when Start is pressed.
     // Announcing the start is best-effort — the host must never be stranded on
     // the lobby with a button that silently does nothing.
+    //
+    // Only publish once the room is actually connected. Solo hosts routinely
+    // press Start before the lobby socket is up, and publishing then makes
+    // livekit-client log "NegotiationError: cannot negotiate on closed engine"
+    // before it rejects, so a try/catch cannot suppress it. Guests are told to
+    // enter by ParticipantConnected regardless, so skipping the publish here
+    // costs nothing.
     try {
-      await livekitRoomRef.current?.localParticipant.publishData(
-        buildMsg('SESSION_START', { initiator: storedParticipantId, session_id: id }),
-        { reliable: true },
-      );
+      const lobbyRoom = livekitRoomRef.current;
+      if (lobbyRoom?.state === 'connected') {
+        await lobbyRoom.localParticipant.publishData(
+          buildMsg('SESSION_START', { initiator: storedParticipantId, session_id: id }),
+          { reliable: true },
+        );
+      }
     } catch { /* non-fatal — guests also reconcile on ParticipantConnected */ }
     setPhase('starting');
+    enteringRoomRef.current = true;
     router.push(`/session/${id}/${roomSlug}`);
   }
 

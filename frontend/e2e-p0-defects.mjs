@@ -5,8 +5,8 @@
 import { chromium } from '@playwright/test';
 import { mkdirSync, writeFileSync } from 'node:fs';
 
-const FRONT = process.env.FRONT_BASE || 'http://localhost:3000';
-const API = process.env.API_BASE || 'http://127.0.0.1:8001/api/v1';
+const FRONT = process.env.FRONT_BASE || 'http://localhost:3010';
+const API = process.env.API_BASE || 'http://127.0.0.1:8300/api/v1';
 const OUT = 'e2e-shots/p0';
 mkdirSync(OUT, { recursive: true });
 
@@ -165,15 +165,24 @@ async function driveRoom(browser, { label, roomType, tok }) {
       await page.waitForTimeout(2500);
       await page.screenshot({ path: `${OUT}/${label}-${vp.name}-01-lobby.png`, fullPage: false });
 
-      const ready = page.locator('button:has-text(\"Ready\")').first();
-      if (await ready.count()) await ready.click({ timeout: 5000 }).catch(() => entry.notes.push('Ready click failed'));
-      else entry.notes.push('no Ready button');
+      // Click through the DOM: Playwright's text matcher is brittle against the
+      // em-dash in "I'm Ready - Join Session".
+      const clickByText = (src) =>
+        page.evaluate((pattern) => {
+          const rx = new RegExp(pattern, 'i');
+          const btn = [...document.querySelectorAll('button')].find((b) => rx.test(b.textContent || ''));
+          if (btn) btn.click();
+          return Boolean(btn);
+        }, src);
 
-      const start = page
-        .locator('button:has-text("Start Solo Session"), button:has-text("Start Session"), button:has-text("Start")')
-        .first();
-      await start.waitFor({ state: 'visible', timeout: 20000 }).catch(() => entry.notes.push('Start button never appeared'));
-      if (await start.count()) await start.click({ timeout: 5000 }).catch(() => entry.notes.push('Start click failed'));
+      if (!(await clickByText('Ready'))) entry.notes.push('no Ready button');
+
+      await page
+        .locator('button:has-text("Start Solo Session"), button:has-text("Start Session")')
+        .first()
+        .waitFor({ state: 'visible', timeout: 45000 })
+        .catch(() => entry.notes.push('Start button never appeared'));
+      if (!(await clickByText('Start (Solo )?Session'))) entry.notes.push('Start click failed');
 
       await page
         .waitForURL(/\/(activity|reading-room|room)/, { timeout: 25000 })
