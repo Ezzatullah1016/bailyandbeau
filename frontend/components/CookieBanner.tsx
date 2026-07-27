@@ -2,17 +2,23 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 const COOKIE_KEY = 'bb_cookie_consent';
 
 export function CookieBanner() {
+  const pathname = usePathname();
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     if (!localStorage.getItem(COOKIE_KEY)) setVisible(true);
   }, []);
 
-  if (!visible) return null;
+  // Inside a live session the banner is docked over the media controls
+  // (mic/camera/end), so suppress it there and let the lobby handle consent.
+  const inSession = /^\/session\/[^/]+\/(reading-room|activity)/.test(pathname ?? '');
+
+  if (!visible || inSession) return null;
 
   function accept() {
     localStorage.setItem(COOKIE_KEY, 'accepted');

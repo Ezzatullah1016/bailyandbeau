@@ -1,10 +1,13 @@
 /* Fonts: self-hosted via @fontsource* imports in app/layout.tsx (no Google fetch at build time). */
 @import "tailwindcss";
+@import "./room-tokens.css";
 
 /* ─── Reading room body reset (applied via JS class on mount) ────────────── */
+/* The backdrop now comes from `.room-root` (see room-tokens.css) so that a
+   per-book theme can drive it; the body only handles scroll lock. */
 body.reading-room {
   overflow: hidden;
-  background: linear-gradient(135deg, #3d3b62 0%, #764f84 100%);
+  background: var(--room-bg-2, #a9d3f5);
 }
 
 /* ─── Reaction float animation ──────────────────────────────────────────── */

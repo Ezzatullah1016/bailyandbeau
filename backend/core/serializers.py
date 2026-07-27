@@ -12,6 +12,7 @@ from .models import (
     Badge,
     Book,
     BookPage,
+    BookTheme,
     ChildProfile,
     Entitlement,
     FavoriteBook,
@@ -130,8 +131,81 @@ def resolve_media_url(raw: str):
     return raw  # external URL — use as-is
 
 
+class BookThemeSerializer(serializers.ModelSerializer):
+    """Per-book reading-room styling.
+
+    File fields are resolved to fetchable URLs so the room can drop them
+    straight into CSS custom properties.
+    """
+
+    bg_image_url = serializers.SerializerMethodField()
+    bg_video_url = serializers.SerializerMethodField()
+    bg_video_poster_url = serializers.SerializerMethodField()
+    ambient_audio_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BookTheme
+        fields = (
+            "id",
+            "backdrop_kind",
+            "bg_color",
+            "bg_color_2",
+            "gradient_angle",
+            "bg_image_url",
+            "bg_video_url",
+            "bg_video_poster_url",
+            "accent",
+            "ink",
+            "chrome_mode",
+            "book_shadow",
+            "tilt_degrees",
+            "ambient_audio_url",
+            "ambient_volume",
+        )
+        read_only_fields = ("id",)
+
+    def _url(self, field):
+        return resolve_media_url(field.name) if field else ""
+
+    def get_bg_image_url(self, obj):
+        return self._url(obj.bg_image)
+
+    def get_bg_video_url(self, obj):
+        return self._url(obj.bg_video)
+
+    def get_bg_video_poster_url(self, obj):
+        return self._url(obj.bg_video_poster)
+
+    def get_ambient_audio_url(self, obj):
+        return self._url(obj.ambient_audio)
+
+
+class BookThemeWriteSerializer(serializers.ModelSerializer):
+    """Admin-side write serializer — accepts the raw file/colour fields."""
+
+    class Meta:
+        model = BookTheme
+        fields = (
+            "backdrop_kind",
+            "bg_color",
+            "bg_color_2",
+            "gradient_angle",
+            "bg_image",
+            "bg_video",
+            "bg_video_poster",
+            "accent",
+            "ink",
+            "chrome_mode",
+            "book_shadow",
+            "tilt_degrees",
+            "ambient_audio",
+            "ambient_volume",
+        )
+
+
 class BookSerializer(serializers.ModelSerializer):
     pdf_view_url = serializers.SerializerMethodField()
+    theme = BookThemeSerializer(read_only=True)
 
     class Meta:
         model = Book
@@ -148,6 +222,7 @@ class BookSerializer(serializers.ModelSerializer):
             "page_count",
             "asset_type",
             "s3_key",
+            "theme",
             "created_at",
         )
         read_only_fields = ("id", "created_at")
@@ -388,6 +463,7 @@ class ReadingSessionSerializer(serializers.ModelSerializer):
             "started_at",
             "ended_at",
             "reading_duration_seconds",
+            "completed_activity_title",
         )
         read_only_fields = fields
 

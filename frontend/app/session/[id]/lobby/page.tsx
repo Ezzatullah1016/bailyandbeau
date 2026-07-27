@@ -81,6 +81,8 @@ function LobbyPageContent() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const livekitRoomRef = useRef<any>(null);
+  const connectingRef = useRef(false);
+  const leavingRef = useRef(false);
 
   const storedParticipantId =
     typeof localStorage !== 'undefined' ? localStorage.getItem(`bb_participant_${id}`) : null;
@@ -145,16 +147,25 @@ function LobbyPageContent() {
     };
   }, []);
 
-  // ── Disconnect livekit on unmount ─────────────────────────────────────────
+  // ── Disconnect livekit when the lobby is really gone ──────────────────────
+  // Navigating into the room unmounts this page; the room page opens its own
+  // connection, so tearing this one down is correct. `leavingRef` suppresses
+  // the teardown for React StrictMode's simulated unmount, which would
+  // otherwise kill the connection the second mount is still using.
   useEffect(() => {
     return () => {
-      livekitRoomRef.current?.disconnect();
+      if (leavingRef.current) livekitRoomRef.current?.disconnect();
+      leavingRef.current = true;
     };
   }, []);
 
   // ── Connect to LiveKit lobby room and exchange PARTICIPANT_READY ───────────
   const connectToLobby = useCallback(
     async (token: string, url: string, participantId: string, role: 'host' | 'guest', sessionIdForNav: string) => {
+      // Re-entry (double click, StrictMode) would orphan the first Room and
+      // leave negotiation running against a discarded engine.
+      if (connectingRef.current || livekitRoomRef.current) return;
+      connectingRef.current = true;
       const { Room, RoomEvent } = await import('livekit-client');
       const room = new Room();
       livekitRoomRef.current = room;
@@ -232,13 +243,22 @@ function LobbyPageContent() {
         }
       });
 
-      await room.connect(url, token, { autoSubscribe: true });
+      try {
+        await room.connect(url, token, { autoSubscribe: true });
 
-      await room.localParticipant.publishData(
-        buildMsg('PARTICIPANT_READY', { participantId, role }),
-        { reliable: true },
-      );
+        await room.localParticipant.publishData(
+          buildMsg('PARTICIPANT_READY', { participantId, role }),
+          { reliable: true },
+        );
+      } catch (e) {
+        // Release the guard so the user can retry instead of being stuck with
+        // a dead ref and a Start button that does nothing.
+        livekitRoomRef.current = null;
+        connectingRef.current = false;
+        throw e;
+      }
 
+      connectingRef.current = false;
       if (role === 'host') void hostReconcileRemotes();
       else guestReconcileRemotes();
     },
@@ -321,13 +341,19 @@ function LobbyPageContent() {
 
   // ── Host: manual "Start Session" ─────────────────────────────────────────
   async function handleHostStart() {
-    if (!livekitRoomRef.current || !storedParticipantId) return;
+    if (!storedParticipantId) {
+      setError('Session participant not found. Please recreate the session.');
+      return;
+    }
+    // The lobby LiveKit room may still be connecting when Start is pressed.
+    // Announcing the start is best-effort — the host must never be stranded on
+    // the lobby with a button that silently does nothing.
     try {
-      await livekitRoomRef.current.localParticipant.publishData(
+      await livekitRoomRef.current?.localParticipant.publishData(
         buildMsg('SESSION_START', { initiator: storedParticipantId, session_id: id }),
         { reliable: true },
       );
-    } catch { /* non-fatal */ }
+    } catch { /* non-fatal — guests also reconcile on ParticipantConnected */ }
     setPhase('starting');
     router.push(`/session/${id}/${roomSlug}`);
   }
@@ -480,11 +506,14 @@ function LobbyPageContent() {
                 </div>
               </div>
 
-              {error && <p className="order-[70] font-karla text-sm text-[#ba1a1a] font-medium">{error}</p>}
+              {error && <p className="order-[34] font-karla text-sm text-[#ba1a1a] font-medium">{error}</p>}
 
-              {/* CTA */}
+              {/* CTA — ordered above the camera-check block (order-50). The
+                  preview is tall enough that on a 900px-high viewport the join
+                  button fell below the fold, so the lobby looked like it had no
+                  action at all. */}
               {phase === 'check' && (
-                <div className="order-[60] flex flex-col gap-2">
+                <div className="order-[35] flex flex-col gap-2">
                   <button
                     type="button"
                     onClick={isGuestMode ? handleGuestReady : handleHostReady}
@@ -500,7 +529,7 @@ function LobbyPageContent() {
               )}
 
               {phase === 'waiting' && (
-                <div className="order-[60] flex flex-col items-center gap-4 py-4">
+                <div className="order-[35] flex flex-col items-center gap-4 py-4">
                   <div className="w-8 h-8 border-4 border-[#764f84] border-t-transparent rounded-full animate-spin" />
                   <p className="font-karla text-sm text-[#43493d] font-medium">
                     {isGuestMode
@@ -529,7 +558,7 @@ function LobbyPageContent() {
               )}
 
               {phase === 'starting' && (
-                <div className="order-[60] flex flex-col items-center gap-3 py-4">
+                <div className="order-[35] flex flex-col items-center gap-3 py-4">
                   <Rocket className="w-10 h-10 text-[#764f84] animate-pulse" />
                   <p className="font-karla text-sm text-[#3d3b62] font-bold">Session starting…</p>
                 </div>

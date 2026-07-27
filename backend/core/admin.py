@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from .models import (
+    BookTheme,
     ActivityConfig,
     Badge,
     Book,
@@ -101,3 +102,10 @@ class BadgeAdmin(admin.ModelAdmin):
 class UserBadgeAdmin(admin.ModelAdmin):
     list_display = ("child_profile", "badge", "session", "created_at")
     list_filter = ("badge",)
+
+
+@admin.register(BookTheme)
+class BookThemeAdmin(admin.ModelAdmin):
+    list_display = ("book", "backdrop_kind", "chrome_mode", "accent", "updated_at")
+    list_filter = ("backdrop_kind", "chrome_mode")
+    search_fields = ("book__title",)

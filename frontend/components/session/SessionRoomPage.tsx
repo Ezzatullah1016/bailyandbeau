@@ -2,13 +2,14 @@
 
 import dynamic from 'next/dynamic';
 import {
+  forwardRef,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from 'react';
-import type { MutableRefObject } from 'react';
+import type { ComponentType, MutableRefObject, Ref } from 'react';
 import { usePlaceholderPdf } from '@/lib/usePlaceholderPdf';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -28,30 +29,31 @@ import {
   getGuestToken,
   getSession,
   getSnapshot,
-  getUserBadges,
   transferHost,
   updateSnapshot,
   type BookPageData,
-  type UserBadgeData,
 } from '@/lib/api';
 import { MAX_LIVEKIT_ROOM_PARTICIPANTS } from '@/lib/sessionLimits';
 import ActivityRoom from '@/components/activity/ActivityRoom';
+import { ActivityPicker } from '@/components/activity/ActivityPicker';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import type { ActivityConfigData } from '@/components/activity/types';
 import { AnnotationToolbar, DockTip, type ReadingInteractionMode } from '@/components/annotation/AnnotationToolbar';
-import type { AnnotationCanvasHandle } from '@/components/annotation/AnnotationCanvas';
-import { SpreadBookViewer } from '@/components/reading/SpreadBookViewer';
+import type {
+  AnnotationCanvasHandle,
+  AnnotationCanvasProps,
+} from '@/components/annotation/AnnotationCanvas';
+import { SpreadBookViewer, usePreloadSpreads } from '@/components/reading/SpreadBookViewer';
+import { useRoomTheme } from '@/lib/useRoomTheme';
+import type { BookThemeData } from '@/lib/api';
 import { TransformComponent, TransformWrapper, type ReactZoomPanPinchContentRef } from 'react-zoom-pan-pinch';
 import {
   AlarmClock,
   BookMarked,
-  BookOpen,
   ChevronLeft,
   ChevronRight,
   Check,
-  Clock,
   Copy,
-  FileText,
   Loader2,
   Link2,
   MessageCircle,
@@ -62,7 +64,6 @@ import {
   SlidersHorizontal,
   Star,
   Timer,
-  Trophy,
   User,
   Users,
   Video,
@@ -79,10 +80,21 @@ import {
   MoreHorizontal,
 } from 'lucide-react';
 
-// Dynamic import for Fabric canvas (SSR-unsafe)
-const AnnotationCanvas = dynamic(
+// Dynamic import for Fabric canvas (SSR-unsafe).
+// `next/dynamic` returns a plain function component, so a `ref` passed to it is
+// dropped with "Function components cannot be given refs" and every imperative
+// call (undo, clear, remote ink sync) silently no-ops. Forward it explicitly.
+const AnnotationCanvasLazy = dynamic(
   () => import('@/components/annotation/AnnotationCanvas'),
   { ssr: false },
+) as unknown as ComponentType<
+  AnnotationCanvasProps & { forwardedRef?: Ref<AnnotationCanvasHandle> }
+>;
+
+const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCanvasProps>(
+  function AnnotationCanvas(props, ref) {
+    return <AnnotationCanvasLazy {...props} forwardedRef={ref} />;
+  },
 );
 
 // ─── Sync message format ──────────────────────────────────────────────────────
@@ -193,29 +205,41 @@ function ConnectionBanner() {
 
 // ─── Participant tile ─────────────────────────────────────────────────────────
 
+/**
+ * A round presence bubble rather than a rectangular video tile. Rectangles with
+ * a name bar and a role chip are the visual signature of a meeting app; the
+ * people in a reading session should read as sitting alongside the book, not as
+ * a conference grid. The name is revealed on hover instead of always-on.
+ */
 function ParticipantTile({ identity, label, isHost }: { identity: string; label: string; isHost: boolean }) {
   const tracks = useTracks([Track.Source.Camera]);
   const track = tracks.find((t) => t.participant.identity === identity);
 
   return (
-    <div className="relative group aspect-video bg-stone-950 rounded-xl overflow-hidden ring-1 ring-white/10">
-      {track ? (
-        <VideoTrack trackRef={track} className="w-full h-full object-cover opacity-80" />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center">
-          <User className="w-10 h-10 text-stone-600" />
-        </div>
-      )}
-      <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
-        <span className="px-2 py-0.5 bg-stone-900/80 backdrop-blur-md rounded-md text-[10px] font-bold text-white">
-          {label}
-        </span>
-        {isHost && (
-          <span className="px-1.5 py-0.5 bg-[#3c4b30] text-[#a9bb99] rounded-md text-[9px] font-bold uppercase">
-            Host
-          </span>
+    <div className="group relative flex flex-col items-center gap-1.5">
+      <div
+        className="relative h-[84px] w-[84px] overflow-hidden rounded-full sm:h-24 sm:w-24"
+        style={{
+          background: 'var(--room-chrome-strong)',
+          border: '2px solid var(--room-chrome-line)',
+          boxShadow: 'var(--elev-1)',
+        }}
+      >
+        {track ? (
+          <VideoTrack trackRef={track} className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <User className="h-8 w-8" style={{ color: 'var(--room-ink-soft)' }} aria-hidden />
+          </div>
         )}
       </div>
+      <span
+        className="max-w-[92px] truncate text-[11px] font-semibold opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+        style={{ color: 'var(--room-ink-soft)' }}
+      >
+        {label}
+        {isHost ? ' · Host' : ''}
+      </span>
     </div>
   );
 }
@@ -223,7 +247,7 @@ function ParticipantTile({ identity, label, isHost }: { identity: string; label:
 function ParticipantList({ hostIdentity }: { hostIdentity?: string }) {
   const participants = useParticipants();
   return (
-    <div className="space-y-3">
+    <div className="flex flex-wrap justify-center gap-4">
       {participants.map((p) => (
         <ParticipantTile
           key={p.identity}
@@ -360,7 +384,14 @@ function SessionTimerRing({
         title={role === 'host' && !timerActive ? 'Start session timer' : undefined}
       >
         <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 88 88" aria-hidden>
-          <circle cx="44" cy="44" r={radius} fill="none" className="text-stone-700/80" stroke="currentColor" strokeWidth="5" />
+          <circle
+            cx="44"
+            cy="44"
+            r={radius}
+            fill="none"
+            stroke="var(--room-chrome-line)"
+            strokeWidth="5"
+          />
           <circle
             cx="44"
             cy="44"
@@ -375,13 +406,24 @@ function SessionTimerRing({
           />
         </svg>
         <div className="relative z-10 flex flex-col items-center text-center">
-          <span className="font-baloo text-xl font-bold tabular-nums text-white">{fmtTime(remaining)}</span>
-          <span className="text-[9px] font-semibold uppercase tracking-wider text-stone-400">
+          <span
+            className="font-baloo text-xl font-bold tabular-nums"
+            style={{ color: 'var(--room-ink)' }}
+          >
+            {fmtTime(remaining)}
+          </span>
+          <span
+            className="text-[9px] font-semibold uppercase tracking-wider"
+            style={{ color: 'var(--room-ink-soft)' }}
+          >
             {timerActive ? 'remaining' : role === 'host' ? 'starts live' : 'waiting'}
           </span>
         </div>
       </div>
-      <p className="text-center text-[10px] font-bold uppercase tracking-widest text-stone-500">
+      <p
+        className="text-center text-[10px] font-bold uppercase tracking-widest"
+        style={{ color: 'var(--room-ink-soft)' }}
+      >
         {timerActive ? 'Reading' : 'Session'}
       </p>
     </div>
@@ -402,121 +444,6 @@ function bookSpreadItems(pages: BookPageData[]) {
   return items;
 }
 
-// ─── Session-complete overlay ─────────────────────────────────────────────────
-
-function CompletionOverlay({
-  bookTitle,
-  pagesRead,
-  pageCount,
-  durationSecs,
-  badges,
-  onDashboard,
-}: {
-  bookTitle: string;
-  pagesRead: number;
-  pageCount: number;
-  durationSecs: number;
-  badges: UserBadgeData[];
-  onDashboard: () => void;
-}) {
-  const mins = Math.round(durationSecs / 60);
-  const badge = badges[0] ?? null;
-
-  return (
-    <div className="fixed inset-0 z-[200] bg-gradient-to-br from-[#3d3b62] to-[#764f84] flex items-center justify-center p-6 overflow-y-auto">
-      <div className="fixed inset-0 pointer-events-none" style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.12) 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
-      <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] bg-white/5 blur-[120px] rounded-full pointer-events-none" />
-      <div className="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-white/5 blur-[120px] rounded-full pointer-events-none" />
-
-      <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-6 py-6 pointer-events-none">
-        <div className="font-baloo text-2xl font-bold text-white pointer-events-auto">
-          Bailey &amp; Beau
-        </div>
-        <button onClick={onDashboard} className="w-10 h-10 flex items-center justify-center text-white/80 hover:text-white pointer-events-auto transition-colors">
-          <X className="w-7 h-7" />
-        </button>
-      </header>
-
-      <main className="relative z-10 w-full max-w-[560px] flex flex-col items-center text-center mt-20">
-        <div className="mb-8 flex flex-col items-center">
-          <span className="text-[72px] leading-none mb-4" role="img" aria-label="Party Popper">🎉</span>
-          <h1 className="font-baloo text-5xl text-white font-bold tracking-tight mb-3">Amazing Session!</h1>
-          <p className="text-white/90 text-lg font-light max-w-[400px]">
-            You read together for {mins} {mins === 1 ? 'minute' : 'minutes'}.
-          </p>
-        </div>
-
-        <div className="w-full bg-white rounded-[2rem] p-10 shadow-[0_32px_64px_-12px_rgba(23,57,1,0.3)] mb-8">
-          <div className="flex flex-col items-center">
-            <span className="font-karla text-xs font-extrabold uppercase tracking-[0.2em] text-[#764f84] mb-10">
-              {badge ? 'NEW BADGE EARNED' : 'SESSION COMPLETE'}
-            </span>
-
-            {badge ? (
-              <>
-                <div className="relative flex items-center justify-center mb-8">
-                  <div className="absolute w-[200px] h-[200px] border border-[#eccdca]/30 rounded-full" />
-                  <div className="absolute w-[160px] h-[160px] border border-[#eccdca]/60 rounded-full" />
-                  <div className="relative w-[120px] h-[120px] bg-[#f0c75e] rounded-full flex items-center justify-center shadow-lg">
-                    <Star className="w-12 h-12 text-white fill-white" />
-                  </div>
-                </div>
-                <h2 className="font-baloo text-[32px] text-[#3d3b62] font-bold mb-2">{badge.badge_name}</h2>
-                <p className="font-karla text-stone-500 text-base mb-8">{badge.badge_description}</p>
-              </>
-            ) : (
-              <div className="flex items-center justify-center w-[120px] h-[120px] rounded-full bg-[#eccdca]/30 mb-8">
-                <BookMarked className="w-14 h-14 text-[#764f84]" />
-              </div>
-            )}
-
-            <div className="w-full h-px bg-[#c3c9b9]/20 mb-8" />
-
-            <div className="grid grid-cols-2 gap-y-6 gap-x-4 w-full text-left">
-              <div className="flex items-start gap-3">
-                <BookOpen className="w-5 h-5 text-[#3d3b62] mt-0.5 shrink-0" />
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Book</span>
-                  <span className="text-sm font-semibold text-[#3d3b62]">{bookTitle}</span>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <Clock className="w-5 h-5 text-[#3d3b62] mt-0.5 shrink-0" />
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Duration</span>
-                  <span className="text-sm font-semibold text-[#3d3b62]">{mins} minutes</span>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <FileText className="w-5 h-5 text-[#3d3b62] mt-0.5 shrink-0" />
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Pages Read</span>
-                  <span className="text-sm font-semibold text-[#3d3b62]">{pagesRead} of {pageCount}</span>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <Trophy className="w-5 h-5 text-[#3d3b62] mt-0.5 shrink-0" />
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Badges</span>
-                  <span className="text-sm font-semibold text-[#3d3b62]">{badges.length} earned</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row items-center gap-4 w-full mb-10">
-          <button
-            onClick={onDashboard}
-            className="font-baloo w-full sm:flex-1 bg-gradient-to-br from-[#f0c75e] to-[#c84a71] text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:brightness-105 active:scale-95 transition-all text-sm uppercase tracking-widest"
-          >
-            Go to Dashboard
-          </button>
-        </div>
-      </main>
-    </div>
-  );
-}
 
 // ─── Timer warning banner ─────────────────────────────────────────────────────
 
@@ -601,6 +528,8 @@ function RoomContent({
   // ── Pages ─────────────────────────────────────────────────────────────────
   const [backendPages, setBackendPages] = useState<BookPageData[]>([]);
   const [bookPdfUrl, setBookPdfUrl] = useState('');
+  const [bookTheme, setBookTheme] = useState<BookThemeData | null>(null);
+  const roomTheme = useRoomTheme(bookTheme);
   const [loadingPages, setLoadingPages] = useState(true);
   // When the book has no pre-rendered image pages, render its own PDF client-side.
   // Fall back to the bundled sample only if the book has no PDF either.
@@ -615,6 +544,9 @@ function RoomContent({
     [currentPage, spreadItems.length],
   );
   const activeSpread = spreadItems[clampedSpreadIndex];
+  // Warm the pages either side of the spread so a page turn paints instantly
+  // instead of showing blank paper while the next images download.
+  usePreloadSpreads(pages, currentPage);
   const [activeTab, setActiveTab] = useState<'video' | 'tools' | 'participants' | 'chat' | 'settings'>('video');
   const [roomPanelOpen, setRoomPanelOpen] = useState(false);
 
@@ -905,11 +837,6 @@ function RoomContent({
   const chatCounterRef = useRef(0);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // ── Completion ────────────────────────────────────────────────────────────
-  const [showComplete, setShowComplete] = useState(false);
-  const [badges, setBadges] = useState<UserBadgeData[]>([]);
-  const [sessionDurationSecs, setSessionDurationSecs] = useState(0);
-
   const [activities, setActivities] = useState<ActivityConfigData[]>([]);
   const spreadCoverPrefsKey = `bb_spread_cover_${sessionId}`;
   const [spreadPageCover, setSpreadPageCover] = useState(false);
@@ -937,6 +864,9 @@ function RoomContent({
 
   const [activityOpen, setActivityOpen] = useState(false);
   const [activityIndex, setActivityIndex] = useState(0);
+  // Activity mode: false = show the "Choose an Activity" picker; true = an
+  // activity is entered. Host-controlled, synced to guests via ACTIVITY_PICK.
+  const [activityEntered, setActivityEntered] = useState(false);
   const [activityStateByActivity, setActivityStateByActivity] = useState<Record<string, Record<string, unknown>>>(
     {},
   );
@@ -983,9 +913,10 @@ function RoomContent({
   useEffect(() => {
     const guestPid = role === 'guest' ? participantId : undefined;
     getBookPagesWithMeta(bookId, guestPid)
-      .then(({ pages, pdfViewUrl }) => {
+      .then(({ pages, pdfViewUrl, theme }) => {
         setBackendPages(pages);
         setBookPdfUrl(pdfViewUrl);
+        setBookTheme(theme);
       })
       .catch(() => {})
       .finally(() => setLoadingPages(false));
@@ -1137,9 +1068,15 @@ function RoomContent({
 
         case 'SESSION_COMPLETE':
           if (role === 'guest') {
-            fetchBadgesAndShow(
-              typeof msg.payload.duration === 'number' ? msg.payload.duration : 0,
-            );
+            goToCompletion();
+          }
+          break;
+
+        case 'ACTIVITY_PICK':
+          if (role === 'guest') {
+            const picked = typeof msg.payload.index === 'number' ? msg.payload.index : 0;
+            setActivityIndex(picked);
+            setActivityEntered(msg.payload.entered !== false);
           }
           break;
 
@@ -1390,14 +1327,15 @@ function RoomContent({
   }, [role, timerActive, publishHostTimerKick]);
 
   // ── End / complete session ────────────────────────────────────────────────
-  async function fetchBadgesAndShow(durationSecs: number) {
-    setSessionDurationSecs(durationSecs);
-    try {
-      const earned = await getUserBadges();
-      setBadges(earned);
-    } catch { /* ok */ }
-    // Navigate to the dedicated completion screen
-    router.push(`/session/${sessionId}/complete`);
+  // Navigate to the mission-focused completion screen. `mode` is authoritative;
+  // in activity mode we also pass the current activity's title (client-only).
+  function goToCompletion() {
+    const q = new URLSearchParams({ mode });
+    if (isActivityMode && activityEntered) {
+      const activityTitle = activities[activityIndex]?.title ?? '';
+      if (activityTitle) q.set('activity', activityTitle);
+    }
+    router.push(`/session/${sessionId}/complete?${q.toString()}`);
   }
 
   async function handleEndSession(fromTimer = false) {
@@ -1409,18 +1347,14 @@ function RoomContent({
         buildMsg('SESSION_COMPLETE', { duration: elapsed }),
         { reliable: true },
       );
-      try { await completeSession(sessionId, participantId); } catch { /* ok */ }
-      await fetchBadgesAndShow(elapsed);
+      const completedActivityId = isActivityMode && activityEntered ? (activities[activityIndex]?.id ?? null) : null;
+      try { await completeSession(sessionId, participantId, completedActivityId); } catch { /* ok */ }
+      goToCompletion();
     } else {
       room.disconnect();
       onEnd();
     }
   }
-
-  const handleDashboard = () => {
-    room.disconnect();
-    onEnd();
-  };
 
   // ── Host transfer ─────────────────────────────────────────────────────────
   const participants = useParticipants();
@@ -1501,6 +1435,26 @@ function RoomContent({
     }
   };
 
+  // Activity-mode picker: host chooses an activity; broadcast to guests.
+  const handlePickActivity = (pickIndex: number) => {
+    if (role !== 'host') return;
+    setActivityIndex(pickIndex);
+    setActivityEntered(true);
+    room.localParticipant.publishData(
+      buildMsg('ACTIVITY_PICK', { index: pickIndex, entered: true }),
+      { reliable: true },
+    );
+  };
+
+  const handleBackToPicker = () => {
+    if (role !== 'host') return;
+    setActivityEntered(false);
+    room.localParticipant.publishData(
+      buildMsg('ACTIVITY_PICK', { index: activityIndex, entered: false }),
+      { reliable: true },
+    );
+  };
+
   // One activity element, rendered either as the reading-mode popup (modal) or,
   // in activity mode, as the in-flow card that sits in the center stage.
   const activityElement = (activities.length > 0) ? (
@@ -1557,17 +1511,6 @@ function RoomContent({
           activity in the center stage (below), not here. */}
       {!isActivityMode && activityElement}
 
-      {showComplete && (
-        <CompletionOverlay
-          bookTitle={bookTitle}
-          pagesRead={currentPage + 1}
-          pageCount={pageCount}
-          durationSecs={sessionDurationSecs}
-          badges={badges}
-          onDashboard={handleDashboard}
-        />
-      )}
-
       {/* Reaction overlay — floats above everything */}
       {reactions.length > 0 && (
         <div className="fixed inset-0 z-[200] pointer-events-none overflow-hidden">
@@ -1583,18 +1526,24 @@ function RoomContent({
         </div>
       )}
 
-      <div className="relative isolate flex h-[100dvh] min-h-0 w-screen flex-col overflow-hidden bg-gradient-to-br from-[#3a3028] via-[#382f42] to-[#2c2636] pb-[env(safe-area-inset-bottom,0px)] text-[#e5e2e1]">
-        {/* Warm ambient layers */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_0%,rgba(255,219,164,0.12),transparent_55%)]"
-        />
-        <div aria-hidden className="pointer-events-none absolute inset-0 shadow-[inset_0_0_120px_rgba(10,8,14,0.55)]" />
+      <div
+        className="room-root room-sky relative isolate flex h-[100dvh] min-h-0 w-screen flex-col overflow-hidden pb-[env(safe-area-inset-bottom,0px)]"
+        data-backdrop={roomTheme.backdrop}
+        data-chrome={roomTheme.chrome}
+        style={roomTheme.style}
+      >
 
         {/* ── Top nav — read-along style header ─────────────────────────────── */}
-        <header className="fixed left-0 right-0 top-0 z-50 flex w-full items-center justify-between border-b border-white/5 bg-[#2a2838]/95 px-4 pb-2 pt-[max(8px,env(safe-area-inset-top))] shadow-lg backdrop-blur-xl sm:px-6">
+        <header
+          className="fixed left-0 right-0 top-0 z-50 flex w-full items-center justify-between px-4 pb-2 pt-[max(8px,env(safe-area-inset-top))] sm:px-6"
+          style={{
+            background: 'var(--room-chrome)',
+            borderBottom: '1px solid var(--room-chrome-line)',
+            backdropFilter: 'blur(14px) saturate(1.1)',
+          }}
+        >
           <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-5">
-            <BrandLogo variant="light" className="h-7 shrink-0 max-sm:max-w-[140px] sm:h-9" />
+            <BrandLogo variant="dark" className="h-7 shrink-0 max-sm:max-w-[140px] sm:h-9" />
             <div className="mx-1 hidden h-9 w-px shrink-0 bg-white/10 sm:block" aria-hidden />
             <div className="flex min-w-0 max-w-[min(40vw,280px)] items-center gap-3 sm:max-w-[320px]">
               {!loadingPages && coverUrl ? (
@@ -1610,7 +1559,12 @@ function RoomContent({
                 </div>
               )}
               <div className="min-w-0">
-                <h1 className="font-baloo truncate text-sm font-semibold tracking-tight text-[#e5e2e1] sm:text-base">{bookTitle}</h1>
+                <h1
+                  className="font-baloo truncate text-sm font-semibold tracking-tight sm:text-base"
+                  style={{ color: 'var(--room-ink)' }}
+                >
+                  {bookTitle}
+                </h1>
                 <p className="font-karla truncate text-[11px] text-[#ffb955]/90">
                   {pages[currentPage + 1]
                     ? `Pages ${currentPage + 1}–${currentPage + 2} of ${pageCount}`
@@ -1621,18 +1575,27 @@ function RoomContent({
           </div>
 
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-            <div className="hidden items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 lg:flex">
-              <Users className="h-3.5 w-3.5 text-[#7ec8e8]" aria-hidden />
-              <span className="text-[11px] font-bold tabular-nums text-stone-200">{participants.length}</span>
+            <div
+              className="hidden items-center gap-1.5 rounded-full px-2.5 py-1 lg:flex"
+              style={{
+                border: '1px solid var(--room-chrome-line)',
+                background: 'var(--room-chrome-strong)',
+              }}
+            >
+              <Users className="h-3.5 w-3.5" style={{ color: 'var(--room-ink-soft)' }} aria-hidden />
+              <span
+                className="text-[11px] font-bold tabular-nums"
+                style={{ color: 'var(--room-ink)' }}
+              >
+                {participants.length}
+              </span>
             </div>
-            <div className="flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-950/30 px-2 py-1">
-              <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" aria-hidden />
-              <span className="hidden text-[10px] font-bold uppercase tracking-wide text-emerald-200/90 sm:inline">Secure</span>
-            </div>
+            {/* The "Secure" badge was decoration competing with the controls that
+                actually do something — the room had 21 visible controls. Dropped. */}
 
             {/* Timer chip — mobile / when right panel hidden */}
             <div
-              className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition-all lg:hidden ${remaining <= 2 * 60 ? 'border-red-500/30 bg-red-950/40' : 'border-[#ffb955]/25 bg-[#644000]/35'}`}
+              className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition-all lg:hidden ${remaining <= 2 * 60 ? 'border-red-300 bg-red-50 text-red-700' : 'border-amber-300 bg-amber-50 text-amber-800'}`}
               title={
                 role === 'host' && !timerActive
                   ? 'Session timer — starts automatically when connected; tap if you paused it.'
@@ -1641,20 +1604,23 @@ function RoomContent({
               onClick={role === 'host' && !timerActive ? handleStartTimer : undefined}
               style={role === 'host' && !timerActive ? { cursor: 'pointer' } : undefined}
             >
-              <Timer className="h-3.5 w-3.5 text-[#ffb955]" />
-              <span className="font-bold tabular-nums text-xs text-[#ffb955]">{fmtTime(remaining)}</span>
+              <Timer className="h-3.5 w-3.5" aria-hidden />
+              <span className="text-xs font-bold tabular-nums">{fmtTime(remaining)}</span>
             </div>
 
-            <span className={`hidden px-2 py-0.5 text-[10px] font-bold uppercase tracking-tight rounded-full sm:inline-block ${role === 'host' ? 'bg-[#764f84] text-white' : 'bg-stone-800 text-stone-300'}`}>
-              {role}
-            </span>
+            {/* The role chip duplicated the "You are the host" card in the rail. */}
 
             {role === 'host' && inviteToken && (
               <button
                 type="button"
                 onClick={handleCopyInviteLink}
                 title="Copy invite link"
-                className="hidden items-center gap-1 rounded-full border border-white/15 bg-white/5 px-2.5 py-1.5 text-[11px] font-semibold text-[#e5e2e1] transition-colors hover:border-[#ffb955]/40 hover:bg-white/10 sm:flex"
+                className="room-tap hidden items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-colors sm:flex"
+                style={{
+                  color: 'var(--room-ink)',
+                  border: '1px solid var(--room-chrome-line)',
+                  background: 'var(--room-chrome-strong)',
+                }}
               >
                 {linkCopied ? <Check className="h-3.5 w-3.5 text-[#7fd89a]" /> : <Link2 className="h-3.5 w-3.5 text-[#ffb955]" />}
                 <span className="hidden md:inline">{linkCopied ? 'Copied' : 'Invite'}</span>
@@ -1666,7 +1632,8 @@ function RoomContent({
                 type="button"
                 onClick={() => setRoomPanelOpen(true)}
                 aria-label="Room panel — video, chat, settings"
-                className="flex h-9 w-9 items-center justify-center text-stone-400 transition-colors hover:text-white sm:hidden"
+                className="room-tap rounded-full sm:hidden"
+                style={{ color: 'var(--room-ink-soft)' }}
               >
                 <SlidersHorizontal className="h-5 w-5" />
               </button>
@@ -1675,7 +1642,8 @@ function RoomContent({
                   type="button"
                   onClick={() => setShowTransferModal(true)}
                   aria-label="Session menu"
-                  className="hidden h-9 w-9 items-center justify-center text-stone-400 transition-colors hover:text-white sm:flex"
+                  className="room-tap hidden rounded-full sm:inline-flex"
+                  style={{ color: 'var(--room-ink-soft)' }}
                 >
                   <MoreHorizontal className="h-5 w-5" />
                 </button>
@@ -1908,7 +1876,7 @@ function RoomContent({
             </div>
           )}
           {/* ── Main area ────────────────────────────────────────────────────── */}
-          <section className="relative ml-0 flex min-h-0 flex-1 flex-col overflow-hidden bg-[#171210]/95 pb-[calc(11rem+env(safe-area-inset-bottom,0px))] shadow-[inset_0_0_80px_rgba(0,0,0,0.35)] backdrop-blur-[1px] md:pb-[calc(12rem+env(safe-area-inset-bottom,0px))] md:pr-72">
+          <section className="relative ml-0 flex min-h-0 flex-1 flex-col overflow-hidden pb-[calc(11rem+env(safe-area-inset-bottom,0px))] md:pb-[calc(12rem+env(safe-area-inset-bottom,0px))] md:pr-72">
             <ConnectionBanner />
             <TimerWarning remaining={remaining} />
 
@@ -1956,7 +1924,32 @@ function RoomContent({
                 className="relative flex min-h-0 flex-1 items-center justify-center px-3 py-4 sm:px-5 sm:py-5"
               >
                 {isActivityMode ? (
-                  activityElement
+                  activityEntered ? (
+                    <div className="w-full flex flex-col items-center">
+                      {role === 'host' && activities.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={handleBackToPicker}
+                          className="room-tap font-karla mb-2 flex cursor-pointer items-center gap-1 self-start rounded-full px-3 text-xs font-bold"
+                          style={{ color: 'var(--room-ink-soft)' }}
+                        >
+                          ← Choose another activity
+                        </button>
+                      )}
+                      {activityElement}
+                    </div>
+                  ) : (
+                    // The picker owns its own scroll so its heading can stay
+                    // pinned; the stage centres content, which would otherwise
+                    // push the heading off-screen on short viewports.
+                    <div className="absolute inset-0 overflow-y-auto overscroll-contain">
+                      <ActivityPicker
+                        activities={activities}
+                        role={role}
+                        onPick={handlePickActivity}
+                      />
+                    </div>
+                  )
                 ) : (
                 <TransformWrapper
                   ref={transformRef}
@@ -1975,12 +1968,16 @@ function RoomContent({
                   onTransformed={scheduleCanvasRecalcAfterTransform}
                   onInit={scheduleCanvasRecalcAfterTransform}
                 >
+                  {/* The wrapper must clip: with `overflow-visible` a panned or
+                      zoomed spread escapes the stage and gets silently cropped
+                      by an ancestor, which read as the book being cut off at
+                      tablet widths. */}
                   <TransformComponent
-                    wrapperClass="w-full max-w-5xl !overflow-visible"
-                    contentClass="w-full"
+                    wrapperClass="!w-full !max-w-5xl !overflow-hidden"
+                    contentClass="!w-full flex justify-center"
                   >
                     <div
-                      className={`group relative flex w-full max-w-5xl flex-col overflow-hidden rounded-[1.65rem] border border-black/50 bg-gradient-to-b from-[#e8dfd4] via-[#faf6ee] to-[#e6ded4] shadow-[0_52px_100px_-22px_rgba(5,5,12,0.88)] ${
+                      className={`room-book group relative flex w-full max-w-5xl flex-col overflow-hidden ${
                         loadingPages || pages.length === 0
                           ? 'min-h-[min(80vh,calc(100dvh-14rem))]'
                           : ''
@@ -2139,8 +2136,13 @@ function RoomContent({
 
           {/* Right panel — timer + participants + status (desktop) */}
           <aside
-            className="fixed right-0 top-16 z-30 hidden w-72 flex-col gap-4 border-l border-white/5 bg-[#121018]/92 p-4 pb-24 backdrop-blur-xl md:flex"
-            style={{ height: 'calc(100vh - 4rem)' }}
+            className="room-recede fixed right-0 top-16 z-30 hidden w-72 flex-col gap-4 p-4 pb-24 md:flex"
+            style={{
+              height: 'calc(100dvh - 4rem)',
+              background: 'var(--room-chrome)',
+              borderLeft: '1px solid var(--room-chrome-line)',
+              backdropFilter: 'blur(14px) saturate(1.1)',
+            }}
           >
             <SessionTimerRing
               remaining={remaining}
@@ -2150,21 +2152,29 @@ function RoomContent({
               onStart={handleStartTimer}
             />
             {remaining <= 5 * 60 && timerActive && (
-              <p className="text-center text-[11px] font-semibold text-[#ffb955]">
+              <p className="text-center text-[11px] font-semibold text-[#a35a00]">
                 {remaining <= 2 * 60 ? 'Wrapping up soon' : 'Five minutes left'}
               </p>
             )}
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <p className="mb-2 shrink-0 text-[10px] font-bold uppercase tracking-widest text-stone-500">Participants</p>
+              <p
+                className="mb-2 shrink-0 text-[10px] font-bold uppercase tracking-widest"
+                style={{ color: 'var(--room-ink-soft)' }}
+              >
+                Participants
+              </p>
               <div className="min-h-0 flex-1 overflow-y-auto pr-1">
                 <ParticipantList hostIdentity={hostIdentity} />
               </div>
             </div>
-            <div className="shrink-0 rounded-2xl border border-[#3b85a6]/35 bg-gradient-to-br from-[#3b85a6]/25 to-[#764f84]/20 p-4 shadow-lg">
-              <p className="text-xs font-bold text-[#9dd4f0]">
+            <div className="room-panel-strong shrink-0 p-4">
+              <p className="text-xs font-bold" style={{ color: 'var(--room-accent)' }}>
                 You are the {role === 'host' ? 'host' : 'guest'}
               </p>
-              <p className="mt-2 text-[11px] leading-relaxed text-stone-300">
+              <p
+                className="mt-2 text-[11px] leading-relaxed"
+                style={{ color: 'var(--room-ink-soft)' }}
+              >
                 {isActivityMode
                   ? role === 'host'
                     ? 'You lead the activities — Reset, Previous and Next control what everyone sees.'
@@ -2177,7 +2187,11 @@ function RoomContent({
                 <button
                   type="button"
                   onClick={handleOpenActivities}
-                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-white/10 py-2.5 text-[11px] font-bold text-white transition-colors hover:bg-white/15 cursor-pointer"
+                  className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl py-2.5 text-[11px] font-bold transition-colors"
+                  style={{
+                    background: 'var(--room-accent)',
+                    color: 'var(--room-accent-contrast)',
+                  }}
                 >
                   <Gamepad2 className="h-4 w-4" />
                   Activities
@@ -2294,6 +2308,14 @@ export function SessionRoomPage({ mode = 'reading' }: { mode?: 'reading' | 'acti
   const [bookTitle, setBookTitle] = useState('Reading Room');
   const [inviteToken, setInviteToken] = useState<string | null>(null);
 
+  // LiveKit negotiates asynchronously; handing <LiveKitRoom> a new token value
+  // mid-negotiation tears the engine down and the retry lands on a closed engine
+  // ("NegotiationError: cannot negotiate on closed engine"). Pin the first token
+  // we receive so later refreshes don't remount the room.
+  const pinnedTokenRef = useRef<string | null>(null);
+  if (token && !pinnedTokenRef.current) pinnedTokenRef.current = token;
+  const connectToken = pinnedTokenRef.current;
+
   useEffect(() => {
     document.body.classList.add('reading-room');
     return () => document.body.classList.remove('reading-room');
@@ -2330,7 +2352,7 @@ export function SessionRoomPage({ mode = 'reading' }: { mode?: 'reading' | 'acti
     }).catch(() => router.replace('/'));
   }, [token, sessionId, id, router, setSession]);
 
-  if (!token || !roomName || !livekitUrl || !bookId) {
+  if (!connectToken || !roomName || !livekitUrl || !bookId) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-[#131313] text-[#e5e2e1]">
         <div className="flex flex-col items-center gap-4">
@@ -2343,7 +2365,15 @@ export function SessionRoomPage({ mode = 'reading' }: { mode?: 'reading' | 'acti
 
   return (
     <>
-      <LiveKitRoom serverUrl={livekitUrl} token={token} connect video audio style={{ height: '100vh' }}>
+      <LiveKitRoom
+        key={roomName}
+        serverUrl={livekitUrl}
+        token={connectToken}
+        connect
+        video
+        audio
+        style={{ height: '100dvh' }}
+      >
         <RoomContent
           role={role!}
           sessionId={sessionId ?? id}

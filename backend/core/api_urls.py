@@ -30,6 +30,7 @@ from .api_views import (
     BillingEntitlementView,
     BillingPlansView,
     AdminBookRenderPdfView,
+    AdminBookThemeView,
     BookActivityListView,
     BookDetailView,
     BookListView,
@@ -101,6 +102,7 @@ urlpatterns = [
     path("admin/books/<uuid:pk>/", AdminBookDetailView.as_view(), name="admin-book-detail"),
     path("admin/books/<uuid:book_id>/pages/", AdminBookPageListCreateView.as_view(), name="admin-book-page-list"),
     path("admin/books/<uuid:book_id>/pages/<uuid:pk>/", AdminBookPageDetailView.as_view(), name="admin-book-page-detail"),
+    path("admin/books/<uuid:book_id>/theme/", AdminBookThemeView.as_view(), name="admin-book-theme"),
     path("admin/books/<uuid:pk>/render-pdf/", AdminBookRenderPdfView.as_view(), name="admin-book-render-pdf"),
 
     # Admin — Activities

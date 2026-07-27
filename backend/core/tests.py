@@ -7,8 +7,9 @@ from django.core import mail
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from rest_framework.test import APIClient
 
-from .models import ActivityConfig, Badge, Book, ChildProfile, Entitlement, FavoriteBook, NotificationPreference, ReadingReminder, ReadingSession, SessionEvent, SessionParticipant, SessionSnapshot, UserBadge
+from .models import ActivityConfig, Badge, Book, BookTheme, ChildProfile, Entitlement, FavoriteBook, NotificationPreference, ReadingReminder, ReadingSession, SessionEvent, SessionParticipant, SessionSnapshot, UserBadge
 
 User = get_user_model()
 
@@ -2499,3 +2500,100 @@ class AdminSessionEventExportViewTests(TestCase):
         content = response.content.decode()
         lines = [l for l in content.strip().splitlines() if l and not l.startswith("event_id")]
         self.assertEqual(len(lines), 0)
+
+
+class BookThemeModelTests(TestCase):
+    """Per-book reading-room theming."""
+
+    def setUp(self):
+        self.book = Book.objects.create(title="Night Sky", slug="night-sky")
+
+    def test_gradient_theme_requires_both_colours(self):
+        theme = BookTheme(book=self.book, backdrop_kind="gradient", bg_color="#123456")
+        with self.assertRaises(ValidationError):
+            theme.save()
+
+    def test_image_theme_requires_an_image(self):
+        theme = BookTheme(book=self.book, backdrop_kind="image")
+        with self.assertRaises(ValidationError):
+            theme.save()
+
+    def test_rejects_malformed_hex_colour(self):
+        theme = BookTheme(
+            book=self.book, backdrop_kind="color", bg_color="nope", accent="#3D3B62"
+        )
+        with self.assertRaises(ValidationError):
+            theme.save()
+
+    def test_rejects_out_of_range_tilt(self):
+        theme = BookTheme(
+            book=self.book,
+            backdrop_kind="color",
+            bg_color="#BFDCF7",
+            tilt_degrees=45,
+        )
+        with self.assertRaises(ValidationError):
+            theme.save()
+
+    def test_valid_gradient_theme_saves(self):
+        theme = BookTheme.objects.create(
+            book=self.book,
+            backdrop_kind="gradient",
+            bg_color="#CFE6FB",
+            bg_color_2="#A9D3F5",
+        )
+        self.assertEqual(theme.book, self.book)
+        self.assertEqual(self.book.theme, theme)
+
+    def test_book_without_theme_is_valid(self):
+        """No theme means "use the platform default", not an error."""
+        self.assertFalse(BookTheme.objects.filter(book=self.book).exists())
+
+
+class BookThemeApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            username="theme-admin", password="Admin123!", is_staff=True, is_superuser=True
+        )
+        self.book = Book.objects.create(title="Ocean Deep", slug="ocean-deep")
+        self.url = f"/api/v1/admin/books/{self.book.id}/theme/"
+
+    def test_requires_admin(self):
+        self.assertEqual(self.client.get(self.url).status_code, 401)
+
+    def test_get_returns_null_when_no_theme(self):
+        self.client.force_authenticate(self.admin)
+        res = self.client.get(self.url)
+        self.assertEqual(res.status_code, 200)
+        self.assertIsNone(res.json()["data"])
+
+    def test_put_creates_then_updates_theme(self):
+        self.client.force_authenticate(self.admin)
+        res = self.client.put(
+            self.url,
+            {"backdrop_kind": "gradient", "bg_color": "#CFE6FB", "bg_color_2": "#A9D3F5"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual(res.json()["data"]["bg_color"], "#CFE6FB")
+
+        res = self.client.put(self.url, {"accent": "#764F84"}, format="json")
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual(res.json()["data"]["accent"], "#764F84")
+        self.assertEqual(BookTheme.objects.filter(book=self.book).count(), 1)
+
+    def test_theme_is_embedded_in_book_payload(self):
+        BookTheme.objects.create(
+            book=self.book, backdrop_kind="color", bg_color="#0E1626", chrome_mode="dark"
+        )
+        self.client.force_authenticate(self.admin)
+        res = self.client.get("/api/v1/admin/books/")
+        self.assertEqual(res.status_code, 200, res.content)
+        book = next(b for b in res.json()["data"] if b["id"] == str(self.book.id))
+        self.assertEqual(book["theme"]["chrome_mode"], "dark")
+
+    def test_invalid_theme_is_rejected(self):
+        self.client.force_authenticate(self.admin)
+        res = self.client.put(self.url, {"backdrop_kind": "image"}, format="json")
+        self.assertEqual(res.status_code, 400, res.content)

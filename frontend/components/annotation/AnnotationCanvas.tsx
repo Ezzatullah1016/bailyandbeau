@@ -7,6 +7,7 @@ import {
   useRef,
   useCallback,
 } from 'react';
+import type { Ref } from 'react';
 import type { AnnotationTool } from './AnnotationToolbar';
 
 // Fabric.js is imported dynamically to avoid SSR issues — no static type available.
@@ -24,14 +25,21 @@ export interface AnnotationCanvasHandle {
   recalcLayout(): void;
 }
 
-interface Props {
+export interface AnnotationCanvasProps {
   tool: AnnotationTool;
   color: string;
   brushSize: number;
   onSync: (json: string) => void;
   /** When false, pointer events pass through so the flip book receives swipes/clicks */
   drawingEnabled: boolean;
+  /**
+   * `next/dynamic` cannot forward a real `ref`, so callers that lazy-load this
+   * component pass the handle through as a normal prop instead.
+   */
+  forwardedRef?: Ref<AnnotationCanvasHandle>;
 }
+
+type Props = AnnotationCanvasProps;
 
 /** Convert a hex color to rgba() string with the given alpha (0–1). */
 function hexToRgba(hex: string, alpha: number): string {
@@ -134,7 +142,13 @@ function applyToolToCanvas(
 }
 
 const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
-  function AnnotationCanvas({ tool, color, brushSize, onSync, drawingEnabled }, ref) {
+  function AnnotationCanvas(
+    { tool, color, brushSize, onSync, drawingEnabled, forwardedRef },
+    ref,
+  ) {
+    // Lazy-loaded callers supply the handle via `forwardedRef` (see the shim in
+    // SessionRoomPage); direct callers use the real `ref`.
+    const handleRef = forwardedRef ?? ref;
     const canvasElRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const fabricRef = useRef<FabricCanvas | null>(null);
@@ -291,7 +305,7 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
 
     // ── Expose imperative handles ─────────────────────────────────────────
     useImperativeHandle(
-      ref,
+      handleRef,
       () => ({
         loadRemoteJSON(json: string) {
           const canvas = fabricRef.current;

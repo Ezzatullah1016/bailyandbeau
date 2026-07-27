@@ -10,6 +10,7 @@ import stripe
 from asgiref.sync import async_to_sync
 from django.conf import settings as django_settings
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -31,8 +32,10 @@ except ImportError:  # poppler/pdf2image not available on all environments
     pdf2image = None
 
 from . import portal_settings as portal_conf
-from .models import ActivityConfig, Badge, Book, BookPage, ChildProfile, Entitlement, FavoriteBook, NotificationPreference, ReadingReminder, ReadingSession, SessionEvent, SessionInvite, SessionParticipant, SessionSnapshot, UserBadge
+from .models import ActivityConfig, Badge, Book, BookPage, BookTheme, ChildProfile, Entitlement, FavoriteBook, NotificationPreference, ReadingReminder, ReadingSession, SessionEvent, SessionInvite, SessionParticipant, SessionSnapshot, UserBadge
 from .serializers import (
+    BookThemeSerializer,
+    BookThemeWriteSerializer,
     ActivityConfigSerializer,
     AdminBadgeAwardSerializer,
     AdminChildProfileSerializer,
@@ -1167,6 +1170,9 @@ class BookPagesView(APIView):
         serializer = BookPageSerializer(pages, many=True)
         from .serializers import resolve_media_url
         pdf_view_url = resolve_media_url(book.s3_key) if book.asset_type == Book.AssetType.PDF else ""
+        # The room needs the book's theme at the same moment it needs the pages,
+        # so it rides along in meta rather than costing a second round trip.
+        theme = BookTheme.objects.filter(book=book).first()
         return Response({
             "data": serializer.data,
             "meta": {
@@ -1174,6 +1180,7 @@ class BookPagesView(APIView):
                 "page_count": book.page_count,
                 "asset_type": book.asset_type,
                 "pdf_view_url": pdf_view_url,
+                "theme": BookThemeSerializer(theme).data if theme else None,
             },
             "error": None,
         })
@@ -1749,7 +1756,23 @@ class SessionCompleteView(APIView):
         session.status = ReadingSession.Status.COMPLETED
         session.ended_at = timezone.now()
         session.timer_remaining_seconds = 0
-        session.save(update_fields=["status", "ended_at", "timer_remaining_seconds", "updated_at"])
+        update_fields = ["status", "ended_at", "timer_remaining_seconds", "updated_at"]
+
+        # Record which activity the session finished on (Activity Room), so the
+        # completion screen can name it. Accept an id (preferred) or raw title.
+        activity_id = request.data.get("activity_id")
+        activity_title = request.data.get("activity_title")
+        if activity_id:
+            activity = ActivityConfig.objects.filter(pk=activity_id, book=session.book).first()
+            if activity:
+                session.completed_activity = activity
+                session.completed_activity_title = activity.title
+                update_fields += ["completed_activity", "completed_activity_title"]
+        elif activity_title:
+            session.completed_activity_title = str(activity_title)[:255]
+            update_fields += ["completed_activity_title"]
+
+        session.save(update_fields=update_fields)
         SessionEvent.objects.create(
             session=session,
             participant=participant,
@@ -2315,3 +2338,58 @@ class TransferHostView(APIView):
                 "error": None,
             }
         )
+
+
+class AdminBookThemeView(APIView):
+    """Read or upsert the reading-room theme for a book.
+
+    A book without a theme returns `data: null` rather than 404 — the room falls
+    back to the platform default, so "no theme" is a valid state, not an error.
+    """
+
+    permission_classes = [permissions.IsAdminUser]
+
+    def _book(self, book_id):
+        return Book.objects.filter(pk=book_id).first()
+
+    def _not_found(self):
+        return Response(
+            {"data": None, "meta": {}, "error": {"code": "not_found", "message": "Book not found."}},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    def get(self, request, book_id):
+        book = self._book(book_id)
+        if not book:
+            return self._not_found()
+        theme = BookTheme.objects.filter(book=book).first()
+        data = BookThemeSerializer(theme).data if theme else None
+        return Response({"data": data, "meta": {}, "error": None})
+
+    def put(self, request, book_id):
+        book = self._book(book_id)
+        if not book:
+            return self._not_found()
+
+        theme = BookTheme.objects.filter(book=book).first()
+        serializer = BookThemeWriteSerializer(theme, data=request.data, partial=theme is not None)
+        serializer.is_valid(raise_exception=True)
+        try:
+            saved = serializer.save(book=book)
+        except DjangoValidationError as exc:
+            return Response(
+                {
+                    "data": None,
+                    "meta": {},
+                    "error": {"code": "invalid_theme", "message": exc.message_dict},
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response({"data": BookThemeSerializer(saved).data, "meta": {}, "error": None})
+
+    def delete(self, request, book_id):
+        book = self._book(book_id)
+        if not book:
+            return self._not_found()
+        BookTheme.objects.filter(book=book).delete()
+        return Response({"data": None, "meta": {}, "error": None}, status=status.HTTP_204_NO_CONTENT)
