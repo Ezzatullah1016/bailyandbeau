@@ -44,6 +44,8 @@ import type {
   AnnotationCanvasProps,
 } from '@/components/annotation/AnnotationCanvas';
 import { RoomRail, type RailItem } from '@/components/reading/RoomRail';
+import { ToolStrip } from '@/components/reading/ToolStrip';
+import { ChatPopup } from '@/components/session/ChatPopup';
 import { ParticipantStrip } from '@/components/session/ParticipantStrip';
 import type { Book3DProps } from '@/components/reading/Book3D/Scene';
 import { useRoomTheme } from '@/lib/useRoomTheme';
@@ -65,7 +67,6 @@ import {
   Pencil,
   Rocket,
   SlidersHorizontal,
-  Smile,
   Star,
   Timer,
   User,
@@ -81,7 +82,6 @@ import {
   Gamepad2,
   GripVertical,
   Phone,
-  MoreHorizontal,
   Volume2,
   VolumeX,
 } from 'lucide-react';
@@ -292,29 +292,6 @@ function ParticipantList({ hostIdentity }: { hostIdentity?: string }) {
 
 // ─── Local controls ───────────────────────────────────────────────────────────
 
-function LocalControls() {
-  const { localParticipant, isMicrophoneEnabled, isCameraEnabled } = useLocalParticipant();
-  return (
-    <div className="flex items-center gap-2">
-      <button
-        onClick={() => localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)}
-        aria-label={isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}
-        aria-pressed={!isMicrophoneEnabled}
-        className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${isMicrophoneEnabled ? 'bg-stone-800/50 text-stone-300 hover:bg-stone-700/50' : 'bg-red-900/50 text-red-300 hover:bg-red-800/50'}`}
-      >
-        {isMicrophoneEnabled ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
-      </button>
-      <button
-        onClick={() => localParticipant.setCameraEnabled(!isCameraEnabled)}
-        aria-label={isCameraEnabled ? 'Turn off camera' : 'Turn on camera'}
-        aria-pressed={!isCameraEnabled}
-        className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${isCameraEnabled ? 'bg-stone-800/50 text-stone-300 hover:bg-stone-700/50' : 'bg-red-900/50 text-red-300 hover:bg-red-800/50'}`}
-      >
-        {isCameraEnabled ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
-      </button>
-    </div>
-  );
-}
 
 /** Large circular mic / camera controls for bottom dock */
 function SessionMediaDock() {
@@ -463,13 +440,6 @@ function TimerWarning({ remaining }: { remaining: number }) {
 
 // ─── Tab config ───────────────────────────────────────────────────────────────
 
-const TAB_ICONS: Record<string, React.ElementType> = {
-  video:        Video,
-  tools:        Pencil,
-  participants: Users,
-  chat:         MessageCircle,
-  settings:     SlidersHorizontal,
-};
 
 // ─── Room content ─────────────────────────────────────────────────────────────
 
@@ -568,8 +538,13 @@ function RoomContent({
     soundedSpreadRef.current = clampedSpreadIndex;
     sounds.play('page-turn');
   }, [clampedSpreadIndex, sounds]);
-  const [activeTab, setActiveTab] = useState<'video' | 'tools' | 'chat' | 'settings'>('video');
-  const [roomPanelOpen, setRoomPanelOpen] = useState(false);
+  // Each rail control owns its own surface. The single tabbed "Session" panel
+  // that used to hold all of these meant opening chat also covered the
+  // participants and the settings, and the drawing options sat three clicks
+  // away from the pen button that turns drawing on.
+  const [drawOpen, setDrawOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // ── Timer ─────────────────────────────────────────────────────────────────
   const [timerActive, setTimerActive] = useState(false);
@@ -1232,15 +1207,6 @@ function RoomContent({
   const coverUrl = pages[0]?.image_url;
   const progressPct = (Math.min(currentPage + 2, pageCount) / pageCount) * 100;
 
-  // "Video" and "People" were two tabs showing the same participants — one as
-  // camera tiles, one as a text roster. Now a single People tab of video tiles.
-  const tabs = [
-    { id: 'video' as const, label: 'People', hint: 'Who is here' },
-    ...(isActivityMode ? [] : [{ id: 'tools' as const, label: 'Tools', hint: 'Draw' }]),
-    { id: 'chat' as const, label: 'Chat', hint: 'Messages' },
-    { id: 'settings' as const, label: 'Settings', hint: 'Timer & host' },
-  ];
-
   const [hostIdentity, setHostIdentity] = useState<string | undefined>(() =>
     resolveHostParticipantIdentity(room, role),
   );
@@ -1319,7 +1285,13 @@ function RoomContent({
         active: drawingEnabled,
         hidden: isActivityMode,
         separatorBefore: true,
-        onClick: () => setInteractionMode(drawingEnabled ? 'book' : 'pen'),
+        // One button, one mental model: the pen turns drawing on and reveals its
+        // options together, rather than the options living somewhere else.
+        onClick: () => {
+          const next = !drawingEnabled;
+          setInteractionMode(next ? 'pen' : 'book');
+          setDrawOpen(next);
+        },
       },
       {
         icon: ZoomIn,
@@ -1355,21 +1327,10 @@ function RoomContent({
         onClick: () => localParticipant.setCameraEnabled(!isCameraEnabled),
       },
       {
-        icon: Users,
-        label: 'People in this session',
-        badge: participants.length,
-        onClick: () => {
-          setActiveTab('video');
-          setRoomPanelOpen(true);
-        },
-      },
-      {
-        icon: Smile,
-        label: 'Send a reaction',
-        onClick: () => {
-          setActiveTab('video');
-          setRoomPanelOpen(true);
-        },
+        icon: MessageCircle,
+        label: chatOpen ? 'Close chat' : 'Open chat',
+        active: chatOpen,
+        onClick: () => setChatOpen((v) => !v),
       },
 
       // Room-level actions.
@@ -1387,9 +1348,10 @@ function RoomContent({
         onClick: sounds.toggleMuted,
       },
       {
-        icon: MoreHorizontal,
-        label: 'More controls',
-        onClick: () => setRoomPanelOpen(true),
+        icon: SlidersHorizontal,
+        label: 'Settings',
+        active: settingsOpen,
+        onClick: () => setSettingsOpen(true),
       },
       {
         icon: Phone,
@@ -1411,9 +1373,10 @@ function RoomContent({
       isMicrophoneEnabled,
       isCameraEnabled,
       localParticipant,
-      participants.length,
       role,
       activities.length,
+      chatOpen,
+      settingsOpen,
     ],
   );
 
@@ -1570,208 +1533,133 @@ function RoomContent({
 
         <main className="relative flex h-full flex-1 overflow-hidden pt-[max(5rem,calc(4rem+env(safe-area-inset-top,0px)))]">
 
-          {roomPanelOpen && (
-            <button
-              type="button"
-              aria-label="Close room panel"
-              className="fixed inset-0 z-[65] bg-black/50 backdrop-blur-[2px]"
-              onClick={() => setRoomPanelOpen(false)}
+          {/* Drawing options, docked beside the rail's pen button. */}
+          {drawOpen && !isActivityMode && (
+            <ToolStrip
+              color={annColor}
+              brushSize={annBrush}
+              onColorChange={setAnnColor}
+              onBrushSizeChange={setAnnBrush}
+              onUndo={() => canvasRef.current?.undo()}
+              onClear={handleClearCanvas}
             />
           )}
 
-          {roomPanelOpen && (
-            <div
-              className="room-panel-strong fixed bottom-0 left-0 right-0 z-[70] flex max-h-[min(88dvh,640px)] flex-col overflow-hidden rounded-t-3xl sm:left-auto sm:right-4 sm:top-24 sm:bottom-auto sm:max-h-[calc(100vh-7rem)] sm:w-[min(100vw-2rem,380px)] sm:rounded-3xl"
-              role="dialog"
-              aria-label="Reading session room"
-            >
-              <div
-                className="flex shrink-0 items-center justify-between px-4 py-3"
-                style={{ borderBottom: '1px solid var(--room-chrome-line)' }}
-              >
-                <h3 className="text-base font-bold" style={{ color: 'var(--room-ink)' }}>
-                  Session
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setRoomPanelOpen(false)}
-                  aria-label="Close"
-                  className="room-tap rounded-xl transition-colors"
-                  style={{ color: 'var(--room-ink-soft)' }}
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              {/* `flex-wrap`, not `overflow-x-auto`: the scrolling strip put a
-                  horizontal scrollbar across the panel whenever the tabs were a
-                  few pixels wider than it. */}
-              <nav
-                className="flex shrink-0 flex-wrap gap-1 px-3 py-2"
-                style={{ borderBottom: '1px solid var(--room-chrome-line)' }}
-              >
-                {tabs.map((tab) => {
-                  const TabIcon = TAB_ICONS[tab.id];
-                  return (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      onClick={() => setActiveTab(tab.id)}
-                      className="flex min-w-0 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold transition-colors"
-                      style={
-                        activeTab === tab.id
-                          ? { background: 'var(--room-accent)', color: 'var(--room-accent-contrast)' }
-                          : { color: 'var(--room-ink-soft)' }
-                      }
-                    >
-                      <TabIcon className="h-4 w-4 shrink-0" aria-hidden />
-                      <span className="truncate">{tab.label}</span>
-                    </button>
-                  );
-                })}
-              </nav>
-
-              <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4">
-                {activeTab === 'video' && <ParticipantList hostIdentity={hostIdentity} />}
-
-                {activeTab === 'tools' && !isActivityMode && (
-                  <div className="space-y-4 px-1">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-stone-400">Drawing</p>
-                    <p className="text-xs leading-relaxed text-stone-500">
-                      Use the toolbar under the book. <span className="font-semibold text-stone-300">Book</span> is the default for page turns; choose{' '}
-                      <span className="font-semibold text-stone-300">Pen</span> to draw.
-                    </p>
-                    <div className="space-y-3">
-                      <div>
-                        <p className="mb-2 text-[10px] uppercase tracking-widest text-stone-500">Brush size</p>
-                        <div
-                          className="h-2 cursor-pointer overflow-hidden rounded-full bg-stone-800"
-                          onClick={(e) => {
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            const pct = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-                            setAnnBrush(Math.round(2 + pct * 30));
-                          }}
-                        >
-                          <div
-                            className="h-full rounded-full bg-[#f0c75e]"
-                            style={{ width: `${((annBrush - 2) / 30) * 100}%` }}
-                          />
-                        </div>
-                        <p className="mt-1 text-[10px] text-stone-500">{annBrush}px</p>
-                      </div>
-                      <div>
-                        <p className="mb-2 text-[10px] uppercase tracking-widest text-stone-500">Color</p>
-                        <div className="flex flex-wrap gap-2">
-                          {['#ef4444', '#f0c75e', '#22c55e', '#3b82f6', '#a855f7'].map((c) => (
-                            <button
-                              key={c}
-                              type="button"
-                              onClick={() => setAnnColor(c)}
-                              className={`h-7 w-7 rounded-full transition-all ${annColor === c ? 'scale-110 ring-2 ring-white/60' : ''}`}
-                              style={{ backgroundColor: c }}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {activeTab === 'chat' && (
-                  <div className="flex h-full flex-col" style={{ minHeight: '200px' }}>
-                    <div className="mb-3 flex-1 space-y-2 overflow-y-auto pr-1">
-                      {chatMessages.length === 0 && (
-                        <p className="pt-4 text-center text-xs text-stone-500">No messages yet. Say hi!</p>
-                      )}
-                      {chatMessages.map((m) => (
-                        <div key={m.id} className={`flex flex-col ${m.self ? 'items-end' : 'items-start'}`}>
-                          <span className="mb-0.5 px-1 text-[10px] text-stone-500">{m.from}</span>
-                          <div
-                            className={`max-w-[90%] break-words rounded-2xl px-3 py-2 text-sm ${m.self ? 'rounded-br-sm bg-[#764f84] text-white' : 'rounded-bl-sm bg-stone-800 text-stone-100'}`}
-                          >
-                            {m.text}
-                          </div>
-                        </div>
-                      ))}
-                      <div ref={chatEndRef} />
-                    </div>
-                    <div className="flex gap-2">
-                      <input
-                        value={chatInput}
-                        onChange={(e) => setChatInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') sendChat();
-                        }}
-                        placeholder="Type a message…"
-                        className="flex-1 rounded-xl bg-stone-800 px-3 py-2 text-sm text-stone-100 outline-none placeholder-stone-600 focus:ring-1 focus:ring-[#764f84]"
-                      />
-                      <button
-                        type="button"
-                        onClick={sendChat}
-                        className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#764f84] text-white transition-colors hover:bg-[#9b6cb0]"
-                      >
-                        <Rocket className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {activeTab === 'settings' && (
-                  <div className="space-y-3 px-1">
-                    <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-stone-400">Session settings</p>
-                    <label className="flex cursor-pointer items-start gap-3 rounded-xl bg-stone-800/35 px-3 py-3 text-sm text-stone-200 hover:bg-stone-800/50">
-                      <input
-                        type="checkbox"
-                        className="mt-0.5 h-4 w-4 shrink-0 rounded border-stone-500 bg-stone-900 text-[#3b85a6] focus:ring-[#3b85a6]"
-                        checked={spreadPageCover}
-                        onChange={(e) => setSpreadPageCoverPersisted(e.target.checked)}
-                      />
-                      <span>
-                        <span className="font-semibold text-stone-100">Fill spread to frame</span>
-                        <span className="mt-1 block text-xs leading-relaxed text-stone-500">
-                          Zooms pages to fill the spread area; margins may be cropped instead of showing letterboxing. Saved on this device only.
-                        </span>
-                      </span>
-                    </label>
-                    <p className="text-xs leading-relaxed text-stone-500">
-                      Up to {MAX_LIVEKIT_ROOM_PARTICIPANTS} people can be in this live room at once (including the host).
-                    </p>
-                    {role === 'host' && !timerActive && (
-                      <button
-                        type="button"
-                        onClick={handleStartTimer}
-                        className="flex w-full items-center gap-3 rounded-xl bg-stone-800/50 px-4 py-3 text-sm font-semibold text-stone-200 transition-colors hover:bg-stone-700/50"
-                      >
-                        <Timer className="h-4 w-4 text-[#f0c75e]" />
-                        Start session timer
-                      </button>
-                    )}
-                    {role === 'host' && (
-                      <button
-                        type="button"
-                        onClick={() => setShowTransferModal(true)}
-                        className="flex w-full items-center gap-3 rounded-xl bg-stone-800/50 px-4 py-3 text-sm font-semibold text-stone-200 transition-colors hover:bg-stone-700/50"
-                      >
-                        <Users className="h-4 w-4 text-[#3b85a6]" />
-                        Transfer host
-                      </button>
-                    )}
-                    {role === 'host' && (
-                      <button
-                        type="button"
-                        onClick={() => router.push(`/session/${sessionId}/activity?bookId=${bookId}`)}
-                        className="flex w-full items-center gap-3 rounded-xl bg-stone-800/50 px-4 py-3 text-sm font-semibold text-stone-200 transition-colors hover:bg-stone-700/50"
-                      >
-                        <Star className="h-4 w-4 text-[#c84a71]" />
-                        Open activity
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-
-            </div>
+          {chatOpen && (
+            <ChatPopup
+              messages={chatMessages}
+              input={chatInput}
+              onInputChange={setChatInput}
+              onSend={sendChat}
+              onClose={() => setChatOpen(false)}
+            />
           )}
+
+          {settingsOpen && (
+            <>
+              <button
+                type="button"
+                aria-label="Close settings"
+                className="fixed inset-0 z-[65] bg-black/40"
+                onClick={() => setSettingsOpen(false)}
+              />
+              <div
+                role="dialog"
+                aria-label="Session settings"
+                className="room-panel-strong fixed bottom-0 left-0 right-0 z-[70] flex max-h-[min(80dvh,560px)] flex-col overflow-hidden rounded-t-3xl sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:w-[min(100vw-2rem,400px)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl"
+              >
+                <div
+                  className="flex shrink-0 items-center justify-between px-4 py-3"
+                  style={{ borderBottom: '1px solid var(--room-chrome-line)' }}
+                >
+                  <h3 className="text-base font-bold" style={{ color: 'var(--room-ink)' }}>
+                    Settings
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setSettingsOpen(false)}
+                    aria-label="Close"
+                    className="room-tap cursor-pointer rounded-xl"
+                    style={{ color: 'var(--room-ink-soft)' }}
+                  >
+                    <X className="h-5 w-5" aria-hidden />
+                  </button>
+                </div>
+
+                <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden p-4">
+                  <label
+                    className="flex cursor-pointer items-start gap-3 rounded-xl px-3 py-3 text-sm"
+                    style={{ background: 'var(--room-chrome)', color: 'var(--room-ink)' }}
+                  >
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-4 w-4 shrink-0 rounded"
+                      checked={spreadPageCover}
+                      onChange={(e) => setSpreadPageCoverPersisted(e.target.checked)}
+                    />
+                    <span>
+                      <span className="font-semibold">Fill spread to frame</span>
+                      <span
+                        className="mt-1 block text-xs leading-relaxed"
+                        style={{ color: 'var(--room-ink-soft)' }}
+                      >
+                        Zooms pages to fill the spread area; margins may be cropped instead of
+                        showing letterboxing. Saved on this device only.
+                      </span>
+                    </span>
+                  </label>
+
+                  <p className="text-xs leading-relaxed" style={{ color: 'var(--room-ink-soft)' }}>
+                    Up to {MAX_LIVEKIT_ROOM_PARTICIPANTS} people can be in this live room at once
+                    (including the host).
+                  </p>
+
+                  {role === 'host' && !timerActive && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleStartTimer();
+                        setSettingsOpen(false);
+                      }}
+                      className="flex w-full cursor-pointer items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold"
+                      style={{ background: 'var(--room-chrome)', color: 'var(--room-ink)' }}
+                    >
+                      <Timer className="h-4 w-4" aria-hidden />
+                      Start session timer
+                    </button>
+                  )}
+                  {role === 'host' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSettingsOpen(false);
+                        setShowTransferModal(true);
+                      }}
+                      className="flex w-full cursor-pointer items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold"
+                      style={{ background: 'var(--room-chrome)', color: 'var(--room-ink)' }}
+                    >
+                      <Users className="h-4 w-4" aria-hidden />
+                      Transfer host
+                    </button>
+                  )}
+                  {role === 'host' && !isActivityMode && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        router.push(`/session/${sessionId}/activity?bookId=${bookId}`)
+                      }
+                      className="flex w-full cursor-pointer items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold"
+                      style={{ background: 'var(--room-chrome)', color: 'var(--room-ink)' }}
+                    >
+                      <Star className="h-4 w-4" aria-hidden />
+                      Open activity
+                    </button>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+
           {/* ── Main area ────────────────────────────────────────────────────── */}
           {/* The book now gets the whole stage. The old layout reserved 288px
               on the right for the participant aside and up to 192px at the
