@@ -43,14 +43,16 @@ import type {
   AnnotationCanvasHandle,
   AnnotationCanvasProps,
 } from '@/components/annotation/AnnotationCanvas';
-import { SpreadBookViewer, usePreloadSpreads } from '@/components/reading/SpreadBookViewer';
+import { RoomRail, type RailItem } from '@/components/reading/RoomRail';
+import { ParticipantStrip } from '@/components/session/ParticipantStrip';
+import type { Book3DProps } from '@/components/reading/Book3D/Scene';
 import { useRoomTheme } from '@/lib/useRoomTheme';
 import { useRoomIdle, useRoomSounds } from '@/lib/useRoomSounds';
 import type { BookThemeData } from '@/lib/api';
-import { TransformComponent, TransformWrapper, type ReactZoomPanPinchContentRef } from 'react-zoom-pan-pinch';
 import {
   AlarmClock,
   BookMarked,
+  BookOpen,
   ChevronLeft,
   ChevronRight,
   Check,
@@ -99,6 +101,19 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCanvasProp
     return <AnnotationCanvasLazy {...props} forwardedRef={ref} />;
   },
 );
+
+// The 3D book carries three.js with it, so it is split out of the main bundle
+// and loaded only on this route. `ssr: false` is required — three touches
+// `window` at module scope and would break the server render.
+const Book3D = dynamic(() => import('@/components/reading/Book3D/Scene'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full w-full items-center justify-center">
+      <Loader2 className="h-10 w-10 animate-spin" style={{ color: 'var(--room-ink-soft)' }} aria-hidden />
+      <span className="sr-only">Loading book…</span>
+    </div>
+  ),
+}) as ComponentType<Book3DProps>;
 
 // ─── Sync message format ──────────────────────────────────────────────────────
 
@@ -547,9 +562,17 @@ function RoomContent({
     [currentPage, spreadItems.length],
   );
   const activeSpread = spreadItems[clampedSpreadIndex];
-  // Warm the pages either side of the spread so a page turn paints instantly
-  // instead of showing blank paper while the next images download.
-  usePreloadSpreads(pages, currentPage);
+
+  // Leaf index for the 3D book. Leaf 0 is the front cover, so the spread at
+  // index N sits on leaf N+1 — mixing these two spaces up desynchronises host
+  // and guest by exactly one page, which is why they are converted in one place
+  // only.
+  const leafIndex = clampedSpreadIndex + 1;
+
+  /** True while paper is in motion, so the ink overlay can stand aside. */
+  const [turning, setTurning] = useState(false);
+  /** Camera dolly for the rail zoom controls. */
+  const [bookZoom, setBookZoom] = useState(1);
 
   const sounds = useRoomSounds();
   // Let the chrome recede while reading so the book is the only thing asking
@@ -588,14 +611,15 @@ function RoomContent({
   const [annColor, setAnnColor] = useState('#ef4444');
   const [annBrush, setAnnBrush] = useState(8);
   const canvasRef = useRef<AnnotationCanvasHandle>(null);
-  const transformRef = useRef<ReactZoomPanPinchContentRef | null>(null);
   const transformRecalcTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentPageRef = useRef(0);
   currentPageRef.current = currentPage;
   const spreadInkRef = useRef<Record<string, string>>({});
   const annotationPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [bookRect, setBookRect] = useState({ w: 720, h: 540 });
+  // The book element is measured only so the ink overlay can re-register after
+  // a resize. The 3D scene fits itself to its container, so there is no longer
+  // any pixel geometry to compute here.
   const bookMeasureRef = useRef<HTMLDivElement>(null);
   const scheduleCanvasRecalcAfterTransform = useCallback(() => {
     if (transformRecalcTimerRef.current) clearTimeout(transformRecalcTimerRef.current);
@@ -611,35 +635,6 @@ function RoomContent({
     },
     [],
   );
-
-  useEffect(() => {
-    const el = bookMeasureRef.current;
-    if (!el) return;
-    const update = () => {
-      const r = el.getBoundingClientRect();
-      const rw = Math.max(280, Math.floor(Math.min(r.width, 1200)));
-      const vh = typeof window !== 'undefined' ? window.innerHeight : 900;
-      const chromeReserve = 200;
-      const rhCapByVh = Math.floor(Math.min(vh * 0.8, Math.max(0, vh - chromeReserve)));
-      const rhByAspect = Math.floor((rw * 3) / 4);
-      const rh = Math.max(240, Math.min(rhCapByVh, rhByAspect));
-      setBookRect((prev) => (prev.w !== rw || prev.h !== rh ? { w: rw, h: rh } : prev));
-    };
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [loadingPages, spreadItems.length]);
-
-  /** Page/zoom pill: anchored bottom-right; x increases `right` (moves bar left). */
-  const bookHudStorageKey = `bb_reading_pagebar_${sessionId}`;
-  const [bookHudOffset, setBookHudOffset] = useState({ x: 0, y: 0 });
-  const bookHudOffsetRef = useRef(bookHudOffset);
-  bookHudOffsetRef.current = bookHudOffset;
-  const hudDragSessionRef = useRef<{ startX: number; startY: number; ox: number; oy: number } | null>(
-    null,
-  );
-  const bookHudRestoredRef = useRef(false);
 
   /** Bottom AnnotationToolbar: anchored bottom-left; persisted via sessionStorage. */
   const dockHudStorageKey = `bb_reading_dock_${sessionId}`;
@@ -695,23 +690,6 @@ function RoomContent({
   }, []);
 
   useEffect(() => {
-    if (bookHudRestoredRef.current || readingHudSize.w < 80 || readingHudSize.h < 80) return;
-    bookHudRestoredRef.current = true;
-    try {
-      const raw = sessionStorage.getItem(bookHudStorageKey);
-      if (!raw) return;
-      const p = JSON.parse(raw) as { x?: unknown; y?: unknown };
-      if (typeof p.x === 'number' && typeof p.y === 'number') {
-        const next = clampBookHud(p.x, p.y);
-        bookHudOffsetRef.current = next;
-        setBookHudOffset(next);
-      }
-    } catch {
-      /* ok */
-    }
-  }, [bookHudStorageKey, readingHudSize.w, readingHudSize.h, clampBookHud]);
-
-  useEffect(() => {
     if (dockHudRestoredRef.current) return;
     dockHudRestoredRef.current = true;
     try {
@@ -729,65 +707,12 @@ function RoomContent({
   }, [dockHudStorageKey, clampDockHud]);
 
   useEffect(() => {
-    setBookHudOffset((o) => {
-      const c = clampBookHud(o.x, o.y);
-      bookHudOffsetRef.current = c;
-      return c;
-    });
-  }, [clampBookHud]);
-
-  useEffect(() => {
     setDockHudOffset((o) => {
       const c = clampDockHud(o.x, o.y);
       dockHudOffsetRef.current = c;
       return c;
     });
   }, [clampDockHud]);
-
-  const onBookHudGripDown = useCallback(
-    (e: React.PointerEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.pointerType === 'mouse' && e.button !== 0) return;
-      const o = bookHudOffsetRef.current;
-      hudDragSessionRef.current = { startX: e.clientX, startY: e.clientY, ox: o.x, oy: o.y };
-      const move = (ev: PointerEvent) => {
-        const s = hudDragSessionRef.current;
-        if (!s) return;
-        const dx = ev.clientX - s.startX;
-        const dy = s.startY - ev.clientY;
-        const next = clampBookHud(s.ox - dx, s.oy + dy);
-        bookHudOffsetRef.current = next;
-        setBookHudOffset(next);
-      };
-      const up = () => {
-        window.removeEventListener('pointermove', move);
-        window.removeEventListener('pointerup', up);
-        window.removeEventListener('pointercancel', up);
-        hudDragSessionRef.current = null;
-        try {
-          sessionStorage.setItem(bookHudStorageKey, JSON.stringify(bookHudOffsetRef.current));
-        } catch {
-          /* ok */
-        }
-      };
-      window.addEventListener('pointermove', move);
-      window.addEventListener('pointerup', up);
-      window.addEventListener('pointercancel', up);
-    },
-    [bookHudStorageKey, clampBookHud],
-  );
-
-  const resetBookHudPosition = useCallback(() => {
-    const z = { x: 0, y: 0 };
-    bookHudOffsetRef.current = z;
-    setBookHudOffset(z);
-    try {
-      sessionStorage.removeItem(bookHudStorageKey);
-    } catch {
-      /* ok */
-    }
-  }, [bookHudStorageKey]);
 
   const onDockHudGripDown = useCallback(
     (e: React.PointerEvent) => {
@@ -1443,8 +1368,76 @@ function RoomContent({
     };
   }, [room, role]);
 
-  /** Block left-drag pan + pinch on the book transform while annotating (avoids fighting the pen). Wheel zoom stays enabled. */
-  const blockTransformPanPinchWhileDrawing = drawingEnabled;
+  /**
+   * The reading room's entire persistent control surface.
+   *
+   * Everything not here lives behind "More". The room previously showed 26
+   * controls to a host across four separate regions, which is what made it read
+   * as a meeting tool rather than a book.
+   */
+  const railItems: RailItem[] = useMemo(
+    () => [
+      {
+        icon: BookOpen,
+        label: 'Back to library',
+        onClick: () => router.push('/dashboard/library'),
+      },
+      {
+        icon: Pencil,
+        label: drawingEnabled ? 'Stop drawing' : 'Draw on the page',
+        active: drawingEnabled,
+        onClick: () => setInteractionMode(drawingEnabled ? 'book' : 'pen'),
+      },
+      {
+        icon: ZoomIn,
+        label: 'Zoom in',
+        onClick: () => setBookZoom((z) => Math.min(2.5, z + 0.2)),
+      },
+      {
+        icon: ZoomOut,
+        label: 'Zoom out',
+        onClick: () => setBookZoom((z) => Math.max(0.6, z - 0.2)),
+      },
+      {
+        icon: LayoutGrid,
+        label: 'Fit book to view',
+        onClick: () => setBookZoom(1),
+      },
+      {
+        icon: sounds.muted ? VolumeX : Volume2,
+        label: sounds.muted ? 'Turn sound on' : 'Turn sound off',
+        onClick: sounds.toggleMuted,
+      },
+      {
+        icon: MoreHorizontal,
+        label: 'More controls',
+        onClick: () => setRoomPanelOpen(true),
+      },
+    ],
+    [drawingEnabled, router, sounds.muted, sounds.toggleMuted],
+  );
+
+  /** Room-level controls only — the activity's own tools live in its dock. */
+  const activityRailItems: RailItem[] = useMemo(
+    () => [
+      {
+        icon: BookOpen,
+        label: 'Back to library',
+        onClick: () => router.push('/dashboard/library'),
+      },
+      {
+        icon: sounds.muted ? VolumeX : Volume2,
+        label: sounds.muted ? 'Turn sound on' : 'Turn sound off',
+        onClick: sounds.toggleMuted,
+      },
+      {
+        icon: MoreHorizontal,
+        label: 'More controls',
+        onClick: () => setRoomPanelOpen(true),
+      },
+    ],
+    [router, sounds.muted, sounds.toggleMuted],
+  );
 
   /** Open the in-room activity modal (reuses the live LiveKit connection — no navigation, no timer reset).
    *  Host broadcasts ACTIVITY_OPEN so guests follow, and persists the open state to the session snapshot. */
@@ -1570,155 +1563,55 @@ function RoomContent({
         style={roomTheme.style}
       >
 
-        {/* ── Top nav — read-along style header ─────────────────────────────── */}
-        <header
-          className="room-recede fixed left-0 right-0 top-0 z-50 flex w-full items-center justify-between px-4 pb-2 pt-[max(8px,env(safe-area-inset-top))] sm:px-6"
-          style={{
-            background: 'var(--room-chrome)',
-            borderBottom: '1px solid var(--room-chrome-line)',
-            backdropFilter: 'blur(14px) saturate(1.1)',
-          }}
-        >
-          <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-5">
-            <BrandLogo variant="dark" className="h-7 shrink-0 max-sm:max-w-[140px] sm:h-9" />
-            <div className="mx-1 hidden h-9 w-px shrink-0 bg-white/10 sm:block" aria-hidden />
-            <div className="flex min-w-0 max-w-[min(40vw,280px)] items-center gap-3 sm:max-w-[320px]">
-              {!loadingPages && coverUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={coverUrl}
-                  alt=""
-                  className="h-11 w-9 shrink-0 rounded-lg object-cover shadow-md ring-1 ring-white/15"
-                />
-              ) : (
-                <div className="flex h-11 w-9 shrink-0 items-center justify-center rounded-lg bg-stone-800 ring-1 ring-white/10">
-                  <BookMarked className="h-5 w-5 text-stone-500" aria-hidden />
-                </div>
-              )}
-              <div className="min-w-0">
-                <h1
-                  className="font-baloo truncate text-sm font-semibold tracking-tight sm:text-base"
-                  style={{ color: 'var(--room-ink)' }}
-                >
-                  {bookTitle}
-                </h1>
-                <p className="font-karla truncate text-[11px] text-[#ffb955]/90">
-                  {pages[currentPage + 1]
-                    ? `Pages ${currentPage + 1}–${currentPage + 2} of ${pageCount}`
-                    : `Page ${currentPage + 1} of ${pageCount}`}
-                </p>
-              </div>
-            </div>
+        {/* ── Header ────────────────────────────────────────────────────────
+            No bar, no panel, no backdrop blur: the title floats top-left and
+            the way out floats top-right, so the sky runs unbroken behind the
+            book. The old header was a full-width frosted strip carrying a
+            duplicate sound toggle and a third copy of the page counter. */}
+        <header className="room-recede pointer-events-none fixed left-0 right-0 top-0 z-50 flex w-full items-start justify-between px-4 pt-[max(10px,env(safe-area-inset-top))] sm:px-6">
+          <div className="pointer-events-auto flex min-w-0 items-center gap-3">
+            <BrandLogo variant="dark" className="h-7 shrink-0 sm:h-8" />
+            <h1
+              className="font-baloo min-w-0 truncate text-sm font-semibold tracking-tight sm:text-base"
+              style={{ color: 'var(--room-ink)' }}
+            >
+              {bookTitle}
+            </h1>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <div className="pointer-events-auto flex shrink-0 items-center gap-2">
             <div
-              className="hidden items-center gap-1.5 rounded-full px-2.5 py-1 lg:flex"
-              style={{
-                border: '1px solid var(--room-chrome-line)',
-                background: 'var(--room-chrome-strong)',
-              }}
-            >
-              <Users className="h-3.5 w-3.5" style={{ color: 'var(--room-ink-soft)' }} aria-hidden />
-              <span
-                className="text-[11px] font-bold tabular-nums"
-                style={{ color: 'var(--room-ink)' }}
-              >
-                {participants.length}
-              </span>
-            </div>
-            {/* The "Secure" badge was decoration competing with the controls that
-                actually do something — the room had 21 visible controls. Dropped. */}
-
-            {/* Timer chip — mobile / when right panel hidden */}
-            <div
-              className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition-all lg:hidden ${remaining <= 2 * 60 ? 'border-red-300 bg-red-50 text-red-700' : 'border-amber-300 bg-amber-50 text-amber-800'}`}
+              className={`room-tap flex items-center gap-1.5 rounded-full px-3 text-xs font-bold tabular-nums transition-colors ${
+                remaining <= 2 * 60 ? 'text-red-700' : ''
+              }`}
               title={
                 role === 'host' && !timerActive
                   ? 'Session timer — starts automatically when connected; tap if you paused it.'
                   : undefined
               }
               onClick={role === 'host' && !timerActive ? handleStartTimer : undefined}
-              style={role === 'host' && !timerActive ? { cursor: 'pointer' } : undefined}
+              style={{
+                background: 'var(--room-chrome-strong)',
+                color: remaining <= 2 * 60 ? undefined : 'var(--room-ink)',
+                cursor: role === 'host' && !timerActive ? 'pointer' : undefined,
+              }}
             >
               <Timer className="h-3.5 w-3.5" aria-hidden />
-              <span className="text-xs font-bold tabular-nums">{fmtTime(remaining)}</span>
+              {fmtTime(remaining)}
             </div>
-
-            {/* The role chip duplicated the "You are the host" card in the rail. */}
 
             <button
               type="button"
-              onClick={sounds.toggleMuted}
-              title={sounds.muted ? 'Turn sounds on' : 'Turn sounds off'}
-              aria-label={sounds.muted ? 'Turn room sounds on' : 'Turn room sounds off'}
-              aria-pressed={!sounds.muted}
-              className="room-tap cursor-pointer rounded-full"
-              style={{ color: 'var(--room-ink-soft)' }}
+              onClick={() => handleEndSession(false)}
+              className="room-tap cursor-pointer gap-1.5 rounded-full px-4 text-[11px] font-bold transition-all active:scale-95"
+              style={{
+                background: 'var(--room-chrome-strong)',
+                color: 'var(--room-ink)',
+              }}
             >
-              {sounds.muted ? (
-                <VolumeX className="h-[18px] w-[18px]" aria-hidden />
-              ) : (
-                <Volume2 className="h-[18px] w-[18px]" aria-hidden />
-              )}
+              <X className="h-3.5 w-3.5" aria-hidden />
+              {role === 'host' ? 'End session' : 'Leave'}
             </button>
-
-            {role === 'host' && inviteToken && (
-              <button
-                type="button"
-                onClick={handleCopyInviteLink}
-                title="Copy invite link"
-                className="room-tap hidden items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-colors sm:flex"
-                style={{
-                  color: 'var(--room-ink)',
-                  border: '1px solid var(--room-chrome-line)',
-                  background: 'var(--room-chrome-strong)',
-                }}
-              >
-                {linkCopied ? <Check className="h-3.5 w-3.5 text-[#7fd89a]" /> : <Link2 className="h-3.5 w-3.5 text-[#ffb955]" />}
-                <span className="hidden md:inline">{linkCopied ? 'Copied' : 'Invite'}</span>
-              </button>
-            )}
-
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setRoomPanelOpen(true)}
-                aria-label="Room panel — video, chat, settings"
-                className="room-tap rounded-full sm:hidden"
-                style={{ color: 'var(--room-ink-soft)' }}
-              >
-                <SlidersHorizontal className="h-5 w-5" />
-              </button>
-              {role === 'host' && (
-                <button
-                  type="button"
-                  onClick={() => setShowTransferModal(true)}
-                  aria-label="Session menu"
-                  className="room-tap hidden rounded-full sm:inline-flex"
-                  style={{ color: 'var(--room-ink-soft)' }}
-                >
-                  <MoreHorizontal className="h-5 w-5" />
-                </button>
-              )}
-              {role === 'host' ? (
-                <button
-                  type="button"
-                  onClick={() => handleEndSession(false)}
-                  className="room-tap cursor-pointer rounded-full bg-[#93000a] px-4 text-[11px] font-bold text-[#ffdad6] transition-all hover:bg-[#93000a]/80 active:scale-95"
-                >
-                  End
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => handleEndSession(false)}
-                  className="room-tap cursor-pointer rounded-full bg-stone-800 px-4 text-[11px] font-bold text-stone-200 transition-all hover:bg-stone-700 active:scale-95"
-                >
-                  Leave
-                </button>
-              )}
-            </div>
           </div>
         </header>
 
@@ -1929,7 +1822,11 @@ function RoomContent({
             </div>
           )}
           {/* ── Main area ────────────────────────────────────────────────────── */}
-          <section className="relative ml-0 flex min-h-0 flex-1 flex-col overflow-hidden pb-[calc(11rem+env(safe-area-inset-bottom,0px))] md:pb-[calc(12rem+env(safe-area-inset-bottom,0px))] md:pr-72">
+          {/* The book now gets the whole stage. The old layout reserved 288px
+              on the right for the participant aside and up to 192px at the
+              bottom for the control dock, which together took roughly a third
+              of the room away from the thing people came to look at. */}
+          <section className="relative ml-0 flex min-h-0 flex-1 flex-col overflow-hidden pb-[calc(3rem+env(safe-area-inset-bottom,0px))] pl-14 sm:pl-16">
             <ConnectionBanner />
             <TimerWarning remaining={remaining} />
 
@@ -2004,307 +1901,158 @@ function RoomContent({
                     </div>
                   )
                 ) : (
-                <TransformWrapper
-                  ref={transformRef}
-                  initialScale={1}
-                  minScale={0.85}
-                  maxScale={2.5}
-                  centerOnInit
-                  wheel={{
-                    step: 0.12,
-                    smoothStep: 0.02,
-                    disabled: false,
-                  }}
-                  pinch={{ disabled: blockTransformPanPinchWhileDrawing }}
-                  panning={{ disabled: blockTransformPanPinchWhileDrawing }}
-                  doubleClick={{ disabled: true }}
-                  onTransformed={scheduleCanvasRecalcAfterTransform}
-                  onInit={scheduleCanvasRecalcAfterTransform}
-                >
-                  {/* The wrapper must clip: with `overflow-visible` a panned or
-                      zoomed spread escapes the stage and gets silently cropped
-                      by an ancestor, which read as the book being cut off at
-                      tablet widths. */}
-                  <TransformComponent
-                    wrapperClass="!w-full !max-w-5xl !overflow-hidden"
-                    contentClass="!w-full flex justify-center"
-                  >
-                    <div
-                      className={`room-book group relative flex w-full max-w-5xl flex-col overflow-hidden ${
-                        loadingPages || pages.length === 0
-                          ? 'min-h-[min(80vh,calc(100dvh-14rem))]'
-                          : ''
-                      }`}
-                    >
-
-                      {loadingPages ? (
-                        <div className="flex flex-1 items-center justify-center bg-stone-100">
-                          <div className="flex flex-col items-center gap-3 text-stone-400">
-                            <Loader2 className="h-12 w-12 animate-spin" />
-                            <span className="text-sm font-medium">Loading book…</span>
-                          </div>
-                        </div>
-                      ) : pages.length === 0 ? (
-                        <div className="flex flex-1 items-center justify-center bg-stone-50">
-                          <div className="flex flex-col items-center gap-3 p-12 text-center text-stone-400">
-                            <Loader2 className="h-12 w-12 animate-spin" />
-                            <p className="font-medium text-stone-500">Loading placeholder book…</p>
-                          </div>
-                        </div>
-                      ) : (
-                        <div
-                          ref={bookMeasureRef}
-                          className="relative box-border flex w-full shrink-0 justify-center overflow-hidden"
-                          style={
-                            bookRect.w < 64 || bookRect.h < 48
-                              ? { minHeight: 240 }
-                              : { height: bookRect.h, maxHeight: bookRect.h }
-                          }
-                        >
-                          {bookRect.w < 64 || bookRect.h < 48 ? (
-                            <div className="flex min-h-[240px] w-full flex-col items-center justify-center bg-white">
-                              <Loader2 className="h-10 w-10 animate-spin text-stone-300" aria-hidden />
-                              <span className="sr-only">Preparing book viewer…</span>
-                            </div>
-                          ) : activeSpread && !isActivityMode ? (
-                            <>
-                              <SpreadBookViewer
-                                spread={activeSpread}
-                                width={bookRect.w}
-                                height={bookRect.h}
-                                transitionKey={clampedSpreadIndex}
-                                coverPages={spreadPageCover}
-                                swipeEnabled={role === 'host' && interactionMode === 'book'}
-                                onSwipePrev={hostFlipPrev}
-                                onSwipeNext={hostFlipNext}
-                              />
-                              <div className="absolute inset-0 z-[15] opacity-100">
-                                <AnnotationCanvas
-                                  ref={canvasRef}
-                                  tool={annTool}
-                                  color={annColor}
-                                  brushSize={annBrush}
-                                  drawingEnabled={drawingEnabled}
-                                  onSync={handleCanvasSync}
-                                />
-                              </div>
-                              {role === 'host' && (
-                                <>
-                                  <button
-                                    type="button"
-                                    aria-label="Previous spread"
-                                    onClick={hostFlipPrev}
-                                    disabled={currentPage <= 0}
-                                    className="group pointer-events-auto absolute left-0 top-1/2 z-20 flex h-[52%] w-14 -translate-y-1/2 cursor-pointer items-center justify-center rounded-r-2xl text-stone-800 opacity-45 transition-opacity hover:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-0 sm:w-16"
-                                  >
-                                    <span className="grid h-11 w-11 place-items-center rounded-full bg-white/95 shadow-md ring-1 ring-stone-400/40 transition-transform group-hover:scale-105">
-                                      <ChevronLeft className="h-6 w-6" aria-hidden />
-                                    </span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    aria-label="Next spread"
-                                    onClick={hostFlipNext}
-                                    disabled={currentPage >= pageCount - 2}
-                                    className="group pointer-events-auto absolute right-0 top-1/2 z-20 flex h-[52%] w-14 -translate-y-1/2 cursor-pointer items-center justify-center rounded-l-2xl text-stone-800 opacity-45 transition-opacity hover:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-0 sm:w-16"
-                                  >
-                                    <span className="grid h-11 w-11 place-items-center rounded-full bg-white/95 shadow-md ring-1 ring-stone-400/40 transition-transform group-hover:scale-105">
-                                      <ChevronRight className="h-6 w-6" aria-hidden />
-                                    </span>
-                                  </button>
-                                </>
-                              )}
-                            </>
-                          ) : null}
-                        </div>
-                      )}
-
-                      <div className="pointer-events-none absolute inset-y-0 left-1/2 z-[5] w-7 -translate-x-1/2 bg-gradient-to-r from-transparent via-black/45 to-transparent opacity-85" />
-
+                <div ref={bookMeasureRef} className="relative flex h-full w-full items-center justify-center">
+                  {loadingPages || pages.length === 0 ? (
+                    <div className="flex flex-col items-center gap-3" style={{ color: 'var(--room-ink-soft)' }}>
+                      <Loader2 className="h-12 w-12 animate-spin" />
+                      <span className="text-sm font-medium">Loading book…</span>
                     </div>
-                  </TransformComponent>
-                </TransformWrapper>
-                )}
-
-                {!isActivityMode && !loadingPages && pages.length > 0 && activeSpread && bookRect.w >= 64 && bookRect.h >= 48 ? (
-                  <div
-                    className="pointer-events-none absolute z-[30]"
-                    style={{
-                      right: `${12 + bookHudOffset.x}px`,
-                      bottom: `${12 + bookHudOffset.y}px`,
-                    }}
-                  >
-                    <div
-                      className="pointer-events-auto flex max-w-[calc(100vw-2rem)] items-center gap-0.5 rounded-full border border-stone-400/55 bg-white/95 py-1 pl-1 pr-1.5 text-stone-800 shadow-[0_8px_30px_rgba(0,0,0,0.35)] backdrop-blur-sm sm:gap-1 sm:py-1.5 sm:pl-1.5 sm:pr-2.5"
-                      role="toolbar"
-                      aria-label="Book page and zoom controls"
-                    >
-                      <button
-                        type="button"
-                        aria-label="Drag to reposition toolbar. Double-click to reset position."
-                        title="Drag to move · Double-click to reset position"
-                        className="room-tap touch-none cursor-grab rounded-full text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-700 active:cursor-grabbing"
-                        onPointerDown={onBookHudGripDown}
-                        onDoubleClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          resetBookHudPosition();
+                  ) : (
+                    <>
+                      <Book3D
+                        pages={pages}
+                        page={leafIndex}
+                        instant={role !== 'host'}
+                        title={bookTitle}
+                        accent={roomTheme.accent}
+                        ink={roomTheme.bookInk}
+                        zoom={bookZoom}
+                        onTurnStateChange={setTurning}
+                        className="h-full w-full"
+                      />
+                      {/* The ink layer stays a flat 2D overlay above the canvas
+                          rather than a texture on the page mesh: annotations are
+                          stored in pixel space and synced verbatim to other
+                          clients, so projecting them onto bending geometry would
+                          change the wire format for everyone. It hides while
+                          paper is moving. */}
+                      <div
+                        className="absolute inset-0 z-[15] transition-opacity duration-200"
+                        style={{
+                          opacity: turning ? 0 : 1,
+                          pointerEvents: turning ? 'none' : 'auto',
                         }}
                       >
-                        <GripVertical className="h-4 w-4 sm:h-[18px] sm:w-[18px]" aria-hidden />
-                      </button>
-                      <span className="max-w-[min(46vw,200px)] truncate px-1 text-center font-karla text-[10px] font-semibold tabular-nums text-stone-600 sm:max-w-[240px] sm:px-1.5 sm:text-xs">
-                        {pages[currentPage + 1]
-                          ? `Pages ${currentPage + 1}–${currentPage + 2} of ${pageCount}`
-                          : `Page ${currentPage + 1} of ${pageCount}`}
-                      </span>
-                      <div className="mx-0.5 h-5 w-px shrink-0 bg-stone-300/80 sm:mx-1" aria-hidden />
-                      <button
-                        type="button"
-                        aria-label="Zoom out"
-                        className="room-tap cursor-pointer rounded-full text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 disabled:opacity-40"
-                        onClick={() => transformRef.current?.zoomOut()}
-                      >
-                        <ZoomOut className="h-4 w-4 sm:h-[18px] sm:w-[18px]" aria-hidden />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="Fit book to view"
-                        title="Fit to view"
-                        className="room-tap cursor-pointer rounded-full text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 disabled:opacity-40"
-                        onClick={() => transformRef.current?.resetTransform(220)}
-                      >
-                        <LayoutGrid className="h-4 w-4 sm:h-[18px] sm:w-[18px]" aria-hidden />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="Zoom in"
-                        className="room-tap cursor-pointer rounded-full text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 disabled:opacity-40"
-                        onClick={() => transformRef.current?.zoomIn()}
-                      >
-                        <ZoomIn className="h-4 w-4 sm:h-[18px] sm:w-[18px]" aria-hidden />
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
+                        <AnnotationCanvas
+                          ref={canvasRef}
+                          tool={annTool}
+                          color={annColor}
+                          brushSize={annBrush}
+                          drawingEnabled={drawingEnabled && !turning}
+                          onSync={handleCanvasSync}
+                        />
+                      </div>
+                      {role === 'host' && (
+                        <>
+                          <button
+                            type="button"
+                            aria-label="Previous page"
+                            onClick={hostFlipPrev}
+                            disabled={currentPage <= 0}
+                            className="room-recede group absolute left-2 top-1/2 z-20 flex -translate-y-1/2 cursor-pointer items-center justify-center transition-opacity disabled:cursor-not-allowed disabled:opacity-0 sm:left-4"
+                          >
+                            <span
+                              className="room-tap grid place-items-center rounded-full transition-transform group-hover:scale-105"
+                              style={{
+                                background: 'var(--room-chrome-strong)',
+                                color: 'var(--room-ink)',
+                                boxShadow: 'var(--elev-1)',
+                              }}
+                            >
+                              <ChevronLeft className="h-6 w-6" aria-hidden />
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Next page"
+                            onClick={hostFlipNext}
+                            disabled={currentPage >= pageCount - 2}
+                            className="room-recede group absolute right-2 top-1/2 z-20 flex -translate-y-1/2 cursor-pointer items-center justify-center transition-opacity disabled:cursor-not-allowed disabled:opacity-0 sm:right-4"
+                          >
+                            <span
+                              className="room-tap grid place-items-center rounded-full transition-transform group-hover:scale-105"
+                              style={{
+                                background: 'var(--room-chrome-strong)',
+                                color: 'var(--room-ink)',
+                                boxShadow: 'var(--elev-1)',
+                              }}
+                            >
+                              <ChevronRight className="h-6 w-6" aria-hidden />
+                            </span>
+                          </button>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
+                )}
+
               </div>
             </div>
           </section>
 
-          {/* Right panel — timer + participants + status (desktop) */}
-          <aside
-            className="room-recede fixed right-0 top-16 z-30 hidden w-72 flex-col gap-4 p-4 pb-24 md:flex"
-            style={{
-              height: 'calc(100dvh - 4rem)',
-              background: 'var(--room-chrome)',
-              borderLeft: '1px solid var(--room-chrome-line)',
-              backdropFilter: 'blur(14px) saturate(1.1)',
-            }}
-          >
-            <SessionTimerRing
-              remaining={remaining}
-              totalSecs={SESSION_DURATION_S}
-              timerActive={timerActive}
-              role={role}
-              onStart={handleStartTimer}
-            />
-            {remaining <= 5 * 60 && timerActive && (
-              <p className="text-center text-[11px] font-semibold text-[#a35a00]">
-                {remaining <= 2 * 60 ? 'Wrapping up soon' : 'Five minutes left'}
-              </p>
-            )}
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <p
-                className="mb-2 shrink-0 text-[10px] font-bold uppercase tracking-widest"
-                style={{ color: 'var(--room-ink-soft)' }}
-              >
-                Participants
-              </p>
-              <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-                <ParticipantList hostIdentity={hostIdentity} />
-              </div>
-            </div>
-            <div className="room-panel-strong shrink-0 p-4">
-              <p className="text-xs font-bold" style={{ color: 'var(--room-accent)' }}>
-                You are the {role === 'host' ? 'host' : 'guest'}
-              </p>
-              <p
-                className="mt-2 text-[11px] leading-relaxed"
-                style={{ color: 'var(--room-ink-soft)' }}
-              >
-                {isActivityMode
-                  ? role === 'host'
-                    ? 'You lead the activities — Reset, Previous and Next control what everyone sees.'
-                    : 'Follow along with the host as they move through the activities.'
-                  : role === 'host'
-                    ? 'You control page turns and the session timer. Guests follow along; they can use Pen mode to draw on the spread.'
-                    : 'Follow the host’s page turns. Use Book mode to focus on the page; tap Pen when you want to doodle.'}
-              </p>
-              {!isActivityMode && activities.length > 0 && role === 'host' && (
-                <button
-                  type="button"
-                  onClick={handleOpenActivities}
-                  className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl py-2.5 text-[11px] font-bold transition-colors"
-                  style={{
-                    background: 'var(--room-accent)',
-                    color: 'var(--room-accent-contrast)',
-                  }}
-                >
-                  <Gamepad2 className="h-4 w-4" />
-                  Activities
-                </button>
-              )}
-            </div>
-          </aside>
+          {/* Activities keep their tool dock — the tools are the point of that
+              screen — so their rail carries only the room-level controls. */}
+          <RoomRail items={isActivityMode ? activityRailItems : railItems} />
+
+          {/* Participants float over the backdrop instead of taking a fixed
+              288px column away from the book on every desktop session. */}
+          <ParticipantStrip>
+            <ParticipantList hostIdentity={hostIdentity} />
+          </ParticipantStrip>
         </main>
 
-        {/* Fixed bottom: unified controls — default bottom-left; drag handle persists position */}
-        <div
-          className="pointer-events-none fixed z-[95] max-w-[calc(100vw-0.75rem)]"
-          style={{
-            left: `calc(0.75rem + ${dockHudOffset.x}px)`,
-            bottom: `calc(1.25rem + ${dockHudOffset.y}px)`,
-          }}
-        >
-          <div className="pointer-events-auto flex items-end gap-2">
-            <button
-              type="button"
-              aria-label="Drag toolbar. Double-click to reset position."
-              title="Drag to move · Double-click to reset position"
-              className="room-tap mb-1 shrink-0 touch-none cursor-grab rounded-full border border-white/15 bg-[#2b2a3f]/92 text-stone-400 shadow-lg backdrop-blur-xl hover:bg-stone-900 hover:text-stone-200 active:cursor-grabbing sm:mb-1.5"
-              onPointerDown={onDockHudGripDown}
-              onDoubleClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                resetDockHudPosition();
-              }}
-            >
-              <GripVertical className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden />
-            </button>
-            <div className="min-w-0 flex-1">
-              <UnifiedBar
-                className="items-start"
-                hideAnnotationTools={isActivityMode}
-                interactionMode={interactionMode}
-                onInteractionModeChange={setInteractionMode}
-                color={annColor}
-                brushSize={annBrush}
-                onColorChange={setAnnColor}
-                onBrushSizeChange={setAnnBrush}
-                onClear={handleClearCanvas}
-                onUndo={() => canvasRef.current?.undo()}
-                onReaction={handleReaction}
-                role={role}
-                participantCount={participants.length}
-                onOpenParticipants={() => { setRoomPanelOpen(true); setActiveTab('video'); }}
-                onOpenActivities={role === 'host' ? handleOpenActivities : undefined}
-                onCopyInvite={role === 'host' && inviteToken ? handleCopyInviteLink : undefined}
-                linkCopied={linkCopied}
-                onEndSession={() => handleEndSession(false)}
-              />
+        {/* Reading mode gets the rail only — the draggable dock stays for
+            activities, where the tool row is the point of the screen rather
+            than something competing with a book. */}
+        {isActivityMode && (
+          <div
+            className="pointer-events-none fixed z-[95] max-w-[calc(100vw-0.75rem)]"
+            style={{
+              left: `calc(0.75rem + ${dockHudOffset.x}px)`,
+              bottom: `calc(1.25rem + ${dockHudOffset.y}px)`,
+            }}
+          >
+            <div className="pointer-events-auto flex items-end gap-2">
+              <button
+                type="button"
+                aria-label="Drag toolbar. Double-click to reset position."
+                title="Drag to move · Double-click to reset position"
+                className="room-tap mb-1 shrink-0 touch-none cursor-grab rounded-full border border-white/15 bg-[#2b2a3f]/92 text-stone-400 shadow-lg backdrop-blur-xl hover:bg-stone-900 hover:text-stone-200 active:cursor-grabbing sm:mb-1.5"
+                onPointerDown={onDockHudGripDown}
+                onDoubleClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  resetDockHudPosition();
+                }}
+              >
+                <GripVertical className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden />
+              </button>
+              <div className="min-w-0 flex-1">
+                <UnifiedBar
+                  className="items-start"
+                  hideAnnotationTools={isActivityMode}
+                  interactionMode={interactionMode}
+                  onInteractionModeChange={setInteractionMode}
+                  color={annColor}
+                  brushSize={annBrush}
+                  onColorChange={setAnnColor}
+                  onBrushSizeChange={setAnnBrush}
+                  onClear={handleClearCanvas}
+                  onUndo={() => canvasRef.current?.undo()}
+                  onReaction={handleReaction}
+                  role={role}
+                  participantCount={participants.length}
+                  onOpenParticipants={() => { setRoomPanelOpen(true); setActiveTab('video'); }}
+                  onOpenActivities={role === 'host' ? handleOpenActivities : undefined}
+                  onCopyInvite={role === 'host' && inviteToken ? handleCopyInviteLink : undefined}
+                  linkCopied={linkCopied}
+                  onEndSession={() => handleEndSession(false)}
+                />
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Reading progress bar */}
         <div className="fixed bottom-0 left-0 w-full h-1 bg-[#353535] z-[60]">

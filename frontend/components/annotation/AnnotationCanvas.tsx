@@ -206,8 +206,6 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
           /**
            * Must be true for stylus / pen: Fabric listens on pointer*; with false it only
            * uses mouse* and many pens never drive free-drawing reliably.
-           * Window-level pan capture from react-zoom-pan-pinch is stopped on the
-           * annotation container while drawing (see effect below).
            */
           enablePointerEvents: true,
           perPixelTargetFind: true,
@@ -215,7 +213,7 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
         });
         fabricRef.current = canvas;
 
-        /** Parent uses CSS transforms (zoom/pan). Refresh offset before Fabric handles the pointer. */
+        /** The stage can be resized or re-laid-out under us. Refresh offset before Fabric handles the pointer. */
         const syncOffset = () => {
           if (typeof canvas.calcOffset === 'function') canvas.calcOffset();
         };
@@ -283,9 +281,10 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
     }, [tool, color, brushSize, drawingEnabled, emitSync]);
 
     /**
-     * react-zoom-pan-pinch attaches `mousedown` on `window` for pan start. Even when
-     * `panning.disabled` is true, `onPanningStart` still runs and can fight Fabric.
-     * After Fabric handles the event on the upper canvas, stop bubbling at this wrapper.
+     * The 3D book sits directly beneath this overlay and registers its own
+     * pointer handlers on its canvas. Once Fabric has handled an event on the
+     * upper canvas, stop it bubbling so a stroke never doubles as an
+     * interaction with the scene behind it.
      */
     useEffect(() => {
       const el = containerRef.current;

@@ -72,6 +72,9 @@
   --room-chrome-strong: rgba(14, 22, 38, 0.86);
   --room-chrome-line: rgba(255, 255, 255, 0.16);
   --room-accent-contrast: #0e1626;
+  /* White clouds at daylight opacity read as grey smears against a night sky,
+     so a dark theme gets a much fainter cloud field. */
+  --room-cloud: rgba(255, 255, 255, 0.06);
 }
 
 /* ── Soft cloud field ──────────────────────────────────────────────────────
@@ -129,54 +132,14 @@
 }
 
 /* ── The book itself ───────────────────────────────────────────────────────
-   A slight tilt plus a two-part shadow (tight contact + wide ambient) is what
-   makes the spread read as a physical object sitting in the space. */
-/* The paper fill is only a backdrop for the page images that sit inside this
-   element — it must never paint over them, so it is applied as a background
-   layer rather than an opaque surface above the content. */
-.room-book {
-  background-color: var(--book-paper);
-  border-radius: var(--r-md);
-  box-shadow: var(--book-shadow);
-  transform: perspective(2400px) rotateY(var(--book-tilt));
-  transform-origin: center center;
-  transition: transform var(--dur-base) var(--ease-calm);
-  isolation: isolate;
-}
+   The book is now rendered in WebGL (components/reading/Book3D), so its paper,
+   shadow, tilt and page-turn all live in the scene rather than in CSS. The
+   `--book-*` tokens above are still read: `--book-paper` tints the generated
+   cover, and BookTheme continues to drive them per book.
 
-.room-book > * {
-  position: relative;
-  z-index: 1;
-}
-
-.room-book-gutter {
-  background: linear-gradient(
-    to right,
-    transparent 0%,
-    var(--book-gutter) 42%,
-    var(--book-gutter) 58%,
-    transparent 100%
-  );
-}
-
-/* ── Page turn ─────────────────────────────────────────────────────────────
-   The outgoing half of the spread swings on the gutter like a real leaf. It
-   also dims as it rotates away, which reads as the page catching the light. */
-@keyframes book-turn-next {
-  0%   { transform: perspective(2200px) rotateY(14deg)  translateX(3%);  filter: brightness(0.9); }
-  55%  { transform: perspective(2200px) rotateY(-3deg)  translateX(-0.5%); filter: brightness(1.02); }
-  100% { transform: perspective(2200px) rotateY(0deg)   translateX(0);   filter: brightness(1); }
-}
-@keyframes book-turn-prev {
-  0%   { transform: perspective(2200px) rotateY(-14deg) translateX(-3%); filter: brightness(0.9); }
-  55%  { transform: perspective(2200px) rotateY(3deg)   translateX(0.5%); filter: brightness(1.02); }
-  100% { transform: perspective(2200px) rotateY(0deg)   translateX(0);   filter: brightness(1); }
-}
-
-/* Reduced motion is handled by skipping the leaf entirely in the component
-   rather than by redefining these keyframes — a second @keyframes block with
-   the same name replaces the original wherever it is declared, which silently
-   disabled the turn for everyone. */
+   The old `.room-book` surface, its gutter gradient and the CSS keyframe turn
+   were removed with the 2D viewer — a transformed, opaque DOM element wrapping
+   the canvas fought the 3D perspective and clipped the page mesh. */
 
 /* ── Activity room ─────────────────────────────────────────────────────────
    The two rooms are deliberately different places. Reading is quiet: a book
@@ -222,10 +185,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .room-book {
-    transform: none;
-    transition: none;
-  }
   .room-recede,
   .room-tap {
     transition: none;

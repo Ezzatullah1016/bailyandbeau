@@ -12,10 +12,20 @@ import type { BookThemeData } from './api';
  *
  * A null theme returns empty style, so the room keeps its default sky look.
  */
+/** Fallbacks mirror the `.room-root` defaults in app/room-tokens.css. */
+const DEFAULT_ACCENT = '#3d3b62';
+const DEFAULT_BOOK_INK = '#fdfbf7';
+
 export function useRoomTheme(theme: BookThemeData | null | undefined) {
   return useMemo(() => {
     if (!theme) {
-      return { style: {} as CSSProperties, backdrop: 'gradient', chrome: 'light' as const };
+      return {
+        style: {} as CSSProperties,
+        backdrop: 'gradient',
+        chrome: 'light' as const,
+        accent: DEFAULT_ACCENT,
+        bookInk: DEFAULT_BOOK_INK,
+      };
     }
 
     const style: Record<string, string> = {};
@@ -54,6 +64,12 @@ export function useRoomTheme(theme: BookThemeData | null | undefined) {
       style: style as CSSProperties,
       backdrop: theme.backdrop_kind,
       chrome: theme.chrome_mode,
+      // The 3D cover is drawn to a 2D canvas, which cannot resolve CSS custom
+      // properties — it needs the resolved colours themselves. Cover lettering
+      // sits on the accent board, so it takes the light paper ink rather than
+      // `theme.ink`, which is tuned for text on the backdrop.
+      accent: theme.accent || DEFAULT_ACCENT,
+      bookInk: DEFAULT_BOOK_INK,
     };
   }, [theme]);
 }
