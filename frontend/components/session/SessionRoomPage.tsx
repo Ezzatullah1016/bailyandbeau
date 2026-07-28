@@ -65,6 +65,7 @@ import {
   Pencil,
   Rocket,
   SlidersHorizontal,
+  Smile,
   Star,
   Timer,
   User,
@@ -355,19 +356,6 @@ function SessionMediaDock() {
 }
 
 /** Wraps AnnotationToolbar and injects LiveKit mic/camera state */
-function UnifiedBar(props: Omit<Parameters<typeof AnnotationToolbar>[0], 'isMicEnabled' | 'isCameraEnabled' | 'onToggleMic' | 'onToggleCamera'>) {
-  const { localParticipant, isMicrophoneEnabled, isCameraEnabled } = useLocalParticipant();
-  return (
-    <AnnotationToolbar
-      {...props}
-      isMicEnabled={isMicrophoneEnabled}
-      isCameraEnabled={isCameraEnabled}
-      onToggleMic={() => localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)}
-      onToggleCamera={() => localParticipant.setCameraEnabled(!isCameraEnabled)}
-    />
-  );
-}
-
 function SessionTimerRing({
   remaining,
   totalSecs,
@@ -515,7 +503,9 @@ function RoomContent({
   mode?: 'reading' | 'activity';
 }) {
   const room = useRoomContext();
-  const { localParticipant } = useLocalParticipant();
+  // Mic and camera state feed the rail directly now that it is the room's only
+  // control surface.
+  const { localParticipant, isMicrophoneEnabled, isCameraEnabled } = useLocalParticipant();
   const router = useRouter();
 
   const isActivityMode = mode === 'activity';
@@ -637,12 +627,6 @@ function RoomContent({
   );
 
   /** Bottom AnnotationToolbar: anchored bottom-left; persisted via sessionStorage. */
-  const dockHudStorageKey = `bb_reading_dock_${sessionId}`;
-  const [dockHudOffset, setDockHudOffset] = useState({ x: 0, y: 0 });
-  const dockHudOffsetRef = useRef(dockHudOffset);
-  dockHudOffsetRef.current = dockHudOffset;
-  const dockHudDragSessionRef = useRef<{ startX: number; startY: number; ox: number; oy: number } | null>(null);
-  const dockHudRestoredRef = useRef(false);
   const readingHudBoundsRef = useRef<HTMLDivElement>(null);
   const [readingHudSize, setReadingHudSize] = useState({ w: 0, h: 0 });
 
@@ -677,87 +661,6 @@ function RoomContent({
     },
     [readingHudSize.w, readingHudSize.h],
   );
-
-  const clampDockHud = useCallback((x: number, y: number) => {
-    if (typeof window === 'undefined') return { x, y };
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const pad = 10;
-    return {
-      x: Math.min(vw - pad - 64, Math.max(-vw * 0.4, x)),
-      y: Math.min(vh - pad - 56, Math.max(-vh * 0.35, y)),
-    };
-  }, []);
-
-  useEffect(() => {
-    if (dockHudRestoredRef.current) return;
-    dockHudRestoredRef.current = true;
-    try {
-      const raw = sessionStorage.getItem(dockHudStorageKey);
-      if (!raw) return;
-      const p = JSON.parse(raw) as { x?: unknown; y?: unknown };
-      if (typeof p.x === 'number' && typeof p.y === 'number') {
-        const next = clampDockHud(p.x, p.y);
-        dockHudOffsetRef.current = next;
-        setDockHudOffset(next);
-      }
-    } catch {
-      /* ok */
-    }
-  }, [dockHudStorageKey, clampDockHud]);
-
-  useEffect(() => {
-    setDockHudOffset((o) => {
-      const c = clampDockHud(o.x, o.y);
-      dockHudOffsetRef.current = c;
-      return c;
-    });
-  }, [clampDockHud]);
-
-  const onDockHudGripDown = useCallback(
-    (e: React.PointerEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.pointerType === 'mouse' && e.button !== 0) return;
-      const o = dockHudOffsetRef.current;
-      dockHudDragSessionRef.current = { startX: e.clientX, startY: e.clientY, ox: o.x, oy: o.y };
-      const move = (ev: PointerEvent) => {
-        const s = dockHudDragSessionRef.current;
-        if (!s) return;
-        const dx = ev.clientX - s.startX;
-        const dy = s.startY - ev.clientY;
-        const next = clampDockHud(s.ox + dx, s.oy + dy);
-        dockHudOffsetRef.current = next;
-        setDockHudOffset(next);
-      };
-      const up = () => {
-        window.removeEventListener('pointermove', move);
-        window.removeEventListener('pointerup', up);
-        window.removeEventListener('pointercancel', up);
-        dockHudDragSessionRef.current = null;
-        try {
-          sessionStorage.setItem(dockHudStorageKey, JSON.stringify(dockHudOffsetRef.current));
-        } catch {
-          /* ok */
-        }
-      };
-      window.addEventListener('pointermove', move);
-      window.addEventListener('pointerup', up);
-      window.addEventListener('pointercancel', up);
-    },
-    [dockHudStorageKey, clampDockHud],
-  );
-
-  const resetDockHudPosition = useCallback(() => {
-    const z = { x: 0, y: 0 };
-    dockHudOffsetRef.current = z;
-    setDockHudOffset(z);
-    try {
-      sessionStorage.removeItem(dockHudStorageKey);
-    } catch {
-      /* ok */
-    }
-  }, [dockHudStorageKey]);
 
   // ── Reactions overlay ─────────────────────────────────────────────────────
   const [reactions, setReactions] = useState<{ id: number; emoji: string; x: number }[]>([]);
@@ -1375,72 +1278,15 @@ function RoomContent({
    * controls to a host across four separate regions, which is what made it read
    * as a meeting tool rather than a book.
    */
-  const railItems: RailItem[] = useMemo(
-    () => [
-      {
-        icon: BookOpen,
-        label: 'Back to library',
-        onClick: () => router.push('/dashboard/library'),
-      },
-      {
-        icon: Pencil,
-        label: drawingEnabled ? 'Stop drawing' : 'Draw on the page',
-        active: drawingEnabled,
-        onClick: () => setInteractionMode(drawingEnabled ? 'book' : 'pen'),
-      },
-      {
-        icon: ZoomIn,
-        label: 'Zoom in',
-        onClick: () => setBookZoom((z) => Math.min(2.5, z + 0.2)),
-      },
-      {
-        icon: ZoomOut,
-        label: 'Zoom out',
-        onClick: () => setBookZoom((z) => Math.max(0.6, z - 0.2)),
-      },
-      {
-        icon: LayoutGrid,
-        label: 'Fit book to view',
-        onClick: () => setBookZoom(1),
-      },
-      {
-        icon: sounds.muted ? VolumeX : Volume2,
-        label: sounds.muted ? 'Turn sound on' : 'Turn sound off',
-        onClick: sounds.toggleMuted,
-      },
-      {
-        icon: MoreHorizontal,
-        label: 'More controls',
-        onClick: () => setRoomPanelOpen(true),
-      },
-    ],
-    [drawingEnabled, router, sounds.muted, sounds.toggleMuted],
-  );
-
-  /** Room-level controls only — the activity's own tools live in its dock. */
-  const activityRailItems: RailItem[] = useMemo(
-    () => [
-      {
-        icon: BookOpen,
-        label: 'Back to library',
-        onClick: () => router.push('/dashboard/library'),
-      },
-      {
-        icon: sounds.muted ? VolumeX : Volume2,
-        label: sounds.muted ? 'Turn sound on' : 'Turn sound off',
-        onClick: sounds.toggleMuted,
-      },
-      {
-        icon: MoreHorizontal,
-        label: 'More controls',
-        onClick: () => setRoomPanelOpen(true),
-      },
-    ],
-    [router, sounds.muted, sounds.toggleMuted],
-  );
 
   /** Open the in-room activity modal (reuses the live LiveKit connection — no navigation, no timer reset).
    *  Host broadcasts ACTIVITY_OPEN so guests follow, and persists the open state to the session snapshot. */
+  // Stable handles for the rail. Both handlers close over state that changes
+  // constantly, so they are redefined every render; the refs let the memoised
+  // rail call the current version without listing them as dependencies.
+  const endSessionRef = useRef(handleEndSession);
+  endSessionRef.current = handleEndSession;
+
   const handleOpenActivities = () => {
     if (activities.length === 0) return;
     setActivityOpen(true);
@@ -1463,6 +1309,122 @@ function RoomContent({
       ).catch(() => {});
     }
   };
+
+  const openActivitiesRef = useRef(handleOpenActivities);
+  openActivitiesRef.current = handleOpenActivities;
+
+  const railItems: RailItem[] = useMemo(
+    () => [
+      {
+        icon: BookOpen,
+        label: 'Back to library',
+        onClick: () => router.push('/dashboard/library'),
+      },
+
+      // Reading tools. Hidden during an activity, which has its own canvas.
+      {
+        icon: Pencil,
+        label: drawingEnabled ? 'Stop drawing' : 'Draw on the page',
+        active: drawingEnabled,
+        hidden: isActivityMode,
+        separatorBefore: true,
+        onClick: () => setInteractionMode(drawingEnabled ? 'book' : 'pen'),
+      },
+      {
+        icon: ZoomIn,
+        label: 'Zoom in',
+        hidden: isActivityMode,
+        onClick: () => setBookZoom((z) => Math.min(2.5, z + 0.2)),
+      },
+      {
+        icon: ZoomOut,
+        label: 'Zoom out',
+        hidden: isActivityMode,
+        onClick: () => setBookZoom((z) => Math.max(0.6, z - 0.2)),
+      },
+      {
+        icon: LayoutGrid,
+        label: 'Fit book to view',
+        hidden: isActivityMode,
+        onClick: () => setBookZoom(1),
+      },
+
+      // Presence: your own mic and camera, then who else is here.
+      {
+        icon: isMicrophoneEnabled ? Mic : MicOff,
+        label: isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone',
+        active: !isMicrophoneEnabled,
+        separatorBefore: true,
+        onClick: () => localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled),
+      },
+      {
+        icon: isCameraEnabled ? Video : VideoOff,
+        label: isCameraEnabled ? 'Turn camera off' : 'Turn camera on',
+        active: !isCameraEnabled,
+        onClick: () => localParticipant.setCameraEnabled(!isCameraEnabled),
+      },
+      {
+        icon: Users,
+        label: 'People in this session',
+        badge: participants.length,
+        onClick: () => {
+          setActiveTab('video');
+          setRoomPanelOpen(true);
+        },
+      },
+      {
+        icon: Smile,
+        label: 'Send a reaction',
+        onClick: () => {
+          setActiveTab('video');
+          setRoomPanelOpen(true);
+        },
+      },
+
+      // Room-level actions.
+      {
+        icon: Gamepad2,
+        label: 'Activities',
+        hidden: isActivityMode || role !== 'host' || activities.length === 0,
+        separatorBefore: true,
+        onClick: () => openActivitiesRef.current(),
+      },
+      {
+        icon: sounds.muted ? VolumeX : Volume2,
+        label: sounds.muted ? 'Turn sound on' : 'Turn sound off',
+        separatorBefore: isActivityMode || role !== 'host' || activities.length === 0,
+        onClick: sounds.toggleMuted,
+      },
+      {
+        icon: MoreHorizontal,
+        label: 'More controls',
+        onClick: () => setRoomPanelOpen(true),
+      },
+      {
+        icon: Phone,
+        label: role === 'host' ? 'End session' : 'Leave session',
+        danger: true,
+        separatorBefore: true,
+        onClick: () => endSessionRef.current(false),
+      },
+    ],
+    // The two handlers are reached through refs: both are redefined on every
+    // render, so depending on them directly would rebuild the whole rail each
+    // time and defeat this useMemo.
+    [
+      drawingEnabled,
+      router,
+      sounds.muted,
+      sounds.toggleMuted,
+      isActivityMode,
+      isMicrophoneEnabled,
+      isCameraEnabled,
+      localParticipant,
+      participants.length,
+      role,
+      activities.length,
+    ],
+  );
 
   // Activity-mode picker: host chooses an activity; broadcast to guests.
   const handlePickActivity = (pickIndex: number) => {
@@ -1993,7 +1955,7 @@ function RoomContent({
 
           {/* Activities keep their tool dock — the tools are the point of that
               screen — so their rail carries only the room-level controls. */}
-          <RoomRail items={isActivityMode ? activityRailItems : railItems} />
+          <RoomRail items={railItems} />
 
           {/* Participants float over the backdrop instead of taking a fixed
               288px column away from the book on every desktop session. */}
@@ -2001,58 +1963,6 @@ function RoomContent({
             <ParticipantList hostIdentity={hostIdentity} />
           </ParticipantStrip>
         </main>
-
-        {/* Reading mode gets the rail only — the draggable dock stays for
-            activities, where the tool row is the point of the screen rather
-            than something competing with a book. */}
-        {isActivityMode && (
-          <div
-            className="pointer-events-none fixed z-[95] max-w-[calc(100vw-0.75rem)]"
-            style={{
-              left: `calc(0.75rem + ${dockHudOffset.x}px)`,
-              bottom: `calc(1.25rem + ${dockHudOffset.y}px)`,
-            }}
-          >
-            <div className="pointer-events-auto flex items-end gap-2">
-              <button
-                type="button"
-                aria-label="Drag toolbar. Double-click to reset position."
-                title="Drag to move · Double-click to reset position"
-                className="room-tap mb-1 shrink-0 touch-none cursor-grab rounded-full border border-white/15 bg-[#2b2a3f]/92 text-stone-400 shadow-lg backdrop-blur-xl hover:bg-stone-900 hover:text-stone-200 active:cursor-grabbing sm:mb-1.5"
-                onPointerDown={onDockHudGripDown}
-                onDoubleClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  resetDockHudPosition();
-                }}
-              >
-                <GripVertical className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden />
-              </button>
-              <div className="min-w-0 flex-1">
-                <UnifiedBar
-                  className="items-start"
-                  hideAnnotationTools={isActivityMode}
-                  interactionMode={interactionMode}
-                  onInteractionModeChange={setInteractionMode}
-                  color={annColor}
-                  brushSize={annBrush}
-                  onColorChange={setAnnColor}
-                  onBrushSizeChange={setAnnBrush}
-                  onClear={handleClearCanvas}
-                  onUndo={() => canvasRef.current?.undo()}
-                  onReaction={handleReaction}
-                  role={role}
-                  participantCount={participants.length}
-                  onOpenParticipants={() => { setRoomPanelOpen(true); setActiveTab('video'); }}
-                  onOpenActivities={role === 'host' ? handleOpenActivities : undefined}
-                  onCopyInvite={role === 'host' && inviteToken ? handleCopyInviteLink : undefined}
-                  linkCopied={linkCopied}
-                  onEndSession={() => handleEndSession(false)}
-                />
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Reading progress bar */}
         <div className="fixed bottom-0 left-0 w-full h-1 bg-[#353535] z-[60]">
@@ -2144,7 +2054,8 @@ export function SessionRoomPage({ mode = 'reading' }: { mode?: 'reading' | 'acti
     const sid = sessionId ?? id;
     if (!sid) return;
     const storedId = typeof localStorage !== 'undefined' ? localStorage.getItem(`bb_participant_${sid}`) : null;
-    if (!storedId) { router.replace('/'); return; }
+    // Send them somewhere they can act, not to the root redirect.
+    if (!storedId) { router.replace('/dashboard'); return; }
     getGuestToken(sid, storedId).then((data) => {
       setSession({
         sessionId: data.session_id,
@@ -2154,7 +2065,7 @@ export function SessionRoomPage({ mode = 'reading' }: { mode?: 'reading' | 'acti
         livekitUrl: data.livekit_url,
         participantId: storedId,
       });
-    }).catch(() => router.replace('/'));
+    }).catch(() => router.replace('/dashboard'));
   }, [token, sessionId, id, router, setSession]);
 
   if (!connectToken || !roomName || !livekitUrl || !bookId) {

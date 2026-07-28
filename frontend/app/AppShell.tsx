@@ -4,11 +4,24 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-const FULLSCREEN_PREFIXES = ['/session', '/invite', '/dashboard', '/onboarding', '/login'];
+/**
+ * Routes that render without the marketing shell. `/` is included because it is
+ * now a redirect rather than a page — showing a topbar with Dashboard/Login
+ * links for the split second before it navigates just flashes chrome at people.
+ */
+const FULLSCREEN_PREFIXES = [
+  '/session',
+  '/invite',
+  '/dashboard',
+  '/onboarding',
+  '/login',
+];
 
 function AppShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isFullscreen = FULLSCREEN_PREFIXES.some((prefix) => pathname?.startsWith(prefix));
+  // `/` is matched exactly — a `startsWith` test would swallow every route.
+  const isFullscreen =
+    pathname === '/' || FULLSCREEN_PREFIXES.some((prefix) => pathname?.startsWith(prefix));
 
   if (isFullscreen) {
     // Session / invite pages are full-screen — skip the shell and topbar entirely
