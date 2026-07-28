@@ -43,7 +43,10 @@ export function ParticipantStrip({ children }: { children: ReactNode }) {
         right: '1rem',
         bottom: '2rem',
         transform: `translate(${offset.x}px, ${offset.y}px)`,
-        maxWidth: 'min(60vw, 320px)',
+        // Tiles are now 1:1 squares sized by their container, so the strip has
+        // to give them an explicit width — previously they were fixed-size
+        // circles that carried their own dimensions.
+        width: 'min(46vw, 168px)',
       }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}

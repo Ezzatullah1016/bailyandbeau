@@ -225,48 +225,58 @@ function ConnectionBanner() {
 // ─── Participant tile ─────────────────────────────────────────────────────────
 
 /**
- * A round presence bubble rather than a rectangular video tile. Rectangles with
- * a name bar and a role chip are the visual signature of a meeting app; the
- * people in a reading session should read as sitting alongside the book, not as
- * a conference grid. The name is revealed on hover instead of always-on.
+ * A 1:1 rounded square, sized by its container.
+ *
+ * This was a fixed-size round bubble with the name revealed only on hover. In a
+ * grid that wasted space (a circle inscribed in its cell loses ~21% of it) and
+ * cropped faces tightly, and a name you must hover to read is no use on a touch
+ * screen. A square fills its cell, and the name sits on a gradient strip over
+ * the video so it is always legible without a separate row.
  */
 function ParticipantTile({ identity, label, isHost }: { identity: string; label: string; isHost: boolean }) {
   const tracks = useTracks([Track.Source.Camera]);
   const track = tracks.find((t) => t.participant.identity === identity);
 
   return (
-    <div className="group relative flex flex-col items-center gap-1.5">
-      <div
-        className="relative h-[84px] w-[84px] overflow-hidden rounded-full sm:h-24 sm:w-24"
-        style={{
-          background: 'var(--room-chrome-strong)',
-          border: '2px solid var(--room-chrome-line)',
-          boxShadow: 'var(--elev-1)',
-        }}
-      >
-        {track ? (
-          <VideoTrack trackRef={track} className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <User className="h-8 w-8" style={{ color: 'var(--room-ink-soft)' }} aria-hidden />
-          </div>
+    <div
+      className="relative aspect-square w-full min-w-0 overflow-hidden rounded-2xl"
+      style={{
+        background: 'var(--room-chrome-strong)',
+        border: '1px solid var(--room-chrome-line)',
+        boxShadow: 'var(--elev-1)',
+      }}
+    >
+      {track ? (
+        <VideoTrack trackRef={track} className="h-full w-full object-cover" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center">
+          <User className="h-8 w-8" style={{ color: 'var(--room-ink-soft)' }} aria-hidden />
+        </div>
+      )}
+
+      <div className="absolute inset-x-0 bottom-0 flex items-center gap-1 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-4">
+        <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-white">
+          {label}
+        </span>
+        {isHost && (
+          <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-white/85">
+            Host
+          </span>
         )}
       </div>
-      <span
-        className="max-w-[92px] truncate text-[11px] font-semibold opacity-0 transition-opacity duration-200 group-hover:opacity-100"
-        style={{ color: 'var(--room-ink-soft)' }}
-      >
-        {label}
-        {isHost ? ' · Host' : ''}
-      </span>
     </div>
   );
 }
 
+/**
+ * Two per row, which is what fits legibly at the panel's width. `min-w-0` on the
+ * children is load-bearing: without it a long participant name forces the grid
+ * wider than its container and the panel grows a horizontal scrollbar.
+ */
 function ParticipantList({ hostIdentity }: { hostIdentity?: string }) {
   const participants = useParticipants();
   return (
-    <div className="flex flex-wrap justify-center gap-4">
+    <div className="grid w-full grid-cols-2 gap-2">
       {participants.map((p) => (
         <ParticipantTile
           key={p.identity}
@@ -279,26 +289,6 @@ function ParticipantList({ hostIdentity }: { hostIdentity?: string }) {
   );
 }
 
-function ParticipantRoster({ hostIdentity }: { hostIdentity?: string }) {
-  const participants = useParticipants();
-  return (
-    <div className="space-y-2">
-      {participants.map((p) => (
-        <div key={p.identity} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-stone-800/40">
-          <div className="w-8 h-8 rounded-full bg-[#764f84]/40 flex items-center justify-center">
-            <User className="w-4 h-4 text-white/80" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-stone-100 truncate">{p.name || p.identity}</p>
-            {p.identity === hostIdentity && (
-              <p className="text-[10px] text-[#f0c75e] uppercase tracking-wider">Host</p>
-            )}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 // ─── Local controls ───────────────────────────────────────────────────────────
 
@@ -578,7 +568,7 @@ function RoomContent({
     soundedSpreadRef.current = clampedSpreadIndex;
     sounds.play('page-turn');
   }, [clampedSpreadIndex, sounds]);
-  const [activeTab, setActiveTab] = useState<'video' | 'tools' | 'participants' | 'chat' | 'settings'>('video');
+  const [activeTab, setActiveTab] = useState<'video' | 'tools' | 'chat' | 'settings'>('video');
   const [roomPanelOpen, setRoomPanelOpen] = useState(false);
 
   // ── Timer ─────────────────────────────────────────────────────────────────
@@ -1242,10 +1232,11 @@ function RoomContent({
   const coverUrl = pages[0]?.image_url;
   const progressPct = (Math.min(currentPage + 2, pageCount) / pageCount) * 100;
 
+  // "Video" and "People" were two tabs showing the same participants — one as
+  // camera tiles, one as a text roster. Now a single People tab of video tiles.
   const tabs = [
-    { id: 'video' as const, label: 'Video', hint: 'Cameras' },
+    { id: 'video' as const, label: 'People', hint: 'Who is here' },
     ...(isActivityMode ? [] : [{ id: 'tools' as const, label: 'Tools', hint: 'Draw' }]),
-    { id: 'participants' as const, label: 'People', hint: 'Who is here' },
     { id: 'chat' as const, label: 'Chat', hint: 'Messages' },
     { id: 'settings' as const, label: 'Settings', hint: 'Timer & host' },
   ];
@@ -1590,26 +1581,35 @@ function RoomContent({
 
           {roomPanelOpen && (
             <div
-              className="fixed bottom-0 left-0 right-0 z-[70] flex max-h-[min(88dvh,640px)] flex-col rounded-t-3xl border border-white/10 bg-stone-900/98 shadow-[0_-20px_60px_rgba(0,0,0,0.45)] backdrop-blur-2xl sm:left-auto sm:right-4 sm:top-24 sm:bottom-auto sm:max-h-[calc(100vh-7rem)] sm:w-[min(100vw-2rem,380px)] sm:rounded-3xl"
+              className="room-panel-strong fixed bottom-0 left-0 right-0 z-[70] flex max-h-[min(88dvh,640px)] flex-col overflow-hidden rounded-t-3xl sm:left-auto sm:right-4 sm:top-24 sm:bottom-auto sm:max-h-[calc(100vh-7rem)] sm:w-[min(100vw-2rem,380px)] sm:rounded-3xl"
               role="dialog"
               aria-label="Reading session room"
             >
-              <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-3">
-                <div>
-                  <h3 className="text-base font-bold text-stone-100">Session</h3>
-                  <p className="text-[11px] text-stone-400">Video, chat &amp; settings</p>
-                </div>
+              <div
+                className="flex shrink-0 items-center justify-between px-4 py-3"
+                style={{ borderBottom: '1px solid var(--room-chrome-line)' }}
+              >
+                <h3 className="text-base font-bold" style={{ color: 'var(--room-ink)' }}>
+                  Session
+                </h3>
                 <button
                   type="button"
                   onClick={() => setRoomPanelOpen(false)}
                   aria-label="Close"
-                  className="flex h-10 w-10 items-center justify-center rounded-xl text-stone-400 transition-colors hover:bg-stone-800 hover:text-white"
+                  className="room-tap rounded-xl transition-colors"
+                  style={{ color: 'var(--room-ink-soft)' }}
                 >
                   <X className="h-5 w-5" />
                 </button>
               </div>
 
-              <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-white/5 px-3 py-2">
+              {/* `flex-wrap`, not `overflow-x-auto`: the scrolling strip put a
+                  horizontal scrollbar across the panel whenever the tabs were a
+                  few pixels wider than it. */}
+              <nav
+                className="flex shrink-0 flex-wrap gap-1 px-3 py-2"
+                style={{ borderBottom: '1px solid var(--room-chrome-line)' }}
+              >
                 {tabs.map((tab) => {
                   const TabIcon = TAB_ICONS[tab.id];
                   return (
@@ -1617,7 +1617,12 @@ function RoomContent({
                       key={tab.id}
                       type="button"
                       onClick={() => setActiveTab(tab.id)}
-                      className={`flex min-w-0 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold transition-all ${activeTab === tab.id ? 'bg-[#764f84]/45 text-white ring-1 ring-[#ffb955]/35' : 'text-stone-400 hover:bg-stone-800/50 hover:text-stone-200'}`}
+                      className="flex min-w-0 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold transition-colors"
+                      style={
+                        activeTab === tab.id
+                          ? { background: 'var(--room-accent)', color: 'var(--room-accent-contrast)' }
+                          : { color: 'var(--room-ink-soft)' }
+                      }
                     >
                       <TabIcon className="h-4 w-4 shrink-0" aria-hidden />
                       <span className="truncate">{tab.label}</span>
@@ -1626,10 +1631,8 @@ function RoomContent({
                 })}
               </nav>
 
-              <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4">
                 {activeTab === 'video' && <ParticipantList hostIdentity={hostIdentity} />}
-
-                {activeTab === 'participants' && <ParticipantRoster hostIdentity={hostIdentity} />}
 
                 {activeTab === 'tools' && !isActivityMode && (
                   <div className="space-y-4 px-1">
@@ -1767,20 +1770,6 @@ function RoomContent({
                 )}
               </div>
 
-              <div className="shrink-0 space-y-3 border-t border-stone-700/50 p-4">
-                <div className="flex items-center justify-between">
-                  <LocalControls />
-                </div>
-                {role === 'host' && (
-                  <button
-                    type="button"
-                    onClick={() => handleEndSession(false)}
-                    className="font-baloo w-full rounded-full bg-gradient-to-br from-[#3d3b62] to-[#764f84] py-3 text-sm font-bold text-white shadow-xl transition-all active:scale-95"
-                  >
-                    End session
-                  </button>
-                )}
-              </div>
             </div>
           )}
           {/* ── Main area ────────────────────────────────────────────────────── */}

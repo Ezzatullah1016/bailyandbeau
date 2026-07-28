@@ -32,7 +32,12 @@ export function RoomRail({ items }: { items: RailItem[] }) {
   return (
     <nav
       aria-label="Session controls"
-      className="room-recede pointer-events-auto absolute left-0 top-1/2 z-40 flex -translate-y-1/2 flex-col items-center gap-0.5 py-2 pl-1 sm:pl-2"
+      /* A host sees ~12 items, which at the 44px minimum tap size is ~550px of
+         rail. That fits a 900px viewport but not a 640px laptop, so the rail
+         scrolls rather than clipping its last item — which would be the way out
+         of the session. The scrollbar itself is hidden; it would read as chrome
+         on chrome. */
+      className="room-recede pointer-events-auto absolute left-0 top-1/2 z-40 flex max-h-[calc(100dvh-5rem)] -translate-y-1/2 flex-col items-center gap-0.5 overflow-y-auto overflow-x-hidden py-2 pl-1 [scrollbar-width:none] sm:pl-2 [&::-webkit-scrollbar]:hidden"
     >
       {visible.map(
         ({ icon: Icon, label, onClick, active, disabled, separatorBefore, badge, danger }) => (
