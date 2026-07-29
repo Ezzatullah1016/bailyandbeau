@@ -52,20 +52,27 @@ export function ParticipantStrip({
 
   return (
     <div
-      className="room-recede pointer-events-auto absolute z-40 flex cursor-grab touch-none flex-wrap items-end justify-end gap-2 active:cursor-grabbing"
+      /* `fixed`, not `absolute`: the strip renders inside <main>, which carries
+         ~80px of top padding for the header, so an absolute `top: 50px` would
+         land ~130px down the viewport. Fixed measures against the viewport, so
+         the offsets below mean what they say. */
+      className="room-recede pointer-events-auto fixed z-40 flex cursor-grab touch-none flex-wrap items-start justify-end gap-2 active:cursor-grabbing"
       style={{
-        right: '1rem',
-        bottom: '2rem',
+        // Docked top-right: 20px in from the right edge, 50px down from the top.
+        right: '20px',
+        top: '50px',
         transform: `translate(${offset.x}px, ${offset.y}px)`,
         // Tiles are 1:1 squares sized by their container, so the strip supplies
-        // the width. At 168px a two-column grid gave ~80px faces — too small to
-        // read expression on, which is most of the point of having video in a
-        // reading session at all. These give ~245px tiles either way: 3x.
+        // the width. The vw ceilings keep the strip off the opposite edge on
+        // narrow screens, so they scale with the px values rather than clamping
+        // them back down.
         width: compact
-          ? 'min(28vw, 150px)'
+          ? 'min(56vw, 300px)'
           : count <= 1
-            ? 'min(46vw, 245px)'
-            : 'min(72vw, 500px)',
+            ? 'min(80vw, 490px)'
+            : 'min(92vw, 1000px)',
+        // Never taller than the space below the 50px offset.
+        maxHeight: 'calc(100dvh - 70px)',
       }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
