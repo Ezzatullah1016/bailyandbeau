@@ -224,6 +224,14 @@ function ConnectionBanner() {
 
 // ─── Participant tile ─────────────────────────────────────────────────────────
 
+/** Initials from a display name, for the placeholder when video is off. */
+function participantInitials(label: string): string {
+  const parts = label.trim().split(/[\s._-]+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+}
+
 /**
  * A 1:1 rounded square, sized by its container.
  *
@@ -232,10 +240,23 @@ function ConnectionBanner() {
  * cropped faces tightly, and a name you must hover to read is no use on a touch
  * screen. A square fills its cell, and the name sits on a gradient strip over
  * the video so it is always legible without a separate row.
+ *
+ * With the camera off it shows initials on the room accent rather than a
+ * generic person glyph, so several people with cameras off are still tellable
+ * apart. A muted badge sits in the corner, because whether someone can hear you
+ * is the thing people check most often in a call.
  */
 function ParticipantTile({ identity, label, isHost }: { identity: string; label: string; isHost: boolean }) {
-  const tracks = useTracks([Track.Source.Camera]);
-  const track = tracks.find((t) => t.participant.identity === identity);
+  const cameraTracks = useTracks([Track.Source.Camera]);
+  const micTracks = useTracks([Track.Source.Microphone]);
+
+  const track = cameraTracks.find((t) => t.participant.identity === identity);
+  const cameraOn = Boolean(track && !track.publication?.isMuted);
+
+  const micPub = micTracks.find((t) => t.participant.identity === identity);
+  // No publication at all also means no audio reaching anyone, so it reads as
+  // muted rather than as unknown.
+  const micOn = Boolean(micPub && !micPub.publication?.isMuted);
 
   return (
     <div
@@ -246,13 +267,38 @@ function ParticipantTile({ identity, label, isHost }: { identity: string; label:
         boxShadow: 'var(--elev-1)',
       }}
     >
-      {track ? (
+      {cameraOn && track ? (
         <VideoTrack trackRef={track} className="h-full w-full object-cover" />
       ) : (
-        <div className="flex h-full w-full items-center justify-center">
-          <User className="h-8 w-8" style={{ color: 'var(--room-ink-soft)' }} aria-hidden />
+        <div
+          className="flex h-full w-full items-center justify-center"
+          style={{ background: 'var(--room-accent)' }}
+        >
+          <span
+            className="text-2xl font-bold tracking-wide"
+            style={{ color: 'var(--room-accent-contrast)' }}
+            aria-hidden
+          >
+            {participantInitials(label)}
+          </span>
         </div>
       )}
+
+      <div
+        className="absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full"
+        style={{
+          background: micOn ? 'rgba(0,0,0,0.45)' : '#c0392b',
+          color: '#ffffff',
+        }}
+        title={micOn ? `${label} is unmuted` : `${label} is muted`}
+      >
+        {micOn ? (
+          <Mic className="h-3.5 w-3.5" aria-hidden />
+        ) : (
+          <MicOff className="h-3.5 w-3.5" aria-hidden />
+        )}
+        <span className="sr-only">{micOn ? 'Microphone on' : 'Microphone muted'}</span>
+      </div>
 
       <div className="absolute inset-x-0 bottom-0 flex items-center gap-1 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-4">
         <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-white">
@@ -275,8 +321,11 @@ function ParticipantTile({ identity, label, isHost }: { identity: string; label:
  */
 function ParticipantList({ hostIdentity }: { hostIdentity?: string }) {
   const participants = useParticipants();
+  // A lone participant gets the full width rather than half of a two-column
+  // grid with an empty cell beside them.
+  const columns = participants.length <= 1 ? 'grid-cols-1' : 'grid-cols-2';
   return (
-    <div className="grid w-full grid-cols-2 gap-2">
+    <div className={`grid w-full gap-2 ${columns}`}>
       {participants.map((p) => (
         <ParticipantTile
           key={p.identity}
@@ -1836,7 +1885,7 @@ function RoomContent({
 
           {/* Participants float over the backdrop instead of taking a fixed
               288px column away from the book on every desktop session. */}
-          <ParticipantStrip>
+          <ParticipantStrip count={participants.length}>
             <ParticipantList hostIdentity={hostIdentity} />
           </ParticipantStrip>
         </main>

@@ -11,7 +11,14 @@ import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNod
  * costs nothing: the book gets the full stage, and the faces stay visible.
  * They can be dragged if they ever sit over something the reader wants to see.
  */
-export function ParticipantStrip({ children }: { children: ReactNode }) {
+export function ParticipantStrip({
+  children,
+  count = 1,
+}: {
+  children: ReactNode;
+  /** Drives the strip width so one face is not blown up to the size of two. */
+  count?: number;
+}) {
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const dragRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
 
@@ -43,10 +50,11 @@ export function ParticipantStrip({ children }: { children: ReactNode }) {
         right: '1rem',
         bottom: '2rem',
         transform: `translate(${offset.x}px, ${offset.y}px)`,
-        // Tiles are now 1:1 squares sized by their container, so the strip has
-        // to give them an explicit width — previously they were fixed-size
-        // circles that carried their own dimensions.
-        width: 'min(46vw, 168px)',
+        // Tiles are 1:1 squares sized by their container, so the strip supplies
+        // the width. At 168px a two-column grid gave ~80px faces — too small to
+        // read expression on, which is most of the point of having video in a
+        // reading session at all. These give ~245px tiles either way: 3x.
+        width: count <= 1 ? 'min(46vw, 245px)' : 'min(72vw, 500px)',
       }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
