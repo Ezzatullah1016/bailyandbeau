@@ -67,10 +67,13 @@ export function ParticipantStrip({
         // narrow screens, so they scale with the px values rather than clamping
         // them back down.
         width: compact
-          ? 'min(56vw, 300px)'
+          ? 'min(28vw, 150px)'
           : count <= 1
-            ? 'min(80vw, 490px)'
-            : 'min(92vw, 1000px)',
+            ? 'min(40vw, 245px)'
+            // Two-up is a 2-column grid, so this width is halved per tile. The
+            // vw ceiling is deliberately looser than the solo case: at 46vw a
+            // phone gave ~86px faces, too small to read expression on.
+            : 'min(80vw, 500px)',
         // Never taller than the space below the 50px offset.
         maxHeight: 'calc(100dvh - 70px)',
       }}
