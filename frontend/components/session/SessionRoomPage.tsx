@@ -1777,10 +1777,10 @@ function RoomContent({
                       {activityElement}
                     </div>
                   ) : (
-                    // The picker owns its own scroll so its heading can stay
-                    // pinned; the stage centres content, which would otherwise
-                    // push the heading off-screen on short viewports.
-                    <div className="absolute inset-0 overflow-y-auto overscroll-contain">
+                    // The picker is a single carousel row now, so it no longer
+                    // needs its own vertical scroller — one would also fight the
+                    // horizontal rail inside it.
+                    <div className="flex w-full items-center justify-center">
                       <ActivityPicker
                         activities={activities}
                         role={role}
@@ -1885,7 +1885,7 @@ function RoomContent({
 
           {/* Participants float over the backdrop instead of taking a fixed
               288px column away from the book on every desktop session. */}
-          <ParticipantStrip count={participants.length}>
+          <ParticipantStrip count={participants.length} compact={isActivityMode}>
             <ParticipantList hostIdentity={hostIdentity} />
           </ParticipantStrip>
         </main>

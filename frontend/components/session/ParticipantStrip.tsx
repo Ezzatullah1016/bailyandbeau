@@ -14,10 +14,17 @@ import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNod
 export function ParticipantStrip({
   children,
   count = 1,
+  compact = false,
 }: {
   children: ReactNode;
   /** Drives the strip width so one face is not blown up to the size of two. */
   count?: number;
+  /**
+   * Shrinks the strip where the stage content reaches the edges — the activity
+   * carousel runs the full width, and a full-size tile lands on top of the last
+   * card and its Play button.
+   */
+  compact?: boolean;
 }) {
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const dragRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
@@ -54,7 +61,11 @@ export function ParticipantStrip({
         // the width. At 168px a two-column grid gave ~80px faces — too small to
         // read expression on, which is most of the point of having video in a
         // reading session at all. These give ~245px tiles either way: 3x.
-        width: count <= 1 ? 'min(46vw, 245px)' : 'min(72vw, 500px)',
+        width: compact
+          ? 'min(28vw, 150px)'
+          : count <= 1
+            ? 'min(46vw, 245px)'
+            : 'min(72vw, 500px)',
       }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
