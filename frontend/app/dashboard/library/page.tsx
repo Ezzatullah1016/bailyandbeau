@@ -13,7 +13,7 @@ interface Book {
   room_type: string; age_band: string; cover_image: string;
   page_count: number; published: boolean;
 }
-interface MeData { id: number; username: string; first_name: string; last_name: string; }
+interface MeData { id: number; username: string; first_name: string; last_name: string; is_staff?: boolean; }
 
 const ROOM_LABELS: Record<string, string> = { reading: 'Reading Room', activity: 'Activity Room', hybrid: 'Both Rooms' };
 const ROOM_COLORS: Record<string, string> = { reading: 'bg-purple-100 text-[#764f84]', activity: 'bg-amber-100 text-amber-800', hybrid: 'bg-blue-100 text-blue-700' };

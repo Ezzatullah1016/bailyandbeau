@@ -239,8 +239,15 @@ class ActivityConfig(TimeStampedModel):
                         coord_err = self._validate_coords(z, f"drop_zones[{i}]")
                         if coord_err:
                             errors.append(coord_err)
-                        if "accepts" in z and z["accepts"] not in label_ids:
-                            errors.append(f"drop_zones[{i}].accepts must reference a label id.")
+                        # `accepts` is a single label id. Check the type first:
+                        # an unhashable value (a list, say) would otherwise raise
+                        # TypeError here and surface as a 500 rather than a
+                        # validation error.
+                        if "accepts" in z:
+                            if not isinstance(z["accepts"], str):
+                                errors.append(f"drop_zones[{i}].accepts must be a label id (string).")
+                            elif z["accepts"] not in label_ids:
+                                errors.append(f"drop_zones[{i}].accepts must reference a label id.")
             return errors
         # 1.0: flat string lists.
         if not self._is_non_empty_list(payload.get("items")):

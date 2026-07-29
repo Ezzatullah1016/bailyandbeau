@@ -14,7 +14,7 @@ interface Session {
   ended_at: string | null; invite_token?: string;
   reading_duration_seconds?: number;
 }
-interface MeData { id: number; username: string; first_name: string; last_name: string; }
+interface MeData { id: number; username: string; first_name: string; last_name: string; is_staff?: boolean; }
 
 const STATUS_PILL: Record<string, string> = {
   completed: 'bg-emerald-100 text-emerald-800',

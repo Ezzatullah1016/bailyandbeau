@@ -260,7 +260,7 @@ export default function ActivityRoom({
   // Stage: card sits in the normal flow (center stage). Modal: centered overlay.
   if (isStage) return CardInner;
   return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-[#3d3b62]/95 backdrop-blur-md p-4">
+    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-brand-navy/95 backdrop-blur-md p-4">
       {CardInner}
     </div>
   );
@@ -332,7 +332,7 @@ function ActivityBody({
         />
       );
     default:
-      return <p className="text-[#3d3b62]">Unsupported activity type.</p>;
+      return <p className="text-brand-navy">Unsupported activity type.</p>;
   }
 }
 
@@ -511,7 +511,7 @@ function DrawingPane({
               key={p}
               type="button"
               style={{ backgroundColor: p }}
-              className={`w-8 h-8 rounded-full border-2 ${color === p && !eraser ? 'border-[#3d3b62]' : 'border-transparent'}`}
+              className={`w-8 h-8 rounded-full border-2 ${color === p && !eraser ? 'border-brand-navy' : 'border-transparent'}`}
               onClick={() => {
                 setColor(p);
                 setEraser(false);
@@ -524,7 +524,7 @@ function DrawingPane({
               key={s}
               type="button"
               onClick={() => setWidth(s)}
-              className={`px-2 py-1 rounded text-xs font-bold ${width === s ? 'bg-[#3d3b62] text-[#eccdca]' : 'bg-white border border-[#764f84]/30 text-[#3d3b62]'}`}
+              className={`px-2 py-1 rounded text-xs font-bold ${width === s ? 'bg-brand-navy text-brand-blush' : 'bg-white border border-brand-purple/30 text-brand-navy'}`}
             >
               {s}px
             </button>
@@ -533,7 +533,7 @@ function DrawingPane({
             <button
               type="button"
               onClick={() => setEraser(true)}
-              className={`px-3 py-1 rounded text-xs font-bold ${eraser ? 'bg-[#764f84] text-[#eccdca]' : 'bg-white border border-[#764f84]/30'}`}
+              className={`px-3 py-1 rounded text-xs font-bold ${eraser ? 'bg-brand-purple text-brand-blush' : 'bg-white border border-brand-purple/30'}`}
             >
               Eraser
             </button>
@@ -541,7 +541,7 @@ function DrawingPane({
           <button
             type="button"
             onClick={clear}
-            className="ml-auto px-3 py-1 rounded bg-[#c84a71] text-white text-xs font-bold"
+            className="ml-auto px-3 py-1 rounded bg-brand-pink text-white text-xs font-bold"
           >
             Clear
           </button>
@@ -551,7 +551,7 @@ function DrawingPane({
         ref={canvasRef}
         width={800}
         height={480}
-        className="w-full max-h-[50vh] rounded-xl border border-[#764f84]/20 bg-white touch-none cursor-crosshair"
+        className="w-full max-h-[50vh] rounded-xl border border-brand-purple/20 bg-white touch-none cursor-crosshair"
         onMouseDown={startDraw}
         onMouseMove={moveDraw}
         onMouseUp={endDraw}
@@ -563,12 +563,12 @@ function DrawingPane({
       {allowSubmit ? (
         <div className="flex items-center justify-end gap-3">
           {submitted ? (
-            <span className="font-karla text-sm font-bold text-[#3b85a6]">Artwork saved! 🎨</span>
+            <span className="font-karla text-sm font-bold text-brand-teal">Artwork saved! 🎨</span>
           ) : null}
           <button
             type="button"
             onClick={submitArtwork}
-            className="font-baloo px-5 py-2 rounded-lg bg-gradient-to-br from-[#f0c75e] to-[#c84a71] text-white text-sm font-bold shadow"
+            className="font-baloo px-5 py-2 rounded-lg bg-gradient-to-br from-brand-gold to-brand-pink text-white text-sm font-bold shadow"
           >
             Submit Artwork ✓
           </button>
@@ -631,20 +631,20 @@ function QuizPane({
           {qs.map((qq, i) => (
             <span
               key={qq.id}
-              className={`h-2 rounded-full transition-all ${i === qIndex ? 'w-6 bg-[#764f84]' : 'w-2 bg-[#764f84]/30'}`}
+              className={`h-2 rounded-full transition-all ${i === qIndex ? 'w-6 bg-brand-purple' : 'w-2 bg-brand-purple/30'}`}
             />
           ))}
         </div>
-        <p className="text-center text-xs font-bold uppercase tracking-wider text-[#764f84]">
+        <p className="text-center text-xs font-bold uppercase tracking-wider text-brand-purple">
           {qIndex + 1} of {qs.length}
         </p>
 
         {q.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={q.image_url} alt="" className="w-full max-h-[220px] object-contain rounded-xl border border-[#764f84]/20 bg-white" />
+          <img src={q.image_url} alt="" className="w-full max-h-[220px] object-contain rounded-xl border border-brand-purple/20 bg-white" />
         ) : null}
 
-        <p className="text-lg font-semibold text-[#3d3b62] text-center">{q.prompt}</p>
+        <p className="text-lg font-semibold text-brand-navy text-center">{q.prompt}</p>
 
         <div className="grid gap-2">
           {q.options.map((opt, i) => {
@@ -658,12 +658,12 @@ function QuizPane({
                 onClick={() => choose(i)}
                 className={`text-left px-4 py-3 rounded-xl border-2 font-medium transition-all ${
                   showCorrect
-                    ? 'border-[#3b85a6] bg-[#3b85a6]/15 text-[#3d3b62]'
+                    ? 'border-brand-teal bg-brand-teal/15 text-brand-navy'
                     : showWrong
-                      ? 'border-[#c84a71] bg-[#c84a71]/10'
+                      ? 'border-brand-pink bg-brand-pink/10'
                       : isSel
-                        ? 'border-[#764f84] bg-[#eccdca]/80 text-[#3d3b62]'
-                        : 'border-[#764f84]/30 bg-white text-[#3d3b62] hover:border-[#764f84]'
+                        ? 'border-brand-purple bg-brand-blush/80 text-brand-navy'
+                        : 'border-brand-purple/30 bg-white text-brand-navy hover:border-brand-purple'
                 }`}
               >
                 {opt}
@@ -674,13 +674,13 @@ function QuizPane({
 
         {/* Feedback */}
         {isCorrect ? (
-          <p className="text-center text-sm font-bold text-[#3b85a6]">{q.feedback_correct || 'Correct!'}</p>
+          <p className="text-center text-sm font-bold text-brand-teal">{q.feedback_correct || 'Correct!'}</p>
         ) : isWrong ? (
-          <p className="text-center text-sm font-bold text-[#c84a71]">{q.feedback_wrong || 'Not quite — try again!'}</p>
+          <p className="text-center text-sm font-bold text-brand-pink">{q.feedback_wrong || 'Not quite — try again!'}</p>
         ) : null}
 
         {revealMode === 'host_controlled' && hostRole === 'host' && !revealed ? (
-          <button type="button" onClick={reveal} className="px-4 py-2 rounded-lg bg-[#f0c75e] text-[#3d3b62] font-bold text-sm">
+          <button type="button" onClick={reveal} className="px-4 py-2 rounded-lg bg-brand-gold text-brand-navy font-bold text-sm">
             Reveal answer
           </button>
         ) : null}
@@ -692,7 +692,7 @@ function QuizPane({
               type="button"
               onClick={() => go(-1)}
               disabled={qIndex === 0}
-              className="font-baloo px-4 py-2 rounded-lg border-2 border-[#764f84]/30 text-[#3d3b62] text-sm font-bold disabled:opacity-40"
+              className="font-baloo px-4 py-2 rounded-lg border-2 border-brand-purple/30 text-brand-navy text-sm font-bold disabled:opacity-40"
             >
               Previous
             </button>
@@ -700,13 +700,13 @@ function QuizPane({
               type="button"
               onClick={() => go(1)}
               disabled={isLast}
-              className="font-baloo px-5 py-2 rounded-lg bg-[#764f84] text-white text-sm font-bold disabled:opacity-40"
+              className="font-baloo px-5 py-2 rounded-lg bg-brand-purple text-white text-sm font-bold disabled:opacity-40"
             >
               {isLast ? 'Finished' : 'Next Question'}
             </button>
           </div>
         ) : (
-          <p className="text-center text-xs text-[#764f84]">Your grown-up moves to the next question.</p>
+          <p className="text-center text-xs text-brand-purple">Your grown-up moves to the next question.</p>
         )}
       </div>
     );
@@ -729,7 +729,7 @@ function QuizPane({
 
   return (
     <div className="space-y-4">
-      <p className="text-lg font-semibold text-[#3d3b62]">{question}</p>
+      <p className="text-lg font-semibold text-brand-navy">{question}</p>
       <div className="grid gap-2">
         {options.map((opt, i) => {
           const isSel = selected === i;
@@ -742,12 +742,12 @@ function QuizPane({
               onClick={() => choose(i)}
               className={`text-left px-4 py-3 rounded-xl border-2 font-medium transition-all ${
                 showCorrect
-                  ? 'border-[#3b85a6] bg-[#3b85a6]/15 text-[#3d3b62]'
+                  ? 'border-brand-teal bg-brand-teal/15 text-brand-navy'
                   : showWrong
-                    ? 'border-[#c84a71] bg-[#c84a71]/10'
+                    ? 'border-brand-pink bg-brand-pink/10'
                     : isSel
-                      ? 'border-[#764f84] bg-[#eccdca]/80 text-[#3d3b62]'
-                      : 'border-[#764f84]/30 bg-white text-[#3d3b62] hover:border-[#764f84]'
+                      ? 'border-brand-purple bg-brand-blush/80 text-brand-navy'
+                      : 'border-brand-purple/30 bg-white text-brand-navy hover:border-brand-purple'
               }`}
             >
               {opt}
@@ -756,12 +756,12 @@ function QuizPane({
         })}
       </div>
       {revealMode === 'host_controlled' && hostRole === 'host' && !revealed ? (
-        <button type="button" onClick={reveal} className="px-4 py-2 rounded-lg bg-[#f0c75e] text-[#3d3b62] font-bold text-sm">
+        <button type="button" onClick={reveal} className="px-4 py-2 rounded-lg bg-brand-gold text-brand-navy font-bold text-sm">
           Reveal answer
         </button>
       ) : null}
       {revealMode === 'host_controlled' && hostRole === 'guest' && !revealed ? (
-        <p className="text-sm text-[#764f84]">The host will reveal the answer when everyone is ready.</p>
+        <p className="text-sm text-brand-purple">The host will reveal the answer when everyone is ready.</p>
       ) : null}
     </div>
   );
@@ -820,7 +820,7 @@ function LegacyDragDrop({
   return (
     <div className="grid md:grid-cols-2 gap-6">
       <div>
-        <p className="text-xs font-bold uppercase text-[#764f84] mb-2">Items</p>
+        <p className="text-xs font-bold uppercase text-brand-purple mb-2">Items</p>
         <div className="flex flex-wrap gap-2">
           {items.map((item) => (
             <button
@@ -828,17 +828,17 @@ function LegacyDragDrop({
               type="button"
               onClick={() => setPicked(picked === item ? null : item)}
               className={`px-3 py-2 rounded-lg text-sm font-bold border-2 ${
-                picked === item ? 'border-[#c84a71] bg-[#c84a71]/15' : 'border-[#764f84]/30 bg-white'
+                picked === item ? 'border-brand-pink bg-brand-pink/15' : 'border-brand-purple/30 bg-white'
               }`}
             >
               {item}
             </button>
           ))}
         </div>
-        <p className="text-xs text-[#764f84] mt-2">{picked ? `Tap a zone for “${picked}”.` : 'Tap an item, then a drop zone.'}</p>
+        <p className="text-xs text-brand-purple mt-2">{picked ? `Tap a zone for “${picked}”.` : 'Tap an item, then a drop zone.'}</p>
       </div>
       <div>
-        <p className="text-xs font-bold uppercase text-[#764f84] mb-2">Drop zones</p>
+        <p className="text-xs font-bold uppercase text-brand-purple mb-2">Drop zones</p>
         <div className="space-y-2">
           {zones.map((zone) => (
             <button
@@ -846,10 +846,10 @@ function LegacyDragDrop({
               type="button"
               disabled={!picked}
               onClick={() => picked && assign(zone, picked)}
-              className="w-full px-4 py-6 rounded-xl border-2 border-dashed border-[#3b85a6]/50 bg-[#3b85a6]/5 text-left"
+              className="w-full px-4 py-6 rounded-xl border-2 border-dashed border-brand-teal/50 bg-brand-teal/5 text-left"
             >
-              <span className="block text-xs font-bold text-[#3b85a6]">{zone}</span>
-              <span className="block mt-1 text-[#3d3b62] font-semibold">{assignments[zone] ?? '—'}</span>
+              <span className="block text-xs font-bold text-brand-teal">{zone}</span>
+              <span className="block mt-1 text-brand-navy font-semibold">{assignments[zone] ?? '—'}</span>
             </button>
           ))}
         </div>
@@ -872,7 +872,7 @@ function DraggableLabel({ id, text, disabled }: { id: string; text: string; disa
       {...listeners}
       {...attributes}
       type="button"
-      className={`px-3 py-2 rounded-full text-sm font-bold border-2 border-[#c84a71]/60 bg-white text-[#c84a71] shadow-sm touch-none ${
+      className={`px-3 py-2 rounded-full text-sm font-bold border-2 border-brand-pink/60 bg-white text-brand-pink shadow-sm touch-none ${
         isDragging ? 'opacity-70' : ''
       } ${disabled ? 'opacity-50' : 'cursor-grab active:cursor-grabbing'}`}
     >
@@ -899,13 +899,13 @@ function DropZone({
       type="button"
       onClick={onTap}
       className={`absolute rounded-lg border-2 border-dashed flex items-center justify-center text-center transition-colors ${
-        isOver || isTarget ? 'border-[#3b85a6] bg-[#3b85a6]/30' : 'border-[#3b85a6]/70 bg-[#3b85a6]/10'
+        isOver || isTarget ? 'border-brand-teal bg-brand-teal/30' : 'border-brand-teal/70 bg-brand-teal/10'
       }`}
       style={{ left: `${zone.x}%`, top: `${zone.y}%`, width: `${zone.w}%`, height: `${zone.h}%` }}
       aria-label={zone.label ?? zone.id}
     >
       {assignedText ? (
-        <span className="px-2 text-xs font-bold text-[#3d3b62] bg-white/90 rounded">{assignedText}</span>
+        <span className="px-2 text-xs font-bold text-brand-navy bg-white/90 rounded">{assignedText}</span>
       ) : null}
     </button>
   );
@@ -960,7 +960,7 @@ function ImageDragDrop({
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
       <div className="space-y-4">
-        <div className="relative w-full rounded-xl overflow-hidden border border-[#764f84]/20 bg-[#eccdca]/30">
+        <div className="relative w-full rounded-xl overflow-hidden border border-brand-purple/20 bg-brand-blush/30">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={imageUrl} alt="" className="w-full h-auto block max-h-[360px] object-contain mx-auto" />
           <div className="absolute inset-0">
@@ -979,16 +979,16 @@ function ImageDragDrop({
         <div className="flex flex-wrap gap-2 justify-center">
           {availableLabels.map((l) => (
             <div key={l.id} onClick={() => setPicked(picked === l.id ? null : l.id)}>
-              <div className={picked === l.id ? 'ring-2 ring-[#c84a71] rounded-full' : ''}>
+              <div className={picked === l.id ? 'ring-2 ring-brand-pink rounded-full' : ''}>
                 <DraggableLabel id={l.id} text={l.text} disabled={false} />
               </div>
             </div>
           ))}
           {availableLabels.length === 0 ? (
-            <p className="text-sm font-bold text-[#3b85a6]">All placed! 🎉</p>
+            <p className="text-sm font-bold text-brand-teal">All placed! 🎉</p>
           ) : null}
         </div>
-        <p className="text-center text-xs text-[#764f84]">
+        <p className="text-center text-xs text-brand-purple">
           {picked ? 'Now tap a box on the picture.' : 'Drag a word onto the picture — or tap a word, then a box.'}
         </p>
       </div>
@@ -1016,7 +1016,7 @@ function HotspotPane({
 
   return (
     <div className="relative">
-      <div className="relative w-full rounded-xl overflow-hidden border border-[#764f84]/20 bg-[#eccdca]/30">
+      <div className="relative w-full rounded-xl overflow-hidden border border-brand-purple/20 bg-brand-blush/30">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={url} alt="" className="w-full h-auto block max-h-[360px] object-contain mx-auto" />
         <div className="absolute inset-0">
@@ -1025,7 +1025,7 @@ function HotspotPane({
               key={h.id}
               type="button"
               onClick={() => patchCurrent({ openId: h.id })}
-              className="absolute border-2 border-[#f0c75e]/90 bg-[#f0c75e]/25 rounded-lg hover:bg-[#f0c75e]/40 transition-colors animate-pulse"
+              className="absolute border-2 border-brand-gold/90 bg-brand-gold/25 rounded-lg hover:bg-brand-gold/40 transition-colors animate-pulse"
               style={{
                 left: `${h.x}%`,
                 top: `${h.y}%`,
@@ -1040,7 +1040,7 @@ function HotspotPane({
         {/* Popup modal (1.1): overlay the active hotspot's text over the image. */}
         {isPopup && active ? (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 p-6">
-            <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl text-[#3d3b62]">
+            <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl text-brand-navy">
               <button
                 type="button"
                 onClick={() => patchCurrent({ openId: null })}
@@ -1053,7 +1053,7 @@ function HotspotPane({
               <button
                 type="button"
                 onClick={() => patchCurrent({ openId: null })}
-                className="font-baloo mt-4 rounded-lg bg-[#3b85a6] px-4 py-2 text-sm font-bold text-white"
+                className="font-baloo mt-4 rounded-lg bg-brand-teal px-4 py-2 text-sm font-bold text-white"
               >
                 Got it! ✨
               </button>
@@ -1064,14 +1064,14 @@ function HotspotPane({
 
       {/* Panel display (1.0 default). */}
       {!isPopup && (active ? (
-        <div className="mt-4 p-4 rounded-xl bg-white border border-[#764f84]/20 text-[#3d3b62]">
+        <div className="mt-4 p-4 rounded-xl bg-white border border-brand-purple/20 text-brand-navy">
           <p className="text-sm font-semibold">{active.content}</p>
         </div>
       ) : (
-        <p className="mt-3 text-sm text-[#764f84]">Tap a highlighted area.</p>
+        <p className="mt-3 text-sm text-brand-purple">Tap a highlighted area.</p>
       ))}
       {isPopup && !active ? (
-        <p className="mt-3 text-sm text-[#764f84]">Tap each glowing spot to learn something new.</p>
+        <p className="mt-3 text-sm text-brand-purple">Tap each glowing spot to learn something new.</p>
       ) : null}
     </div>
   );

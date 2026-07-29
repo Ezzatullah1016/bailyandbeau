@@ -2210,16 +2210,33 @@ class AdminSessionEventExportView(APIView):
 
 # ─── Media Upload (staging / no-S3 fallback) ──────────────────────────────────
 
+#: Images only. Admins upload activity illustrations and book pages here; there
+#: is no use case for anything else, and an open endpoint that writes
+#: attacker-named files under MEDIA_ROOT is worth closing even behind staff auth.
+UPLOAD_ALLOWED_TYPES = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+}
+UPLOAD_ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+UPLOAD_MAX_BYTES = 5 * 1024 * 1024
+
+
 class MediaUploadView(APIView):
     """
-    Staff-only endpoint to upload book assets when S3 is not configured.
-    Returns the hosted URL so admins can paste it into BookPage.image_url fields.
+    Staff-only endpoint to upload book assets and activity illustrations when S3
+    is not configured. Returns the hosted URL for BookPage.image_url fields and
+    for the activity builder's image pickers.
     """
     permission_classes = [permissions.IsAdminUser]
     parser_classes = [MultiPartParser]
 
     def post(self, request):
+        import uuid as _uuid
         from pathlib import Path
+
+        from django.utils.text import get_valid_filename
 
         file_obj = request.FILES.get("file")
         if not file_obj:
@@ -2228,11 +2245,42 @@ class MediaUploadView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        if file_obj.size > UPLOAD_MAX_BYTES:
+            return Response(
+                {
+                    "data": None,
+                    "error": {
+                        "code": "file_too_large",
+                        "message": "Images must be 5 MB or smaller.",
+                    },
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Check both: the content type is client-supplied and trivially spoofed,
+        # while the extension is what actually decides how the file is served.
+        content_type = (file_obj.content_type or "").split(";")[0].strip().lower()
+        extension = Path(file_obj.name or "").suffix.lower()
+        if content_type not in UPLOAD_ALLOWED_TYPES or extension not in UPLOAD_ALLOWED_EXTENSIONS:
+            return Response(
+                {
+                    "data": None,
+                    "error": {
+                        "code": "unsupported_file_type",
+                        "message": "Only PNG, JPEG, WebP and GIF images can be uploaded.",
+                    },
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         upload_dir = Path(django_settings.MEDIA_ROOT) / "uploads"
         upload_dir.mkdir(parents=True, exist_ok=True)
 
-        import uuid as _uuid
-        safe_name = f"{_uuid.uuid4().hex}_{file_obj.name}"
+        # The uuid prefix already prevents collisions; get_valid_filename strips
+        # separators and traversal out of the part the uploader controls. Keep
+        # the original stem so admins can still recognise their own files.
+        stem = get_valid_filename(Path(file_obj.name or "image").stem)[:60] or "image"
+        safe_name = f"{_uuid.uuid4().hex}_{stem}{extension}"
         dest = upload_dir / safe_name
         with open(dest, "wb+") as fh:
             for chunk in file_obj.chunks():

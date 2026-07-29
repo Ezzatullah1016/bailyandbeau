@@ -15,6 +15,7 @@ interface MeData {
   first_name: string;
   last_name: string;
   avatar_url?: string;
+  is_staff?: boolean;
 }
 
 interface ChildProfile {

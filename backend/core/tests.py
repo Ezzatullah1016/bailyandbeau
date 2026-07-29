@@ -1,7 +1,11 @@
 import json
+import shutil
+import tempfile
 from io import StringIO
 
+from django.conf import settings as django_settings
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.exceptions import ValidationError
 from django.core import mail
 from django.core.management import call_command
@@ -15,11 +19,27 @@ User = get_user_model()
 
 
 class HomePageTests(TestCase):
-    def test_home_page_loads(self):
+    """
+    The backend root is a staff entry point, not a landing page: it redirects
+    rather than rendering the old scaffold, which no longer exists.
+    """
+
+    def test_anonymous_visitor_is_redirected_to_the_staff_portal(self):
         response = self.client.get(reverse("home"))
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Django project is running")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers.get("Location"), reverse("super_admin_dashboard"))
+
+    def test_signed_in_customer_is_sent_to_the_app_frontend(self):
+        User.objects.create_user(
+            username="home-parent", email="home-parent@example.com", password="strong-password-123"
+        )
+        self.client.login(username="home-parent", password="strong-password-123")
+
+        response = self.client.get(reverse("home"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertNotEqual(response.headers.get("Location"), reverse("super_admin_dashboard"))
 
 
 class SuperAdminDashboardTests(TestCase):
@@ -351,66 +371,38 @@ class AdminPortalPageTests(TestCase):
         self.assertContains(response, "Detail Activity")
         self.assertContains(response, self.book.title)
 
-    def test_activity_save_redirects_back_to_book_detail_with_return_to(self):
+    def test_activity_config_page_points_at_the_builder(self):
+        """Authoring moved to the React builder; this page only lists and deletes."""
         self.client.force_login(self.admin_user)
-        return_to = reverse("admin_book_detail", args=[self.book.id])
-        response = self.client.post(
-            reverse("admin_activity_config"),
-            data={
-                "action": "save",
-                "book": str(self.book.id),
-                "title": "Return Quiz",
-                "activity_type": ActivityConfig.ActivityType.QUIZ,
-                "sort_order": 1,
-                "is_active": "on",
-                "return_to": return_to,
-                "config_json": "{}",
-                "ui_title": "Return Quiz",
-                "ui_instructions": "Pick one answer.",
-                "ui_theme": "default",
-                "quiz_question": "What color is the moon?",
-                "quiz_options[]": ["Blue", "Silver"],
-                "quiz_correct_index": 1,
-                "quiz_reveal_mode": "instant",
-            },
-            follow=False,
-        )
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.headers.get("Location"), return_to)
-        self.assertTrue(ActivityConfig.objects.filter(title="Return Quiz").exists())
-    def test_admin_activity_config_can_create_config_from_form(self):
-        self.client.force_login(self.admin_user)
-
-        response = self.client.post(
-            reverse("admin_activity_config"),
-            data={
-                "action": "save",
-                "book": str(self.book.id),
-                "title": "Forest Quiz",
-                "activity_type": ActivityConfig.ActivityType.QUIZ,
-                "sort_order": 1,
-                "is_active": "on",
-                "config_json": json.dumps(
-                    {
-                        "schema_version": "1.0",
-                        "activity_type": "quiz",
-                        "book_id": str(self.book.id),
-                        "ui": {"title": "Forest Quiz", "instructions": "", "theme": "default"},
-                        "payload": {
-                            "question": "What color is the door?",
-                            "options": ["Red", "Blue"],
-                            "correct_index": 0,
-                            "reveal_mode": "instant",
-                        },
-                        "validation": {},
-                    }
-                ),
-            },
-            follow=True,
-        )
+        response = self.client.get(reverse("admin_activity_config"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(ActivityConfig.objects.filter(title="Forest Quiz").exists())
+        self.assertContains(response, "/admin/activities")
+        self.assertNotContains(response, 'data-form-type="activity"')
+
+    def test_activity_config_page_can_still_delete(self):
+        self.client.force_login(self.admin_user)
+        activity = ActivityConfig.objects.create(
+            book=self.book,
+            title="Doomed Activity",
+            activity_type=ActivityConfig.ActivityType.DRAWING,
+            sort_order=0,
+            is_active=True,
+            config={
+                "schema_version": "1.0",
+                "activity_type": "drawing",
+                "book_id": str(self.book.id),
+                "ui": {"title": "Draw", "instructions": "Draw", "theme": "default"},
+                "payload": {"palette": ["#000"], "brush_sizes": [2], "allow_eraser": True},
+                "validation": {},
+            },
+        )
+        response = self.client.post(
+            reverse("admin_activity_config"),
+            data={"action": "delete", "activity_id": str(activity.id)},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(ActivityConfig.objects.filter(pk=activity.id).exists())
 
     def test_admin_users_api_lists_users_for_staff(self):
         self.client.force_login(self.admin_user)
@@ -496,7 +488,6 @@ class AdminPortalPageTests(TestCase):
 
         book_response = self.client.get(reverse("admin_book_library"))
         detail_response = self.client.get(reverse("admin_book_detail", args=[self.book.id]))
-        activity_response = self.client.get(reverse("admin_activity_config"))
         user_detail_response = self.client.get(reverse("admin_user_detail", args=[self.parent_user.id]))
 
         self.assertContains(book_response, 'View details')
@@ -506,8 +497,6 @@ class AdminPortalPageTests(TestCase):
         self.assertContains(detail_response, 'cover_image_file')
         self.assertContains(detail_response, 'data-required-message="Book title is required."')
         self.assertContains(detail_response, 'data-confirm-message="Delete this book from the library?"')
-        self.assertContains(activity_response, 'data-validate-form="activity-form"')
-        self.assertContains(activity_response, 'novalidate')
         self.assertContains(user_detail_response, "User activity snapshot")
 
 
@@ -2597,3 +2586,132 @@ class BookThemeApiTests(TestCase):
         self.client.force_authenticate(self.admin)
         res = self.client.put(self.url, {"backdrop_kind": "image"}, format="json")
         self.assertEqual(res.status_code, 400, res.content)
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp(prefix="bb-test-media-"))
+class MediaUploadTests(TestCase):
+    """
+    The upload endpoint writes attacker-named files under MEDIA_ROOT, so the
+    allowlist and the filename sanitising are load-bearing, not cosmetic.
+    """
+
+    @classmethod
+    def tearDownClass(cls):
+        # Written files are real; do not leave them behind between runs.
+        shutil.rmtree(django_settings.MEDIA_ROOT, ignore_errors=True)
+        super().tearDownClass()
+
+    #: 1x1 transparent GIF — a real, decodable image small enough to inline.
+    TINY_GIF = (
+        b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!"
+        b"\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00"
+        b"\x00\x02\x02D\x01\x00;"
+    )
+
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            username="upload-admin",
+            email="upload-admin@example.com",
+            password="strong-password-123",
+            is_staff=True,
+            is_superuser=True,
+        )
+        self.url = "/api/v1/admin/upload/"
+
+    def _upload(self, name, content, content_type):
+        return self.client.post(
+            self.url,
+            {"file": SimpleUploadedFile(name, content, content_type=content_type)},
+            format="multipart",
+        )
+
+    def test_requires_staff(self):
+        res = self._upload("a.gif", self.TINY_GIF, "image/gif")
+        self.assertEqual(res.status_code, 401)
+
+        parent = User.objects.create_user(
+            username="upload-parent", email="p@example.com", password="strong-password-123"
+        )
+        self.client.force_authenticate(parent)
+        res = self._upload("a.gif", self.TINY_GIF, "image/gif")
+        self.assertEqual(res.status_code, 403)
+
+    def test_accepts_an_image(self):
+        self.client.force_authenticate(self.admin)
+        res = self._upload("bedtime scene.gif", self.TINY_GIF, "image/gif")
+        self.assertEqual(res.status_code, 201, res.content)
+        url = res.json()["data"]["url"]
+        self.assertTrue(url.endswith(".gif"), url)
+        self.assertIn("/uploads/", url)
+
+    def test_rejects_non_image_type(self):
+        self.client.force_authenticate(self.admin)
+        res = self._upload("notes.txt", b"hello", "text/plain")
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertEqual(res.json()["error"]["code"], "unsupported_file_type")
+
+    def test_rejects_image_content_type_with_executable_extension(self):
+        """A spoofed content type must not get a .php/.html file written to disk."""
+        self.client.force_authenticate(self.admin)
+        res = self._upload("shell.php", self.TINY_GIF, "image/gif")
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertEqual(res.json()["error"]["code"], "unsupported_file_type")
+
+    def test_rejects_oversized_file(self):
+        self.client.force_authenticate(self.admin)
+        res = self._upload("huge.png", b"\x00" * (5 * 1024 * 1024 + 1), "image/png")
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertEqual(res.json()["error"]["code"], "file_too_large")
+
+    def test_rejects_missing_file(self):
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(self.url, {}, format="multipart")
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertEqual(res.json()["error"]["code"], "no_file")
+
+    def test_traversal_in_filename_is_stripped(self):
+        self.client.force_authenticate(self.admin)
+        res = self._upload("../../../evil.png", self.TINY_GIF, "image/png")
+        self.assertEqual(res.status_code, 201, res.content)
+        url = res.json()["data"]["url"]
+        self.assertNotIn("..", url)
+        self.assertRegex(url, r"/uploads/[0-9a-f]{32}_evil\.png$")
+
+
+class ActivityConfigValidationTests(TestCase):
+    """Malformed configs must fail validation, never crash the request."""
+
+    def setUp(self):
+        self.book = Book.objects.create(title="Validation Book", slug="validation-book")
+
+    def _drag_drop(self, accepts):
+        return ActivityConfig(
+            book=self.book,
+            title="Zones",
+            activity_type=ActivityConfig.ActivityType.DRAG_DROP,
+            config={
+                "schema_version": "1.1",
+                "activity_type": "drag_drop",
+                "book_id": str(self.book.id),
+                "ui": {"title": "Zones", "instructions": ""},
+                "payload": {
+                    "image_url": "http://example.test/i.png",
+                    "labels": [{"id": "l1", "text": "Happy"}],
+                    "drop_zones": [{"id": "z1", "x": 1, "y": 1, "w": 1, "h": 1, "accepts": accepts}],
+                },
+            },
+        )
+
+    def test_accepts_as_a_label_id_is_valid(self):
+        self._drag_drop("l1").full_clean()
+
+    def test_accepts_with_an_unhashable_value_is_a_validation_error(self):
+        # A list here used to raise TypeError ("unhashable type") from the
+        # `in label_ids` membership test, surfacing as a 500.
+        with self.assertRaises(ValidationError):
+            self._drag_drop(["l1"]).full_clean()
+
+    def test_accepts_referencing_an_unknown_label_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            self._drag_drop("nope").full_clean()

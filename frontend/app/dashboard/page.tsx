@@ -4,11 +4,11 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowRight, BookOpen, BookMarked, CalendarDays, CheckSquare,
-  CreditCard, DoorOpen, Lock, Medal, MoreHorizontal, Play, RefreshCw, Settings,
+  BookOpen, BookMarked, CalendarDays, CheckSquare,
+  CreditCard, DoorOpen, MoreHorizontal, Play, RefreshCw, Settings,
   X,
 } from 'lucide-react';
-import { apiRequest, createSession, type UserBadgeData } from '@/lib/api';
+import { apiRequest, createSession } from '@/lib/api';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { HeaderProfileAvatar } from '@/components/dashboard/AccountAvatar';
 import { NotificationBell, type NotificationItem } from '@/components/dashboard/NotificationBell';
@@ -40,6 +40,7 @@ interface MeData {
   email: string;
   first_name: string;
   last_name: string;
+  is_staff?: boolean;
 }
 
 interface ChildProfile {
@@ -83,15 +84,6 @@ function statusPill(status: string) {
   };
   return map[status] ?? 'bg-stone-100 text-stone-600';
 }
-
-const BADGE_ICONS: Record<string, string> = {
-  'first-session': '⭐',
-  'five-sessions': '🏆',
-  'ten-sessions':  '🌟',
-  'bookworm':      '📖',
-  'brave-heart':   '🦁',
-};
-
 
 // ─── Start Session Modal ──────────────────────────────────────────────────────
 
@@ -247,7 +239,6 @@ function DashboardInner() {
   const [entitlement, setEntitlement] = useState<EntitlementData | null>(null);
   const [books, setBooks] = useState<Book[]>([]);
   const [children, setChildren] = useState<ChildProfile[]>([]);
-  const [badges, setBadges] = useState<UserBadgeData[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -282,7 +273,6 @@ function DashboardInner() {
       apiRequest<{ data: EntitlementData }>('/billing/entitlement/').then((r) => { if (!cancelled) setEntitlement(r.data); }),
       apiRequest<{ data: Book[] }>('/books/').then((r) => { if (!cancelled) setBooks(r.data); }),
       apiRequest<{ data: ChildProfile[] }>('/children/').then((r) => { if (!cancelled) setChildren(r.data); }),
-      apiRequest<{ data: UserBadgeData[] }>('/me/badges/').then((r) => { if (!cancelled) setBadges(r.data); }),
     ])
       .catch((e) => {
         if (cancelled) return;
@@ -323,13 +313,6 @@ function DashboardInner() {
   const sessionsLeft = (entitlement?.sessions_remaining ?? 0) + (entitlement?.pack_sessions_remaining ?? 0);
 
   const notifications: NotificationItem[] = [
-    ...badges.map((b) => ({
-      id: `badge-${b.id}`,
-      kind: 'badge' as const,
-      title: `Badge earned: ${b.badge_name}`,
-      detail: `${b.child_name} unlocked ${b.badge_name} ${BADGE_ICONS[b.badge_code] ?? '🏅'}`,
-      at: b.earned_at,
-    })),
     ...(dash?.recent_sessions ?? [])
       .filter((s) => s.status === 'completed' && s.ended_at)
       .map((s) => ({
@@ -420,7 +403,7 @@ function DashboardInner() {
           </p>
         </section>
 
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
           <div className="bg-white p-6 rounded-xl shadow-[0_6px_18px_rgba(0,0,0,0.08)] flex flex-col border border-[#eccdca]">
             <span className="font-karla text-xs font-bold uppercase tracking-wider text-stone-400 mb-4">Sessions Remaining</span>
             <div className="flex items-end justify-between">
@@ -437,14 +420,6 @@ function DashboardInner() {
             <div className="flex items-end justify-between">
               <span className="font-baloo text-5xl font-bold text-[#3d3b62]">{dash?.completed_sessions_count ?? 0}</span>
               <CheckSquare className="w-8 h-8 text-[#f0c75e]" />
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-xl shadow-[0_6px_18px_rgba(0,0,0,0.08)] flex flex-col border border-[#eccdca]">
-            <span className="font-karla text-xs font-bold uppercase tracking-wider text-stone-400 mb-4">Badges Earned</span>
-            <div className="flex items-end justify-between">
-              <span className="font-baloo text-5xl font-bold text-[#3d3b62]">{badges.length}</span>
-              <Medal className="w-8 h-8 text-[#c84a71]" />
             </div>
           </div>
         </section>
@@ -510,7 +485,7 @@ function DashboardInner() {
 
         <div className="grid grid-cols-1 lg:grid-cols-10 gap-8">
 
-          <div className="lg:col-span-6 bg-white rounded-2xl p-6 shadow-[0_6px_18px_rgba(0,0,0,0.08)] border border-[#eccdca]">
+          <div className="lg:col-span-10 bg-white rounded-2xl p-6 shadow-[0_6px_18px_rgba(0,0,0,0.08)] border border-[#eccdca]">
             <div className="flex justify-between items-center mb-6">
               <h4 className="font-baloo text-2xl text-[#3d3b62] font-bold">Recent Sessions</h4>
               <button className="font-karla text-sm font-bold text-[#764f84] hover:underline">View All</button>
@@ -583,49 +558,6 @@ function DashboardInner() {
                 </table>
               </div>
             )}
-          </div>
-
-          <div className="lg:col-span-4 bg-white rounded-2xl p-6 shadow-[0_6px_18px_rgba(0,0,0,0.08)] border border-[#eccdca]">
-            <div className="flex justify-between items-center mb-2">
-              <h4 className="font-baloo text-2xl text-[#3d3b62] font-bold">Badge Collection</h4>
-            </div>
-            <p className="text-[10px] text-stone-500 mb-6 leading-snug">
-              Private to your account — not a public profile.
-            </p>
-
-            {badges.length === 0 ? (
-              <div className="flex flex-col items-center gap-3 py-8 text-stone-400">
-                <Medal className="w-10 h-10" />
-                <p className="text-sm font-medium text-center">Complete sessions to earn badges!</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-3 gap-y-8 gap-x-4 mb-10">
-                {badges.map((ub) => (
-                  <div key={ub.id} className="flex flex-col items-center gap-2">
-                    <div className="h-16 w-16 rounded-full bg-[#f0c75e]/30 flex items-center justify-center text-3xl shadow-lg border-2 border-white ring-2 ring-[#f0c75e]/30">
-                      {BADGE_ICONS[ub.badge_code] ?? '🏅'}
-                    </div>
-                    <span className="text-[10px] font-bold text-stone-500 uppercase tracking-tighter text-center leading-tight">
-                      {ub.badge_name}
-                    </span>
-                  </div>
-                ))}
-                <div className="flex flex-col items-center gap-2 opacity-40">
-                  <div className="h-16 w-16 rounded-full bg-stone-200 flex items-center justify-center text-stone-400 border-2 border-dashed border-stone-300">
-                    <Lock className="w-6 h-6" />
-                  </div>
-                  <span className="text-[10px] font-bold text-stone-400 uppercase tracking-tighter">Next Milestone</span>
-                </div>
-              </div>
-            )}
-
-            <Link
-              href="/dashboard/badges"
-              className="font-baloo flex items-center justify-center gap-2 w-full py-4 bg-[#eccdca]/30 text-[#3d3b62] font-bold rounded-xl hover:bg-[#eccdca]/50 transition-all text-sm group"
-            >
-              View All Badges
-              <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
-            </Link>
           </div>
         </div>
       </main>

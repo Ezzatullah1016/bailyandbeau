@@ -435,6 +435,22 @@ export interface BookOption {
   room_type: string;
 }
 
+export interface MeData {
+  id: string;
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  avatar_url: string;
+  /** UI hint only — admin endpoints enforce staff access server-side. */
+  is_staff: boolean;
+}
+
+export async function fetchMe(): Promise<MeData> {
+  const res = await apiRequest<{ data: MeData }>('/me/');
+  return res.data;
+}
+
 export async function listBooks(): Promise<BookOption[]> {
   const res = await apiRequest<{ data: BookOption[] }>('/books/');
   return res.data;

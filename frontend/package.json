@@ -19,6 +19,7 @@
     "@fontsource/cormorant-garamond": "^5.2.11",
     "@fontsource/jost": "^5.2.8",
     "@fontsource/karla": "^5.2.8",
+    "@fontsource/montserrat": "^5.3.0",
     "@fontsource/plus-jakarta-sans": "^5.2.8",
     "@livekit/components-react": "^2.6.0",
     "@react-three/fiber": "^8.18.0",

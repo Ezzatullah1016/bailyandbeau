@@ -25,6 +25,8 @@ export type DashboardMe = {
   first_name: string;
   last_name: string;
   avatar_url?: string;
+  /** Staff see the admin links. Optional: older callers do not pass it. */
+  is_staff?: boolean;
 };
 
 export function dashboardInitials(me: DashboardMe | null): string {

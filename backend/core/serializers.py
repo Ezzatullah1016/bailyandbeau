@@ -244,7 +244,11 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ("id", "username", "email", "first_name", "last_name", "avatar_url")
+        # is_staff is read-only and exposed so the frontend can show admin-only
+        # navigation and redirect non-staff away from /admin. It is a UI hint
+        # only: every admin endpoint still enforces IsAdminUser server-side.
+        fields = ("id", "username", "email", "first_name", "last_name", "avatar_url", "is_staff")
+        read_only_fields = ("is_staff",)
 
     def get_avatar_url(self, obj):
         profile = UserProfile.objects.filter(user_id=obj.pk).first()

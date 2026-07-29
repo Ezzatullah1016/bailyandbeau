@@ -1018,159 +1018,31 @@ def admin_book_detail(request, book_id):
 
 @staff_member_required
 def admin_activity_config(request):
-    def _to_int(value, default=0):
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return default
+    """
+    Read-only roster of every activity config, plus delete.
 
-    def _to_float(value):
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return None
-
-    def _build_config_from_post(post_data, activity_type, book_id, title_value):
-        ui_title = (post_data.get("ui_title") or title_value or "Activity").strip()
-        ui_instructions = (post_data.get("ui_instructions") or "Complete the activity.").strip()
-        ui_theme = (post_data.get("ui_theme") or "default").strip() or "default"
-        payload = {}
-
-        if activity_type == ActivityConfig.ActivityType.DRAWING:
-            palette = [item.strip() for item in (post_data.get("drawing_palette") or "").split(",") if item.strip()]
-            brush_sizes = [
-                _to_float(item.strip())
-                for item in (post_data.get("drawing_brush_sizes") or "").split(",")
-                if item.strip()
-            ]
-            payload = {
-                "palette": palette or ["#1f2937", "#e11d48"],
-                "brush_sizes": [size for size in brush_sizes if isinstance(size, (int, float)) and size > 0] or [4, 8],
-                "allow_eraser": post_data.get("drawing_allow_eraser") == "on",
-            }
-        elif activity_type == ActivityConfig.ActivityType.QUIZ:
-            options = [item.strip() for item in post_data.getlist("quiz_options[]") if item.strip()]
-            payload = {
-                "question": (post_data.get("quiz_question") or "").strip(),
-                "options": options,
-                "correct_index": _to_int(post_data.get("quiz_correct_index"), 0),
-                "reveal_mode": (post_data.get("quiz_reveal_mode") or "host_controlled").strip(),
-            }
-        elif activity_type == ActivityConfig.ActivityType.DRAG_DROP:
-            payload = {
-                "items": [item.strip() for item in post_data.getlist("drag_items[]") if item.strip()],
-                "drop_zones": [item.strip() for item in post_data.getlist("drag_zones[]") if item.strip()],
-            }
-        elif activity_type == ActivityConfig.ActivityType.HOTSPOT:
-            hotspot_ids = post_data.getlist("hotspot_id[]")
-            hotspot_x = post_data.getlist("hotspot_x[]")
-            hotspot_y = post_data.getlist("hotspot_y[]")
-            hotspot_w = post_data.getlist("hotspot_w[]")
-            hotspot_h = post_data.getlist("hotspot_h[]")
-            hotspot_content = post_data.getlist("hotspot_content[]")
-            max_len = max(
-                len(hotspot_ids),
-                len(hotspot_x),
-                len(hotspot_y),
-                len(hotspot_w),
-                len(hotspot_h),
-                len(hotspot_content),
-                default=0,
-            )
-            hotspots = []
-            for idx in range(max_len):
-                row = {
-                    "id": (hotspot_ids[idx] if idx < len(hotspot_ids) else "").strip(),
-                    "x": _to_float(hotspot_x[idx] if idx < len(hotspot_x) else 0),
-                    "y": _to_float(hotspot_y[idx] if idx < len(hotspot_y) else 0),
-                    "w": _to_float(hotspot_w[idx] if idx < len(hotspot_w) else 0),
-                    "h": _to_float(hotspot_h[idx] if idx < len(hotspot_h) else 0),
-                    "content": (hotspot_content[idx] if idx < len(hotspot_content) else "").strip(),
-                }
-                if row["id"] or row["content"]:
-                    row["x"] = row["x"] if row["x"] is not None else 0
-                    row["y"] = row["y"] if row["y"] is not None else 0
-                    row["w"] = row["w"] if row["w"] is not None else 0
-                    row["h"] = row["h"] if row["h"] is not None else 0
-                    hotspots.append(row)
-            payload = {
-                "image_url": (post_data.get("hotspot_image_url") or "").strip(),
-                "hotspots": hotspots,
-            }
-
-        return {
-            "schema_version": ActivityConfig.SCHEMA_VERSION,
-            "activity_type": activity_type,
-            "book_id": str(book_id),
-            "ui": {
-                "title": ui_title,
-                "instructions": ui_instructions,
-                "theme": ui_theme,
-            },
-            "payload": payload,
-            "validation": {},
-        }
-
+    Authoring moved to the React builder at ``/admin/activities``: it uploads
+    illustrations, places drop zones and hotspots by clicking the image, and
+    previews the result. The form that used to live here only emitted schema
+    1.0 payloads (single-question quizzes, no images), so keeping it meant two
+    builders that disagreed about the shape of a config. The URL is kept so
+    existing portal links and bookmarks still resolve.
+    """
     selected_activity = None
-    activity_errors = []
-    selected_activity_json = "{}"
     selected_activity_config = {}
-    selected_book_id = request.GET.get("book", "").strip()
-    return_to = _safe_local_path_or_default(request, request.GET.get("return_to", ""), reverse("admin_activity_config"))
-    create_mode = request.GET.get("create") == "1"
 
-    if request.method == "POST":
-        action = request.POST.get("action")
+    if request.method == "POST" and request.POST.get("action") == "delete":
+        activity = get_object_or_404(ActivityConfig, pk=request.POST.get("activity_id"))
+        title = activity.title
+        activity.delete()
+        messages.success(request, f"Deleted activity config '{title}'.")
+        return redirect(reverse("admin_activity_config"))
 
-        if action == "save":
-            activity_id = request.POST.get("activity_id")
-            selected_activity = ActivityConfig.objects.filter(pk=activity_id).first() if activity_id else None
-            raw_json = request.POST.get("config_json", "{}").strip() or "{}"
-            activity_type = request.POST.get("activity_type", ActivityConfig.ActivityType.DRAWING)
-            book_id = request.POST.get("book")
-            title_value = request.POST.get("title", "").strip()
-            try:
-                parsed_config = json.loads(raw_json)
-            except json.JSONDecodeError:
-                parsed_config = None
-
-            if not isinstance(parsed_config, dict) or not parsed_config or parsed_config.get("schema_version") != ActivityConfig.SCHEMA_VERSION:
-                parsed_config = _build_config_from_post(request.POST, activity_type, book_id, title_value)
-
-            payload = {
-                "book": book_id,
-                "title": title_value,
-                "activity_type": activity_type,
-                "config": parsed_config,
-                "sort_order": request.POST.get("sort_order") or 0,
-                "is_active": request.POST.get("is_active") == "on",
-            }
-            serializer = ActivityConfigSerializer(selected_activity, data=payload, partial=bool(selected_activity))
-            if serializer.is_valid():
-                saved_activity = serializer.save()
-                messages.success(request, f"Activity config '{saved_activity.title}' saved successfully.")
-                posted_return_to = _safe_local_path_or_default(request, request.POST.get("return_to", ""), "")
-                if posted_return_to:
-                    return redirect(posted_return_to)
-                return redirect(f"{reverse('admin_activity_config')}?selected={saved_activity.id}")
-            activity_errors = _flatten_serializer_errors(serializer.errors)
-            selected_activity_json = json.dumps(parsed_config or {}, indent=2)
-        elif action == "delete":
-            activity = get_object_or_404(ActivityConfig, pk=request.POST.get("activity_id"))
-            title = activity.title
-            activity.delete()
-            messages.success(request, f"Deleted activity config '{title}'.")
-            return redirect(reverse("admin_activity_config"))
-
-    if not selected_activity:
-        selected_id = request.GET.get("selected")
-        if selected_id:
-            selected_activity = ActivityConfig.objects.filter(pk=selected_id).select_related("book").first()
-            if selected_activity:
-                selected_activity_json = json.dumps(selected_activity.config, indent=2)
-                selected_activity_config = selected_activity.config or {}
-    elif selected_activity and not selected_activity_config:
-        selected_activity_config = selected_activity.config or {}
+    selected_id = request.GET.get("selected")
+    if selected_id:
+        selected_activity = ActivityConfig.objects.filter(pk=selected_id).select_related("book").first()
+        if selected_activity:
+            selected_activity_config = selected_activity.config or {}
 
     activities = ActivityConfig.objects.select_related("book").order_by("book__title", "sort_order", "title")
     query = request.GET.get("q", "").strip()
@@ -1180,16 +1052,21 @@ def admin_activity_config(request):
     if type_filter:
         activities = activities.filter(activity_type=type_filter)
 
+    # Deep-link straight to the right builder screen when the operator arrived
+    # from a book ("Create activity"), so the book is pre-selected for them.
+    selected_book_id = request.GET.get("book", "").strip()
+    frontend_root = (getattr(django_settings, "FRONTEND_URL", "") or "").rstrip("/")
+    builder_url = f"{frontend_root}/admin/activities"
+    if selected_book_id:
+        builder_url = f"{builder_url}?book={selected_book_id}"
+
     context = {
         "active_nav": "activities",
         "activities": activities[:100],
         "selected_activity": selected_activity,
-        "selected_activity_json": selected_activity_json,
         "selected_activity_config": selected_activity_config,
-        "activity_errors": activity_errors,
         "query": query,
         "type_filter": type_filter,
-        "books": Book.objects.order_by("title"),
         "activity_type_choices": ActivityConfig.ActivityType.choices,
         "activity_stats": {
             "total": ActivityConfig.objects.count(),
@@ -1198,8 +1075,7 @@ def admin_activity_config(request):
             "quiz": ActivityConfig.objects.filter(activity_type=ActivityConfig.ActivityType.QUIZ).count(),
         },
         "selected_book_id": selected_book_id,
-        "return_to": return_to if return_to != reverse("admin_activity_config") else "",
-        "create_mode": create_mode,
+        "builder_url": builder_url,
     }
     return render(request, "core/admin_activity_config.html", context)
 

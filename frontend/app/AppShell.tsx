@@ -15,6 +15,9 @@ const FULLSCREEN_PREFIXES = [
   '/dashboard',
   '/onboarding',
   '/login',
+  // Admin screens are signed-in tooling, not marketing: the shell's "Login"
+  // button makes no sense once you are staff and already authenticated.
+  '/admin',
 ];
 
 function AppShellInner({ children }: { children: React.ReactNode }) {
