@@ -40,30 +40,48 @@ function OptionButton({
           ? 'bg-brand-purple text-white'
           : 'bg-brand-purple/10 text-brand-purple';
 
+  /*
+   * Two elements on purpose.
+   *
+   * An explicit `animate` prop stops framer-motion inheriting variants from the
+   * parent — but `initial` is still inherited. Putting the shake/pop directly on
+   * this button meant it kept the parent's `hidden` (opacity: 0) while the
+   * `animate` object, which only carries `scale`/`x`, never animated opacity
+   * back. The options animated perfectly, invisibly.
+   *
+   * So: the outer element owns entrance and stays at opacity 1, and a wrapper
+   * inside owns the state reaction. A feedback animation must never own opacity.
+   */
   return (
     <motion.button
       type="button"
       onClick={onSelect}
-      variants={m.riseIn}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={m.spring}
       whileHover={state === 'idle' ? m.hover : undefined}
       whileTap={m.press}
-      // The shake and the pop are the feedback; colour alone is easy to miss
-      // and fails for a colour-blind child.
-      animate={state === 'wrong' ? m.nudge : state === 'correct' ? m.celebrate : undefined}
       className={`flex min-h-[56px] w-full cursor-pointer items-center gap-3 rounded-2xl border-2 px-4 py-3 text-left font-medium text-brand-navy transition-colors ${shell}`}
     >
-      <span
-        className={`font-baloo grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-bold transition-colors ${badge}`}
+      <motion.span
+        className="flex min-w-0 flex-1 items-center gap-3"
+        // Colour alone is easy to miss and fails for a colour-blind child, so
+        // the movement carries the verdict too.
+        animate={state === 'wrong' ? m.nudge : state === 'correct' ? m.celebrate : undefined}
       >
-        {state === 'correct' ? (
-          <Check className="h-4 w-4" strokeWidth={3} />
-        ) : state === 'wrong' ? (
-          <X className="h-4 w-4" strokeWidth={3} />
-        ) : (
-          LETTERS[index] ?? index + 1
-        )}
-      </span>
-      <span className="min-w-0 flex-1">{text}</span>
+        <span
+          className={`font-baloo grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-bold transition-colors ${badge}`}
+        >
+          {state === 'correct' ? (
+            <Check className="h-4 w-4" strokeWidth={3} />
+          ) : state === 'wrong' ? (
+            <X className="h-4 w-4" strokeWidth={3} />
+          ) : (
+            LETTERS[index] ?? index + 1
+          )}
+        </span>
+        <span className="min-w-0 flex-1">{text}</span>
+      </motion.span>
     </motion.button>
   );
 }

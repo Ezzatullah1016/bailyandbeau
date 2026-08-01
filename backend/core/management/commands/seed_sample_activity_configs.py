@@ -40,36 +40,73 @@ SAMPLES = [
         "title": "QA Quick Quiz",
         "activity_type": ActivityConfig.ActivityType.QUIZ,
         "sort_order": 11,
+        # 1.1: the multi-question path with per-question feedback. The old 1.0
+        # single-question shape still validates and still renders, but seeding it
+        # meant the demo led with the legacy layout — see "QA Sort Shapes" below.
+        "version": "1.1",
         "ui": {
             "title": "Which shape has three sides?",
             "instructions": "Tap the best answer.",
             "theme": "default",
         },
         "payload": {
-            "question": "How many sides does a triangle have?",
-            "options": ["Two", "Three", "Four"],
-            "correct_index": 1,
             "reveal_mode": "instant",
+            "questions": [
+                {
+                    "id": "q1",
+                    "prompt": "How many sides does a triangle have?",
+                    "options": ["Two", "Three", "Four"],
+                    "correct_index": 1,
+                    "feedback_correct": "Three sides — that's a triangle!",
+                    "feedback_wrong": "Not quite — count the sides again.",
+                },
+                {
+                    "id": "q2",
+                    "prompt": "Which shape is perfectly round?",
+                    "options": ["Square", "Circle", "Triangle"],
+                    "correct_index": 1,
+                    "feedback_correct": "Yes — a circle has no corners at all.",
+                    "feedback_wrong": "Look for the one with no corners.",
+                },
+            ],
         },
     },
     {
         "title": "QA Sort Shapes",
         "activity_type": ActivityConfig.ActivityType.DRAG_DROP,
         "sort_order": 12,
+        # Was a 1.0 payload (flat `items` + string `drop_zones`), which has no
+        # image and therefore renders the legacy two-column list. Because it
+        # sorts before the 1.1 samples at 20+, that list was the first thing a
+        # demo showed. The 1.0 code path stays for existing customer data; the
+        # seeded demo should exercise the current UI.
+        "version": "1.1",
         "ui": {
             "title": "Match shapes to bins",
-            "instructions": "Drag each label into the matching zone.",
+            "instructions": "Drag each label onto the matching shape.",
             "theme": "default",
         },
         "payload": {
-            "items": ["Circle", "Square", "Triangle"],
-            "drop_zones": ["Round things", "Corners", "Three sides"],
+            "image_url": "/activity-samples/dragdrop-sample.png",
+            "labels": [
+                {"id": "l1", "text": "Circle"},
+                {"id": "l2", "text": "Square"},
+                {"id": "l3", "text": "Triangle"},
+            ],
+            "drop_zones": [
+                {"id": "z1", "x": 8, "y": 30, "w": 20, "h": 24, "label": "Round", "accepts": "l1"},
+                {"id": "z2", "x": 40, "y": 30, "w": 20, "h": 24, "label": "Corners", "accepts": "l2"},
+                {"id": "z3", "x": 72, "y": 30, "w": 20, "h": 24, "label": "Three sides", "accepts": "l3"},
+            ],
         },
     },
     {
         "title": "QA Picture hotspots",
         "activity_type": ActivityConfig.ActivityType.HOTSPOT,
         "sort_order": 13,
+        # Without `display: popup` this falls back to the 1.0 panel below the
+        # image, so the anchored speech bubble never appeared in the demo.
+        "version": "1.1",
         "ui": {
             "title": "Tap the animals",
             "instructions": "Explore each highlighted area.",
@@ -79,6 +116,7 @@ SAMPLES = [
             # Served from frontend/public — the old via.placeholder.com host is
             # dead and rendered a broken image in the activity picker.
             "image_url": "/activity-samples/hotspot-sample.png",
+            "display": "popup",
             "hotspots": [
                 {
                     "id": "h1",

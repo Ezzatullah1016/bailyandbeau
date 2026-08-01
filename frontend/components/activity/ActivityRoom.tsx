@@ -150,104 +150,128 @@ export default function ActivityRoom({
 
   // Stage variant is an in-flow card that lives in the center stage (Activity
   // Room). Modal variant is the centered popup used inside the reading room.
-  const CardInner = (
-      <div
-        className={
-          isStage
-            ? 'room-activity-card flex w-full max-w-5xl flex-col overflow-hidden min-h-[min(78vh,calc(100dvh-15rem))]'
-            : 'room-activity-card flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden'
-        }
+  const hostControls = role === 'host' ? (
+    <div className="flex shrink-0 items-center gap-1.5">
+      <button
+        type="button"
+        onClick={resetCurrent}
+        className="flex min-h-11 cursor-pointer items-center gap-1 rounded-xl px-3 text-xs font-bold transition-colors hover:bg-brand-purple/10"
+        style={{ color: 'var(--room-ink-soft)' }}
       >
-        {/* The activity header is a solid accent band — the reading room's
-            chrome is deliberately translucent and recessive, so the two rooms
-            read as different places rather than one skinned two ways. */}
-        <header
-          className="flex items-start justify-between gap-4 px-6 py-4"
-          style={{ background: 'var(--room-accent)', color: 'var(--room-accent-contrast)' }}
+        <RotateCcw className="h-4 w-4" />
+        Reset
+      </button>
+      {activities.length > 1 ? (
+        <>
+          <button
+            type="button"
+            onClick={goPrev}
+            disabled={index <= 0}
+            className="grid h-11 w-11 cursor-pointer place-items-center rounded-xl transition-colors hover:bg-brand-purple/10 disabled:cursor-not-allowed disabled:opacity-30"
+            style={{ color: 'var(--room-ink-soft)' }}
+            aria-label="Previous activity"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            onClick={goNext}
+            disabled={index >= activities.length - 1}
+            className="grid h-11 w-11 cursor-pointer place-items-center rounded-xl transition-colors hover:bg-brand-purple/10 disabled:cursor-not-allowed disabled:opacity-30"
+            style={{ color: 'var(--room-ink-soft)' }}
+            aria-label="Next activity"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        </>
+      ) : null}
+      {!isStage ? (
+        <button
+          type="button"
+          onClick={() => {
+            room.localParticipant.publishData(buildMsg('ACTIVITY_CLOSE', {}), { reliable: true });
+            onClose();
+          }}
+          className="grid h-11 w-11 cursor-pointer place-items-center rounded-xl transition-colors hover:bg-brand-purple/10"
+          style={{ color: 'var(--room-ink-soft)' }}
+          aria-label="Close activities"
         >
-          <div className="min-w-0">
-            <div className="flex items-center gap-3">
-              <p className="text-[10px] font-bold uppercase tracking-widest opacity-70">
-                Activity {index + 1} / {activities.length}
-              </p>
-              {activities.length > 1 && (
-                <div className="flex items-center gap-1" aria-hidden>
-                  {activities.map((a, i) => (
-                    <span
-                      key={a.id}
-                      className={`h-1.5 rounded-full transition-all duration-200 ${
-                        i === index ? 'w-4 bg-current' : 'w-1.5 bg-current/40'
-                      }`}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-            <h2 className="font-headline truncate text-xl font-bold md:text-2xl">{ui.title || current.title}</h2>
-            {ui.instructions ? (
-              <p className="mt-1 max-w-xl text-sm opacity-90">{ui.instructions}</p>
-            ) : null}
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {role === 'host' && (
-              <>
-                <button
-                  type="button"
-                  onClick={resetCurrent}
-                  className="flex min-h-11 cursor-pointer items-center gap-1 rounded-lg bg-white/15 px-3 py-2 text-xs font-bold transition-opacity hover:opacity-90"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  Reset
-                </button>
-                <button
-                  type="button"
-                  onClick={goPrev}
-                  disabled={index <= 0}
-                  className="grid h-11 w-11 cursor-pointer place-items-center rounded-lg bg-white/15 transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-                  aria-label="Previous activity"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={goNext}
-                  disabled={index >= activities.length - 1}
-                  className="grid h-11 w-11 cursor-pointer place-items-center rounded-lg bg-white/15 transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-                  aria-label="Next activity"
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </button>
-              </>
-            )}
-            {role === 'host' && !isStage ? (
-              <button
-                type="button"
-                onClick={() => {
-                  room.localParticipant.publishData(buildMsg('ACTIVITY_CLOSE', {}), { reliable: true });
-                  onClose();
-                }}
-                className="room-tap cursor-pointer rounded-lg bg-white/15 hover:opacity-90"
-                aria-label="Close activities"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            ) : null}
-          </div>
-        </header>
+          <X className="h-5 w-5" />
+        </button>
+      ) : null}
+    </div>
+  ) : null;
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-6" style={{ background: 'var(--activity-paper)' }}>
-          {/* keyed on index so switching activities fades in cleanly */}
-          <div key={current.id} className="activity-in">
-            <ActivityBody
-              activity={current}
-              payload={payload}
-              role={role}
-              state={currentState}
-              patchCurrent={patchCurrent}
-            />
-          </div>
+  const CardInner = (
+    /*
+     * No coloured header band, and no forced height.
+     *
+     * The band was a solid fill of the book's accent, which for Colour
+     * Adventure is the `sunset` preset's #8F4314 — a heavy brown slab across the
+     * top of every activity. And `min-h-[78vh]` applied regardless of content,
+     * so a 250px quiz sat in a 700px box with the remainder painted blank.
+     * The card now sizes to what is in it, and the title sits on the surface.
+     */
+    <div
+      className={
+        isStage
+          ? 'room-activity-card flex w-full max-w-5xl flex-col overflow-hidden'
+          : 'room-activity-card flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden'
+      }
+      style={{ background: 'var(--activity-paper)' }}
+    >
+      <header className="flex items-start justify-between gap-4 px-5 pt-4 md:px-6">
+        <div className="min-w-0">
+          {activities.length > 1 ? (
+            <div className="mb-1.5 flex items-center gap-2">
+              <p
+                className="text-[10px] font-bold uppercase tracking-widest"
+                style={{ color: 'var(--room-ink-soft)' }}
+              >
+                {index + 1} / {activities.length}
+              </p>
+              <div className="flex items-center gap-1" aria-hidden>
+                {activities.map((a, i) => (
+                  <span
+                    key={a.id}
+                    className="h-1.5 rounded-full transition-all duration-200"
+                    style={{
+                      width: i === index ? 16 : 6,
+                      background: i === index ? 'var(--room-accent)' : 'var(--room-chrome-line)',
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+          <h2
+            className="font-baloo truncate text-xl font-bold md:text-2xl"
+            style={{ color: 'var(--room-ink)' }}
+          >
+            {ui.title || current.title}
+          </h2>
+          {ui.instructions ? (
+            <p className="mt-0.5 max-w-xl text-sm" style={{ color: 'var(--room-ink-soft)' }}>
+              {ui.instructions}
+            </p>
+          ) : null}
+        </div>
+        {hostControls}
+      </header>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-5 pt-4 md:px-6">
+        {/* keyed on index so switching activities fades in cleanly */}
+        <div key={current.id} className="activity-in">
+          <ActivityBody
+            activity={current}
+            payload={payload}
+            role={role}
+            state={currentState}
+            patchCurrent={patchCurrent}
+          />
         </div>
       </div>
+    </div>
   );
 
   // Stage: card sits in the normal flow (center stage). Modal: centered overlay.

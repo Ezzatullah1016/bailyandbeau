@@ -16,6 +16,37 @@ import type { BookThemeData } from './api';
 const DEFAULT_ACCENT = '#3d3b62';
 const DEFAULT_BOOK_INK = '#fdfbf7';
 
+/**
+ * Pick black or white text for a background colour.
+ *
+ * `--room-accent` is per-book but `--room-accent-contrast` was never set
+ * alongside it, so anything painted on the accent always took the static white
+ * from room-tokens.css. That happens to pass on the `sunset` preset's brown
+ * (#8F4314) and fails outright on the `night` preset's pale gold (#F0C75E) —
+ * white on pale gold. Deriving it means a new book theme cannot introduce an
+ * unreadable combination.
+ *
+ * sRGB relative luminance, per WCAG 2.x.
+ */
+function contrastFor(hex: string): string {
+  const s = hex.replace('#', '').trim();
+  const full = s.length === 3 ? s.split('').map((c) => c + c).join('') : s;
+  if (full.length !== 6) return '#ffffff';
+  const n = Number.parseInt(full, 16);
+  if (Number.isNaN(n)) return '#ffffff';
+  const channel = (v: number) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const L =
+    0.2126 * channel((n >> 16) & 255) +
+    0.7152 * channel((n >> 8) & 255) +
+    0.0722 * channel(n & 255);
+  // Contrast against white is (1.05 / (L + 0.05)); against near-black it is
+  // ((L + 0.05) / 0.05). They cross at L ≈ 0.179.
+  return L > 0.179 ? '#12203a' : '#ffffff';
+}
+
 export function useRoomTheme(theme: BookThemeData | null | undefined) {
   return useMemo(() => {
     if (!theme) {
@@ -48,7 +79,10 @@ export function useRoomTheme(theme: BookThemeData | null | undefined) {
       style['--room-bg-image'] = `url("${theme.bg_video_poster_url}")`;
     }
 
-    if (theme.accent) style['--room-accent'] = theme.accent;
+    if (theme.accent) {
+      style['--room-accent'] = theme.accent;
+      style['--room-accent-contrast'] = contrastFor(theme.accent);
+    }
     if (theme.ink) style['--room-ink'] = theme.ink;
 
     style['--book-tilt'] = `${theme.tilt_degrees}deg`;
