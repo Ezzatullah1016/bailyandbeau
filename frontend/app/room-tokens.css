@@ -147,6 +147,25 @@
    is a workspace: a solid card with a defined edge and a colour-banded header,
    so a child can tell at a glance whether it is time to listen or time to play.
    Both still read from the same book theme, so a book keeps its world in both. */
+/* Root-level defaults so activity surfaces are still opaque outside a room.
+   These used to live only under `.room-root`, which meant the admin builder's
+   live preview rendered the panes with `background: var(--activity-paper)`
+   resolving to nothing — the hotspot popup and the drawing rail came out
+   transparent, with the illustration legible straight through the text. */
+:root {
+  --activity-paper: #fdfcff;
+  --activity-edge: rgba(35, 50, 74, 0.14);
+  --activity-shadow: 0 18px 48px -16px rgba(23, 34, 51, 0.34);
+  /* The panes also paint with these. Every --room-* token is scoped to
+     .room-root, so outside a session they resolved to nothing: an unstyled
+     check on no background rather than white-on-accent. Light-theme values,
+     matching the .room-root defaults above. */
+  --room-ink: #23324a;
+  --room-ink-soft: rgba(35, 50, 74, 0.62);
+  --room-accent: #3d3b62;
+  --room-accent-contrast: #ffffff;
+}
+
 .room-root {
   --activity-paper: #fdfcff;
   --activity-edge: rgba(35, 50, 74, 0.14);
