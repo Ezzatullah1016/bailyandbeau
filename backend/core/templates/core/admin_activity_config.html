@@ -1,60 +1,78 @@
 {% extends 'core/admin_base.html' %}
 
-{% block title %}Bailey & Beau | Activity Config{% endblock %}
-{% block page_title %}Activity config{% endblock %}
-{% block page_subtitle %}Every activity across the library. Authoring happens in the activity builder.{% endblock %}
+{% block title %}Bailey &amp; Beau | Activities{% endblock %}
+{% block page_title %}Activities{% endblock %}
+{% block page_subtitle %}Author quizzes, drag &amp; drop, discovery spots and drawing pages. Saved as schema 1.1.{% endblock %}
 {% block page_actions %}
+<a href="{% url 'admin_activity_groups' %}" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Adventures</a>
 <a href="/api/v1/admin/activities/" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Activities API</a>
 {% endblock %}
 
 {% block content %}
-<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-    <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p class="text-xs font-bold uppercase tracking-[0.25em] text-slate-500">Total configs</p><p class="mt-3 text-3xl font-extrabold text-slate-900">{{ activity_stats.total }}</p></article>
-    <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p class="text-xs font-bold uppercase tracking-[0.25em] text-slate-500">Drawing</p><p class="mt-3 text-3xl font-extrabold text-slate-900">{{ activity_stats.drawing }}</p></article>
-    <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p class="text-xs font-bold uppercase tracking-[0.25em] text-slate-500">Drag &amp; drop</p><p class="mt-3 text-3xl font-extrabold text-slate-900">{{ activity_stats.drag_drop }}</p></article>
+<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+    <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p class="text-xs font-bold uppercase tracking-[0.25em] text-slate-500">Total</p><p class="mt-3 text-3xl font-extrabold text-slate-900">{{ activity_stats.total }}</p></article>
     <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p class="text-xs font-bold uppercase tracking-[0.25em] text-slate-500">Quiz</p><p class="mt-3 text-3xl font-extrabold text-slate-900">{{ activity_stats.quiz }}</p></article>
+    <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p class="text-xs font-bold uppercase tracking-[0.25em] text-slate-500">Drag &amp; drop</p><p class="mt-3 text-3xl font-extrabold text-slate-900">{{ activity_stats.drag_drop }}</p></article>
+    <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p class="text-xs font-bold uppercase tracking-[0.25em] text-slate-500">Discovery</p><p class="mt-3 text-3xl font-extrabold text-slate-900">{{ activity_stats.hotspot }}</p></article>
+    <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p class="text-xs font-bold uppercase tracking-[0.25em] text-slate-500">Drawing</p><p class="mt-3 text-3xl font-extrabold text-slate-900">{{ activity_stats.drawing }}</p></article>
 </div>
 
 <form method="get" class="mt-6 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:flex-row lg:items-center">
+    <input type="search" name="q" value="{{ query }}" placeholder="Search by title" class="rounded-xl border border-slate-200 px-4 py-2 text-sm lg:w-64">
+    <select name="group" class="rounded-xl border border-slate-200 px-4 py-2 text-sm">
+        <option value="">All adventures &amp; books</option>
+        <option value="ungrouped" {% if group_filter == 'ungrouped' %}selected{% endif %}>Book activities only</option>
+        {% for group in activity_groups %}
+        <option value="{{ group.id }}" {% if group_filter == group.id|stringformat:'s' %}selected{% endif %}>{{ group.title }}</option>
+        {% endfor %}
+    </select>
     <select name="activity_type" class="rounded-xl border border-slate-200 px-4 py-2 text-sm">
         <option value="">All activity types</option>
         {% for value, label in activity_type_choices %}
         <option value="{{ value }}" {% if type_filter == value %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
     </select>
-    <button type="submit" class="rounded-xl bg-rose-600 px-5 py-2 text-sm font-semibold text-white hover:bg-rose-700">Apply Filter</button>
+    <button type="submit" class="rounded-xl bg-rose-600 px-5 py-2 text-sm font-semibold text-white hover:bg-rose-700">Apply filter</button>
+    <a href="{% url 'admin_activity_config' %}" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Reset</a>
 </form>
 
-<div class="mt-6 grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+<div class="mt-6 grid gap-6 xl:grid-cols-[1fr_1fr]">
     <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div class="border-b border-slate-200 px-5 py-4">
-            <h3 class="text-lg font-semibold text-slate-900">All activity configs</h3>
+        <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+            <h3 class="text-lg font-semibold text-slate-900">All activities</h3>
+            <a href="{% url 'admin_activity_config' %}?type=quiz" class="rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800">+ New activity</a>
         </div>
         <div class="overflow-x-auto">
             <table class="table-hover min-w-full text-left text-sm">
                 <thead class="bg-slate-50 text-slate-500">
                     <tr>
-                        <th class="px-5 py-3 font-semibold">Config</th>
-                        <th class="px-5 py-3 font-semibold">Book</th>
+                        <th class="px-5 py-3 font-semibold">Activity</th>
+                        <th class="px-5 py-3 font-semibold">Belongs to</th>
                         <th class="px-5 py-3 font-semibold">Type</th>
                         <th class="px-5 py-3 font-semibold">Status</th>
-                        <th class="px-5 py-3 font-semibold text-right">Actions</th>
+                        <th class="px-5 py-3"></th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody>
                     {% for activity in activities %}
-                    <tr>
-                        <td class="px-5 py-4">
-                            <p class="font-medium text-slate-900">{{ activity.title }}</p>
-                            <p class="text-xs text-slate-500">{{ activity.config|length }} config keys</p>
+                    <tr class="border-t border-slate-100 {% if selected_activity and selected_activity.id == activity.id %}bg-amber-50{% endif %}">
+                        <td class="px-5 py-3 font-semibold text-slate-900">{{ activity.title }}</td>
+                        <td class="px-5 py-3 text-slate-600">
+                            {% if activity.activity_group %}<span class="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-700">{{ activity.activity_group.title }}</span>
+                            {% elif activity.book %}{{ activity.book.title }}
+                            {% else %}<span class="text-slate-400">—</span>{% endif %}
                         </td>
-                        <td class="px-5 py-4">{{ activity.book.title }}</td>
-                        <td class="px-5 py-4">{{ activity.get_activity_type_display }}</td>
-                        <td class="px-5 py-4"><span class="rounded-full px-2.5 py-1 text-xs font-semibold {% if activity.is_active %}bg-emerald-100 text-emerald-700{% else %}bg-amber-100 text-amber-700{% endif %}">{% if activity.is_active %}Active{% else %}Draft{% endif %}</span></td>
-                        <td class="px-5 py-4 text-right"><a href="?selected={{ activity.id }}" class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit</a></td>
+                        <td class="px-5 py-3 text-slate-600">{{ activity.get_activity_type_display }}</td>
+                        <td class="px-5 py-3">
+                            {% if activity.is_active %}<span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">Live</span>
+                            {% else %}<span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">Draft</span>{% endif %}
+                        </td>
+                        <td class="px-5 py-3 text-right">
+                            <a href="{% url 'admin_activity_config' %}?selected={{ activity.id }}" class="font-semibold text-violet-700 hover:underline">Edit</a>
+                        </td>
                     </tr>
                     {% empty %}
-                    <tr><td colspan="5" class="px-5 py-10 text-center text-slate-500">No activity configs available.</td></tr>
+                    <tr><td colspan="5" class="px-5 py-10 text-center text-slate-500">No activities yet — create one on the right.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -62,21 +80,350 @@
     </section>
 
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h3 class="text-lg font-semibold text-slate-900">Create activities in the new builder</h3>
-        <p class="mt-2 text-sm text-slate-600">
-            Activity authoring has moved. The builder in the main app uploads your
-            illustrations, lets you place drop zones and hotspots by clicking on the
-            image, and previews the activity exactly as the child will see it.
-        </p>
-        <p class="mt-3 text-sm text-slate-600">
-            This page stays read-only: it lists every activity and can delete one.
-        </p>
-        <a href="{{ builder_url }}" class="mt-4 inline-flex rounded-xl bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800">Open the activity builder</a>
+        <h3 class="text-lg font-semibold text-slate-900">{% if selected_activity %}Edit activity{% else %}New activity{% endif %}</h3>
+        <p class="mt-1 text-sm text-slate-500">Validation comes from <code>ActivityConfigSerializer</code> and the model's <code>clean()</code> rules.</p>
 
-        <form method="post" class="mt-6 border-t border-slate-200 pt-4" data-confirm-message="Delete this activity config?">{% csrf_token %}<input type="hidden" name="action" value="delete"><input type="hidden" name="activity_id" value="{{ selected_activity.id|default:'' }}"><button type="submit" {% if not selected_activity %}disabled aria-disabled="true"{% endif %} class="rounded-xl border border-rose-200 px-5 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50">Delete</button></form>
-        {% if not selected_activity %}
-        <p class="mt-2 text-xs text-slate-400">Select a config from the list to enable delete.</p>
+        {% if activity_errors %}
+        <div class="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            <ul class="list-disc space-y-1 pl-5">
+                {% for error in activity_errors %}
+                <li><span class="font-semibold">{{ error.field }}:</span> {{ error.message }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <form method="post" enctype="multipart/form-data" class="mt-4 space-y-4" id="activity-form" novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="action" value="save">
+            <input type="hidden" name="activity_id" value="{{ selected_activity.id|default:'' }}">
+            <input type="hidden" name="publish" id="publish-flag" value="{% if selected_activity and not selected_activity.is_active %}0{% else %}1{% endif %}">
+
+            <div class="grid gap-3 sm:grid-cols-2">
+                <label class="block">
+                    <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Activity type</span>
+                    <select name="activity_type" id="activity-type" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                        {% for value, label in activity_type_choices %}
+                        <option value="{{ value }}" {% if create_type == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="block">
+                    <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Belongs to</span>
+                    <select name="owner" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                        <optgroup label="Adventures">
+                            {% for group in activity_groups %}
+                            <option value="group:{{ group.id }}" {% if selected_owner == 'group:'|add:group.id|stringformat:'s' %}selected{% endif %}>{{ group.title }}</option>
+                            {% endfor %}
+                        </optgroup>
+                        <optgroup label="Books">
+                            {% for book in books %}
+                            <option value="book:{{ book.id }}" {% if selected_owner == 'book:'|add:book.id|stringformat:'s' or selected_book_id == book.id|stringformat:'s' %}selected{% endif %}>{{ book.title }}</option>
+                            {% endfor %}
+                        </optgroup>
+                    </select>
+                </label>
+            </div>
+
+            <label class="block">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Admin title</span>
+                <input name="title" value="{{ selected_activity.title|default:'' }}" required class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" placeholder="e.g. Ocean Story Quest">
+            </label>
+
+            <div class="grid gap-3 sm:grid-cols-2">
+                <label class="block">
+                    <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Title shown to the child</span>
+                    <input name="ui_title" value="{{ selected_ui.title|default:'' }}" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" placeholder="What lives in the reef?">
+                </label>
+                <label class="block">
+                    <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Order</span>
+                    <input type="number" name="sort_order" min="0" value="{{ selected_activity.sort_order|default:0 }}" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                </label>
+            </div>
+
+            <label class="block">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Instructions</span>
+                <input name="ui_instructions" value="{{ selected_ui.instructions|default:'' }}" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" placeholder="Tap the best answer.">
+            </label>
+
+            {# ── Illustration: needed by drag & drop and hotspot, optional for drawing ── #}
+            <div data-needs-image class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Illustration</span>
+                <input type="file" name="illustration_file" accept="image/png,image/jpeg,image/webp,image/gif" class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+                {# Two separate defaults: chaining them raises VariableDoesNotExist
+                   when the key is absent, which it is for every other type. #}
+                <input name="image_url" id="image-url" value="{% if selected_payload.image_url %}{{ selected_payload.image_url }}{% elif selected_payload.background_url %}{{ selected_payload.background_url }}{% endif %}" class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs" placeholder="…or paste a URL / path such as /activity-samples/hotspot-sample.png">
+                <p class="mt-1 text-xs text-slate-500">Upload wins over the URL. Max 5MB.</p>
+            </div>
+
+            {# ── Quiz ─────────────────────────────────────────────────────── #}
+            <div data-type-panel="quiz" class="hidden space-y-3">
+                <label class="block">
+                    <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Reveal</span>
+                    <select name="quiz_reveal_mode" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                        <option value="instant" {% if selected_payload.reveal_mode == 'instant' %}selected{% endif %}>Instantly, when the child answers</option>
+                        <option value="host_controlled" {% if selected_payload.reveal_mode == 'host_controlled' %}selected{% endif %}>When the grown-up chooses</option>
+                    </select>
+                </label>
+                <div id="questions"></div>
+                <button type="button" id="add-question" class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">+ Add question</button>
+            </div>
+
+            {# ── Drag & drop ──────────────────────────────────────────────── #}
+            <div data-type-panel="drag_drop" class="hidden space-y-3">
+                <p class="text-xs font-bold uppercase tracking-wider text-slate-500">Labels</p>
+                <div id="labels"></div>
+                <button type="button" id="add-label" class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">+ Add label</button>
+                <p class="text-xs font-bold uppercase tracking-wider text-slate-500">Drop zones — click the picture to place one</p>
+                <div data-placer="zone"></div>
+                <div id="zones"></div>
+            </div>
+
+            {# ── Discovery spots ──────────────────────────────────────────── #}
+            <div data-type-panel="hotspot" class="hidden space-y-3">
+                <p class="text-xs font-bold uppercase tracking-wider text-slate-500">Spots — click the picture to place one</p>
+                <div data-placer="hotspot"></div>
+                <div id="hotspots"></div>
+            </div>
+
+            {# ── Drawing ──────────────────────────────────────────────────── #}
+            <div data-type-panel="drawing" class="hidden space-y-3">
+                <label class="block">
+                    <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Palette (comma separated)</span>
+                    <input name="drawing_palette" value="{% if selected_payload.palette %}{{ selected_payload.palette|join:', ' }}{% else %}#3d3b62, #c84a71, #f0c75e, #3b85a6{% endif %}" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                </label>
+                <label class="block">
+                    <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Brush sizes</span>
+                    <input name="drawing_brush_sizes" value="{% if selected_payload.brush_sizes %}{{ selected_payload.brush_sizes|join:', ' }}{% else %}3, 6, 12, 24{% endif %}" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                </label>
+                <label class="flex items-center gap-2 text-sm text-slate-700">
+                    <input type="checkbox" name="drawing_allow_eraser" {% if selected_payload.allow_eraser or not selected_activity %}checked{% endif %}> Allow the eraser
+                </label>
+                <label class="flex items-center gap-2 text-sm text-slate-700">
+                    <input type="checkbox" name="drawing_allow_submit" {% if selected_payload.allow_submit or not selected_activity %}checked{% endif %}> Let the child submit their artwork
+                </label>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-3 border-t border-slate-200 pt-4">
+                <button type="submit" onclick="document.getElementById('publish-flag').value='1'" class="rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Publish</button>
+                <button type="submit" onclick="document.getElementById('publish-flag').value='0'" class="rounded-xl border border-slate-300 px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Save draft</button>
+                {% if selected_activity %}
+                <a href="{% url 'admin_activity_config' %}" class="text-sm font-semibold text-slate-500 hover:underline">Cancel</a>
+                <span class="ml-auto text-xs font-bold uppercase tracking-wider text-slate-500">Currently {% if selected_activity.is_active %}live{% else %}a draft{% endif %}</span>
+                {% endif %}
+            </div>
+            <p class="text-xs text-slate-500">Drafts are saved but stay hidden from the Activity Room until published.</p>
+        </form>
+
+        {% if selected_activity %}
+        <form method="post" class="mt-3 border-t border-slate-200 pt-3" data-confirm-message="Delete this activity?">{% csrf_token %}
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="activity_id" value="{{ selected_activity.id }}">
+            <button type="submit" class="rounded-xl border border-rose-200 px-5 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-50">Delete</button>
+        </form>
         {% endif %}
     </section>
 </div>
+
+{{ selected_payload|json_script:"existing-payload" }}
+<script>
+(() => {
+  const form = document.getElementById('activity-form');
+  if (!form) return;
+  const typeEl = document.getElementById('activity-type');
+  const imageUrlEl = document.getElementById('image-url');
+  const existing = JSON.parse(document.getElementById('existing-payload').textContent || '{}');
+
+  const esc = (s) => String(s ?? '').replace(/"/g, '&quot;');
+
+  // ── Show only the panel for the chosen type ──────────────────────────────
+  function showPanels() {
+    const type = typeEl.value;
+    form.querySelectorAll('[data-type-panel]').forEach((el) => {
+      el.classList.toggle('hidden', el.dataset.typePanel !== type);
+    });
+    // Quiz is the only type with no picture.
+    form.querySelector('[data-needs-image]').classList.toggle('hidden', type === 'quiz');
+    renderPlacer();
+  }
+
+  // ── Quiz questions ───────────────────────────────────────────────────────
+  const questionsEl = document.getElementById('questions');
+  let qCount = 0;
+  function addQuestion(data) {
+    const i = qCount++;
+    const opts = (data?.options?.length ? data.options : ['', '']);
+    const row = document.createElement('div');
+    row.className = 'rounded-xl border border-slate-200 p-3 space-y-2';
+    row.innerHTML = `
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Question ${i + 1}</span>
+        <button type="button" class="text-xs font-semibold text-rose-600 hover:underline" data-remove>Remove</button>
+      </div>
+      <input type="hidden" name="q_id[]" value="${esc(data?.id || 'q' + (i + 1))}">
+      <input name="q_prompt[]" value="${esc(data?.prompt)}" placeholder="Question text" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
+      <div data-options class="space-y-1"></div>
+      <button type="button" data-add-option class="text-xs font-semibold text-violet-700 hover:underline">+ Add option</button>
+      <div class="grid gap-2 sm:grid-cols-2">
+        <input name="q_feedback_correct[]" value="${esc(data?.feedback_correct)}" placeholder="Message when right (optional)" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs">
+        <input name="q_feedback_wrong[]" value="${esc(data?.feedback_wrong)}" placeholder="Message when wrong (optional)" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs">
+      </div>`;
+    const optionsBox = row.querySelector('[data-options]');
+    const correctIndex = Number.isInteger(data?.correct_index) ? data.correct_index : 0;
+    const addOption = (value, checked) => {
+      const n = optionsBox.children.length;
+      if (n >= 4) return;
+      const line = document.createElement('label');
+      line.className = 'flex items-center gap-2';
+      line.innerHTML = `
+        <input type="radio" name="q_correct[]" value="${n}" ${checked ? 'checked' : ''} title="Correct answer">
+        <input name="q_options_${i}[]" value="${esc(value)}" placeholder="Option ${n + 1}" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">`;
+      optionsBox.appendChild(line);
+    };
+    opts.forEach((o, n) => addOption(o, n === correctIndex));
+    row.querySelector('[data-add-option]').addEventListener('click', () => addOption('', false));
+    row.querySelector('[data-remove]').addEventListener('click', () => row.remove());
+    questionsEl.appendChild(row);
+  }
+  document.getElementById('add-question').addEventListener('click', () => addQuestion());
+
+  // ── Drag & drop labels ───────────────────────────────────────────────────
+  const labelsEl = document.getElementById('labels');
+  let lCount = 0;
+  function addLabel(data) {
+    const i = lCount++;
+    const row = document.createElement('div');
+    row.className = 'flex items-center gap-2 mb-2';
+    row.innerHTML = `
+      <input type="hidden" name="label_id[]" value="${esc(data?.id || 'l' + (i + 1))}">
+      <input name="label_text[]" value="${esc(data?.text)}" placeholder="Label, e.g. Clownfish" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
+      <button type="button" class="text-xs font-semibold text-rose-600 hover:underline" data-remove>Remove</button>`;
+    row.querySelector('[data-remove]').addEventListener('click', () => { row.remove(); refreshAccepts(); });
+    labelsEl.appendChild(row);
+    refreshAccepts();
+  }
+  document.getElementById('add-label').addEventListener('click', () => addLabel());
+
+  /** Every zone's "correct label" dropdown lists the labels defined above. */
+  function refreshAccepts() {
+    const labels = [...labelsEl.querySelectorAll('input[name="label_text[]"]')].map((el, n) => ({
+      id: labelsEl.querySelectorAll('input[name="label_id[]"]')[n]?.value || '',
+      text: el.value || `Label ${n + 1}`,
+    }));
+    document.querySelectorAll('select[name="zone_accepts[]"]').forEach((sel) => {
+      const current = sel.value;
+      sel.innerHTML = '<option value="">— no correct answer —</option>' +
+        labels.map((l) => `<option value="${esc(l.id)}" ${l.id === current ? 'selected' : ''}>${esc(l.text)}</option>`).join('');
+    });
+  }
+  labelsEl.addEventListener('input', refreshAccepts);
+
+  // ── Click-to-place: zones and hotspots ───────────────────────────────────
+  // Percentages, matching how the runtime positions them, so the maths is
+  // resolution-independent and needs no measuring on the render side.
+  function renderPlacer() {
+    const type = typeEl.value;
+    const holder = form.querySelector(`[data-placer="${type === 'drag_drop' ? 'zone' : 'hotspot'}"]`);
+    if (!holder || (type !== 'drag_drop' && type !== 'hotspot')) return;
+    const url = imageUrlEl.value.trim();
+    if (!url) {
+      holder.innerHTML = '<p class="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">Add an illustration first, then click it to place spots.</p>';
+      return;
+    }
+    holder.innerHTML = `<div class="relative inline-block w-full cursor-crosshair overflow-hidden rounded-xl border border-slate-200" data-canvas>
+        <img src="${esc(url)}" alt="" class="block max-h-80 w-full object-contain select-none pointer-events-none">
+        <div class="absolute inset-0" data-marks></div>
+      </div>`;
+    holder.querySelector('[data-canvas]').addEventListener('click', (e) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width) * 100;
+      const y = ((e.clientY - rect.top) / rect.height) * 100;
+      const clamp = (v, hi) => Math.max(0, Math.min(v, hi));
+      if (type === 'drag_drop') addZone({ x: clamp(x, 82), y: clamp(y, 86), w: 18, h: 14 });
+      else addHotspot({ x: clamp(x, 88), y: clamp(y, 86), w: 12, h: 14 });
+    });
+    drawMarks();
+  }
+
+  function drawMarks() {
+    const marks = form.querySelector('[data-marks]');
+    if (!marks) return;
+    const rows = typeEl.value === 'drag_drop'
+      ? [...document.querySelectorAll('#zones [data-row]')]
+      : [...document.querySelectorAll('#hotspots [data-row]')];
+    marks.innerHTML = rows.map((row, n) => {
+      const g = (name) => row.querySelector(`[name="${name}"]`)?.value ?? 0;
+      const prefix = typeEl.value === 'drag_drop' ? 'zone' : 'hotspot';
+      return `<div class="absolute grid place-items-center rounded border-2 border-amber-500 bg-amber-400/30 text-xs font-bold"
+        style="left:${g(prefix + '_x[]')}%;top:${g(prefix + '_y[]')}%;width:${g(prefix + '_w[]')}%;height:${g(prefix + '_h[]')}%">${n + 1}</div>`;
+    }).join('');
+  }
+
+  const zonesEl = document.getElementById('zones');
+  let zCount = 0;
+  function addZone(data) {
+    const i = zCount++;
+    const row = document.createElement('div');
+    row.dataset.row = '1';
+    row.className = 'mt-2 rounded-xl border border-slate-200 p-3 space-y-2';
+    row.innerHTML = `
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Zone ${i + 1}</span>
+        <button type="button" class="text-xs font-semibold text-rose-600 hover:underline" data-remove>Remove</button>
+      </div>
+      <input type="hidden" name="zone_id[]" value="${esc(data?.id || 'z' + (i + 1))}">
+      <input type="hidden" name="zone_x[]" value="${Number(data?.x ?? 0).toFixed(2)}">
+      <input type="hidden" name="zone_y[]" value="${Number(data?.y ?? 0).toFixed(2)}">
+      <input type="hidden" name="zone_w[]" value="${Number(data?.w ?? 18).toFixed(2)}">
+      <input type="hidden" name="zone_h[]" value="${Number(data?.h ?? 14).toFixed(2)}">
+      <input name="zone_label[]" value="${esc(data?.label)}" placeholder="Zone name (optional)" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
+      <select name="zone_accepts[]" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"></select>`;
+    row.querySelector('[data-remove]').addEventListener('click', () => { row.remove(); drawMarks(); });
+    zonesEl.appendChild(row);
+    if (data?.accepts) row.querySelector('select').dataset.want = data.accepts;
+    refreshAccepts();
+    if (data?.accepts) row.querySelector('select').value = data.accepts;
+    drawMarks();
+  }
+
+  const hotspotsEl = document.getElementById('hotspots');
+  let hCount = 0;
+  function addHotspot(data) {
+    const i = hCount++;
+    const row = document.createElement('div');
+    row.dataset.row = '1';
+    row.className = 'mt-2 rounded-xl border border-slate-200 p-3 space-y-2';
+    row.innerHTML = `
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Spot ${i + 1}</span>
+        <button type="button" class="text-xs font-semibold text-rose-600 hover:underline" data-remove>Remove</button>
+      </div>
+      <input type="hidden" name="hotspot_id[]" value="${esc(data?.id || 'h' + (i + 1))}">
+      <input type="hidden" name="hotspot_x[]" value="${Number(data?.x ?? 0).toFixed(2)}">
+      <input type="hidden" name="hotspot_y[]" value="${Number(data?.y ?? 0).toFixed(2)}">
+      <input type="hidden" name="hotspot_w[]" value="${Number(data?.w ?? 12).toFixed(2)}">
+      <input type="hidden" name="hotspot_h[]" value="${Number(data?.h ?? 14).toFixed(2)}">
+      <textarea name="hotspot_content[]" rows="2" placeholder="What the child learns here" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">${esc(data?.content)}</textarea>`;
+    row.querySelector('[data-remove]').addEventListener('click', () => { row.remove(); drawMarks(); });
+    hotspotsEl.appendChild(row);
+    drawMarks();
+  }
+
+  // ── Hydrate from the activity being edited ───────────────────────────────
+  (existing.questions || []).forEach(addQuestion);
+  (existing.labels || []).forEach(addLabel);
+  (existing.drop_zones || []).forEach((z) => { if (typeof z === 'object') addZone(z); });
+  (existing.hotspots || []).forEach(addHotspot);
+  if (typeEl.value === 'quiz' && !questionsEl.children.length) addQuestion();
+  if (typeEl.value === 'drag_drop' && !labelsEl.children.length) { addLabel(); addLabel(); }
+
+  typeEl.addEventListener('change', () => {
+    if (typeEl.value === 'quiz' && !questionsEl.children.length) addQuestion();
+    if (typeEl.value === 'drag_drop' && !labelsEl.children.length) { addLabel(); addLabel(); }
+    showPanels();
+  });
+  imageUrlEl.addEventListener('change', renderPlacer);
+  showPanels();
+})();
+</script>
 {% endblock %}

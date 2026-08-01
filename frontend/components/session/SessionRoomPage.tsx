@@ -25,6 +25,7 @@ import { useSession } from '@/contexts/SessionContext';
 import {
   completeSession,
   getBookActivities,
+  getGroupActivities,
   getBookPagesWithMeta,
   getGuestToken,
   getSession,
@@ -497,6 +498,7 @@ function RoomContent({
   sessionId,
   participantId,
   bookId,
+  activityGroupId,
   bookTitle,
   inviteToken,
   onEnd,
@@ -505,7 +507,9 @@ function RoomContent({
   role: 'host' | 'guest';
   sessionId: string;
   participantId: string;
-  bookId: string;
+  /** Null when the session targets a themed adventure instead of a book. */
+  bookId: string | null;
+  activityGroupId: string | null;
   bookTitle: string;
   inviteToken: string | null;
   onEnd: () => void;
@@ -772,6 +776,8 @@ function RoomContent({
   // ── Fetch pages ───────────────────────────────────────────────────────────
   useEffect(() => {
     const guestPid = role === 'guest' ? participantId : undefined;
+    // An adventure has no pages; skip the fetch rather than 404 on a null id.
+    if (!bookId) { setLoadingPages(false); return; }
     getBookPagesWithMeta(bookId, guestPid)
       .then(({ pages, pdfViewUrl, theme }) => {
         setBackendPages(pages);
@@ -784,10 +790,13 @@ function RoomContent({
 
   useEffect(() => {
     const guestPid = role === 'guest' ? participantId : undefined;
-    getBookActivities(bookId, guestPid)
-      .then(setActivities)
-      .catch(() => setActivities([]));
-  }, [bookId, participantId, role]);
+    const load = activityGroupId
+      ? getGroupActivities(activityGroupId, guestPid)
+      : bookId
+        ? getBookActivities(bookId, guestPid)
+        : Promise.resolve([]);
+    load.then(setActivities).catch(() => setActivities([]));
+  }, [bookId, activityGroupId, participantId, role]);
 
   // ── Restore snapshot ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -1987,6 +1996,8 @@ export function SessionRoomPage({ mode = 'reading' }: { mode?: 'reading' | 'acti
   const { token, role, roomName, livekitUrl, participantId, sessionId, setSession } = useSession();
 
   const [bookId, setBookId] = useState<string | null>(null);
+  // A session targets a book OR a themed adventure; exactly one is set.
+  const [activityGroupId, setActivityGroupId] = useState<string | null>(null);
   const [bookTitle, setBookTitle] = useState('Reading Room');
   const [inviteToken, setInviteToken] = useState<string | null>(null);
 
@@ -2009,6 +2020,7 @@ export function SessionRoomPage({ mode = 'reading' }: { mode?: 'reading' | 'acti
     getSession(sid)
       .then((s) => {
         setBookId(s.book);
+        setActivityGroupId(s.activity_group ?? null);
         setBookTitle(s.book_title ?? 'Reading Room');
         setInviteToken(s.invite_token ?? null);
       })
@@ -2035,7 +2047,9 @@ export function SessionRoomPage({ mode = 'reading' }: { mode?: 'reading' | 'acti
     }).catch(() => router.replace('/dashboard'));
   }, [token, sessionId, id, router, setSession]);
 
-  if (!connectToken || !roomName || !livekitUrl || !bookId) {
+  // An adventure session has no book, so gating on bookId alone left it stuck
+  // on "Loading session…" forever.
+  if (!connectToken || !roomName || !livekitUrl || (!bookId && !activityGroupId)) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-[#131313] text-[#e5e2e1]">
         <div className="flex flex-col items-center gap-4">
@@ -2062,6 +2076,7 @@ export function SessionRoomPage({ mode = 'reading' }: { mode?: 'reading' | 'acti
           sessionId={sessionId ?? id}
           participantId={participantId!}
           bookId={bookId}
+          activityGroupId={activityGroupId}
           bookTitle={bookTitle}
           inviteToken={inviteToken}
           mode={mode}

@@ -210,7 +210,10 @@ export interface BookThemeData {
 
 export interface SessionDetailData {
   id: string;
-  book: string;
+  /** Null when the session targets a themed adventure instead of a book. */
+  book: string | null;
+  activity_group: string | null;
+  /** The target's title, whichever kind it is. */
   book_title: string;
   child_name: string;
   status: string;
@@ -421,6 +424,21 @@ export type { ActivityConfigData } from '@/components/activity/types';
 
 export async function getBookActivities(bookId: string, participantId?: string): Promise<import('@/components/activity/types').ActivityConfigData[]> {
   const url = participantId ? `/books/${bookId}/activities/?participant_id=${participantId}` : `/books/${bookId}/activities/`;
+  const res = await apiRequest<{ data: import('@/components/activity/types').ActivityConfigData[] }>(url);
+  return res.data;
+}
+
+/**
+ * Activities for a themed adventure.
+ *
+ * A session targets a book OR an activity group. Group-targeted sessions have
+ * no book, so the book route can never serve them — the room hung on "Loading
+ * session…" until this existed.
+ */
+export async function getGroupActivities(groupId: string, participantId?: string): Promise<import('@/components/activity/types').ActivityConfigData[]> {
+  const url = participantId
+    ? `/activity-groups/${groupId}/activities/?participant_id=${participantId}`
+    : `/activity-groups/${groupId}/activities/`;
   const res = await apiRequest<{ data: import('@/components/activity/types').ActivityConfigData[] }>(url);
   return res.data;
 }

@@ -36,6 +36,7 @@ urlpatterns = [
     path('super-admin/books/new/', views.admin_book_create, name='admin_book_create'),
     path('super-admin/books/<uuid:book_id>/', views.admin_book_detail, name='admin_book_detail'),
     path('super-admin/activities/', views.admin_activity_config, name='admin_activity_config'),
+    path('super-admin/adventures/', views.admin_activity_groups, name='admin_activity_groups'),
     path('super-admin/users/', views.admin_users, name='admin_users'),
     path('super-admin/users/new/', views.admin_user_create, name='admin_user_create'),
     path('super-admin/users/<int:user_id>/', views.admin_user_detail, name='admin_user_detail'),

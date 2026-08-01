@@ -2858,3 +2858,122 @@ class ThemedAdventureTests(TestCase):
         ):
             res = self.client.post("/api/v1/sessions/", payload, format="json")
             self.assertEqual(res.status_code, 400, res.content)
+
+
+class PortalActivityAuthoringTests(TestCase):
+    """
+    Authoring lives in the super-admin portal. Replaces the two tests removed
+    when the form was retired, at schema 1.1 rather than the 1.0 they covered.
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username="portal-admin", email="portal-admin@example.com",
+            password="strong-password-123", is_staff=True, is_superuser=True,
+        )
+        self.client.force_login(self.admin)
+        self.book = Book.objects.create(title="Portal Book", slug="portal-book", published=True)
+        self.group = ActivityGroup.objects.create(
+            title="Portal Adventure", slug="portal-adventure", published=True,
+        )
+
+    def test_activity_page_renders_the_form(self):
+        response = self.client.get(reverse("admin_activity_config"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="activity-form"')
+        self.assertContains(response, "Publish")
+
+    def test_creates_a_multi_question_quiz_at_schema_1_1(self):
+        response = self.client.post(reverse("admin_activity_config"), data={
+            "action": "save", "activity_type": "quiz",
+            "owner": f"book:{self.book.id}", "title": "Portal Test Quiz",
+            "ui_title": "Pick one", "ui_instructions": "Tap an answer.",
+            "sort_order": 3, "publish": "1", "quiz_reveal_mode": "instant",
+            "q_id[]": ["q1"], "q_prompt[]": ["Which is blue?"],
+            "q_options_0[]": ["Sky", "Grass"], "q_correct[]": ["0"],
+            "q_feedback_correct[]": ["Yes!"], "q_feedback_wrong[]": ["Try again."],
+        })
+        self.assertEqual(response.status_code, 302)
+        activity = ActivityConfig.objects.get(title="Portal Test Quiz")
+        self.assertEqual(activity.config["schema_version"], "1.1")
+        # 1.1 is a `questions` list; the old form could only emit a single
+        # `question` string, which renders through the legacy runtime path.
+        payload = activity.config["payload"]
+        self.assertEqual(len(payload["questions"]), 1)
+        self.assertEqual(payload["questions"][0]["correct_index"], 0)
+        self.assertEqual(payload["questions"][0]["feedback_correct"], "Yes!")
+        self.assertTrue(activity.is_active)
+        self.assertEqual(activity.book_id, self.book.id)
+
+    def test_creates_an_image_anchored_drag_drop_for_a_group(self):
+        response = self.client.post(reverse("admin_activity_config"), data={
+            "action": "save", "activity_type": "drag_drop",
+            "owner": f"group:{self.group.id}", "title": "Portal Test Zones",
+            "ui_title": "Match them", "sort_order": 0, "publish": "1",
+            "image_url": "/activity-samples/dragdrop-sample.png",
+            "label_id[]": ["l1", "l2"], "label_text[]": ["Fish", "Crab"],
+            "zone_id[]": ["z1", "z2"],
+            "zone_x[]": ["10", "50"], "zone_y[]": ["20", "20"],
+            "zone_w[]": ["18", "18"], "zone_h[]": ["14", "14"],
+            "zone_label[]": ["Reef", "Pool"], "zone_accepts[]": ["l1", "l2"],
+        })
+        self.assertEqual(response.status_code, 302)
+        activity = ActivityConfig.objects.get(title="Portal Test Zones")
+        payload = activity.config["payload"]
+        self.assertEqual(payload["image_url"], "/activity-samples/dragdrop-sample.png")
+        self.assertEqual(len(payload["labels"]), 2)
+        # `accepts` is what makes Check My Answers possible at runtime.
+        self.assertEqual(payload["drop_zones"][0]["accepts"], "l1")
+        self.assertIsNone(activity.book_id)
+        self.assertEqual(activity.activity_group_id, self.group.id)
+
+    def test_save_draft_leaves_the_activity_hidden(self):
+        self.client.post(reverse("admin_activity_config"), data={
+            "action": "save", "activity_type": "drawing",
+            "owner": f"book:{self.book.id}", "title": "Portal Draft Activity",
+            "ui_title": "Draw", "sort_order": 0, "publish": "0",
+            "drawing_palette": "#000000", "drawing_brush_sizes": "4",
+        })
+        self.assertFalse(ActivityConfig.objects.get(title="Portal Draft Activity").is_active)
+
+    def test_invalid_config_is_rejected_and_not_saved(self):
+        response = self.client.post(reverse("admin_activity_config"), data={
+            "action": "save", "activity_type": "quiz",
+            "owner": f"book:{self.book.id}", "title": "Portal Broken",
+            "ui_title": "Broken", "sort_order": 0, "publish": "1",
+            "quiz_reveal_mode": "instant",
+            "q_id[]": ["q1"], "q_prompt[]": ["Only one option?"],
+            "q_options_0[]": ["Just this"], "q_correct[]": ["0"],
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(ActivityConfig.objects.filter(title="Portal Broken").exists())
+
+    def test_activity_can_still_be_deleted(self):
+        activity = ActivityConfig.objects.create(
+            book=self.book, title="Portal Doomed",
+            activity_type=ActivityConfig.ActivityType.DRAWING,
+            config={
+                "schema_version": "1.1", "activity_type": "drawing",
+                "ui": {"title": "D", "instructions": ""},
+                "payload": {"palette": ["#000"], "brush_sizes": [4], "allow_eraser": True},
+            },
+        )
+        response = self.client.post(reverse("admin_activity_config"), data={
+            "action": "delete", "activity_id": str(activity.id),
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(ActivityConfig.objects.filter(pk=activity.id).exists())
+
+    def test_adventures_page_creates_a_group(self):
+        response = self.client.get(reverse("admin_activity_groups"))
+        self.assertEqual(response.status_code, 200)
+
+        response = self.client.post(reverse("admin_activity_groups"), data={
+            "action": "save", "title": "Jungle Adventure",
+            "description": "Vines and canopies.", "sort_order": 2, "published": "on",
+        })
+        self.assertEqual(response.status_code, 302)
+        group = ActivityGroup.objects.get(title="Jungle Adventure")
+        self.assertTrue(group.published)
+        # Slug is derived when the operator leaves it blank.
+        self.assertEqual(group.slug, "jungle-adventure")
