@@ -65,6 +65,66 @@ class UserProfile(TimeStampedModel):
         return f"{self.user}"
 
 
+class Theme(TimeStampedModel):
+    """
+    A shared taxonomy across books and activity groups — Ocean, Jungle, Museum.
+
+    Categories used to be `Book.room_type` (reading/activity/hybrid), which is
+    really a *behaviour* switch that also drives `ReadingSession.room_type`, not
+    a subject. A theme lets a storybook and a set of activities sit under one
+    banner without either owning the other.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=120)
+    slug = models.SlugField(unique=True)
+    description = models.TextField(blank=True)
+    #: Drives the chip and card colour wherever the theme is surfaced.
+    accent = models.CharField(max_length=9, default="#3d3b62")
+    cover_image = models.URLField(blank=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+
+    def __str__(self):
+        return self.name
+
+
+class ActivityGroup(TimeStampedModel):
+    """
+    A themed adventure — "Ocean Adventure" — holding activities of mixed type.
+
+    Distinct from Theme: a theme is the label, a group is the container a child
+    actually enters. Kept separate from Book because an adventure has no pages,
+    no PDF and no page count, and should not inherit reading-book semantics.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    title = models.CharField(max_length=255)
+    slug = models.SlugField(unique=True)
+    description = models.TextField(blank=True)
+    theme = models.ForeignKey(
+        Theme,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="activity_groups",
+    )
+    cover_image = models.URLField(blank=True)
+    age_band = models.CharField(max_length=10, blank=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    #: Mirrors Book.published — an adventure is invisible to customers until set.
+    published = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["sort_order", "title"]
+
+    def __str__(self):
+        return self.title
+
+
 class Book(TimeStampedModel):
     class RoomType(models.TextChoices):
         READING = "reading", "Reading"
@@ -92,6 +152,15 @@ class Book(TimeStampedModel):
     page_count = models.PositiveIntegerField(default=1)
     asset_type = models.CharField(max_length=10, choices=AssetType.choices, default=AssetType.IMAGES)
     s3_key = models.CharField(max_length=512, blank=True, help_text="S3 key prefix for this book's assets (e.g. books/uuid/)")
+    #: Named `theme_category`, not `theme`: `BookTheme` already occupies the
+    #: `theme` reverse accessor and is per-book *styling*, unrelated to subject.
+    theme_category = models.ForeignKey(
+        Theme,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="books",
+    )
 
     class Meta:
         ordering = ["title"]
@@ -165,7 +234,24 @@ class ActivityConfig(TimeStampedModel):
     HOTSPOT_DISPLAY_MODES = frozenset({"popup", "panel"})
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name="activity_configs")
+    #: An activity belongs to a book OR an activity group, never both and never
+    #: neither — see the check constraint below. `book` was required until
+    #: adventures existed; it is nullable now so a group can own activities
+    #: without a storybook having to exist for them.
+    book = models.ForeignKey(
+        Book,
+        on_delete=models.CASCADE,
+        related_name="activity_configs",
+        null=True,
+        blank=True,
+    )
+    activity_group = models.ForeignKey(
+        "ActivityGroup",
+        on_delete=models.CASCADE,
+        related_name="activity_configs",
+        null=True,
+        blank=True,
+    )
     title = models.CharField(max_length=255)
     activity_type = models.CharField(max_length=20, choices=ActivityType.choices)
     config = models.JSONField(default=dict, blank=True)
@@ -174,6 +260,19 @@ class ActivityConfig(TimeStampedModel):
 
     class Meta:
         ordering = ["sort_order", "title"]
+        constraints = [
+            # Without this the two nullable columns silently permit orphans
+            # (neither set) and ambiguous ownership (both set), and every
+            # consumer would need a defensive branch for cases the data model
+            # should have made impossible.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(book__isnull=False, activity_group__isnull=True)
+                    | models.Q(book__isnull=True, activity_group__isnull=False)
+                ),
+                name="activityconfig_exactly_one_owner",
+            ),
+        ]
 
     @staticmethod
     def _is_non_empty_list(value):
@@ -341,9 +440,19 @@ class ActivityConfig(TimeStampedModel):
         if config_activity_type != self.activity_type:
             raise ValidationError({"config": "config.activity_type must match activity_type."})
 
+        # Only meaningful for book-owned activities. A group-owned activity has
+        # no book_id to agree with, and comparing against None here would reject
+        # every adventure activity outright.
         config_book_id = config.get("book_id")
-        if config_book_id and str(config_book_id) != str(self.book_id):
+        if self.book_id and config_book_id and str(config_book_id) != str(self.book_id):
             raise ValidationError({"config": "config.book_id must match book."})
+
+        # The DB constraint is the real guard; this turns the IntegrityError
+        # into a field error that serializers and the admin can render.
+        if bool(self.book_id) == bool(self.activity_group_id):
+            raise ValidationError(
+                "An activity must belong to either a book or an activity group, not both."
+            )
 
         ui = config.get("ui")
         if not isinstance(ui, dict):
@@ -394,7 +503,19 @@ class ReadingSession(TimeStampedModel):
         EXPIRED = "expired", "Expired"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    book = models.ForeignKey(Book, on_delete=models.PROTECT, related_name="sessions")
+    #: A session targets a book OR an activity group — see the check constraint
+    #: on Meta. Nullable so an adventure can be launched without a storybook
+    #: existing purely to host it.
+    book = models.ForeignKey(
+        Book, on_delete=models.PROTECT, related_name="sessions", null=True, blank=True
+    )
+    activity_group = models.ForeignKey(
+        "ActivityGroup",
+        on_delete=models.PROTECT,
+        related_name="sessions",
+        null=True,
+        blank=True,
+    )
     child_profile = models.ForeignKey(ChildProfile, on_delete=models.PROTECT, related_name="sessions")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="created_sessions")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
@@ -418,6 +539,24 @@ class ReadingSession(TimeStampedModel):
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(book__isnull=False, activity_group__isnull=True)
+                    | models.Q(book__isnull=True, activity_group__isnull=False)
+                ),
+                name="readingsession_exactly_one_target",
+            ),
+        ]
+
+    @property
+    def target_title(self):
+        """What the session is about, whichever kind of target it has."""
+        if self.book_id:
+            return self.book.title
+        if self.activity_group_id:
+            return self.activity_group.title
+        return ""
 
     def save(self, *args, **kwargs):
         if not self.livekit_room_name:

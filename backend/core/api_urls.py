@@ -32,6 +32,9 @@ from .api_views import (
     AdminBookRenderPdfView,
     AdminBookThemeView,
     BookActivityListView,
+    ThemeListView,
+    ActivityGroupListView,
+    ActivityGroupActivityListView,
     BookDetailView,
     BookListView,
     BookPagesView,
@@ -137,6 +140,16 @@ urlpatterns = [
     path("books/<uuid:pk>/", BookDetailView.as_view(), name="book-detail"),
     path("books/<uuid:pk>/pages/", BookPagesView.as_view(), name="book-pages"),
     path("books/<uuid:book_id>/activities/", BookActivityListView.as_view(), name="book-activity-list"),
+
+    # Themed adventures: a shared taxonomy (themes) plus the groups that hold
+    # activities without needing a storybook to own them.
+    path("themes/", ThemeListView.as_view(), name="theme-list"),
+    path("activity-groups/", ActivityGroupListView.as_view(), name="activity-group-list"),
+    path(
+        "activity-groups/<uuid:group_id>/activities/",
+        ActivityGroupActivityListView.as_view(),
+        name="activity-group-activity-list",
+    ),
 
     # Children
     path("children/", ChildProfileListCreateView.as_view(), name="child-list"),

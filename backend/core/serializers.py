@@ -9,6 +9,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 
 from .models import (
     ActivityConfig,
+    ActivityGroup,
     Badge,
     Book,
     BookPage,
@@ -22,6 +23,7 @@ from .models import (
     SessionEvent,
     SessionInvite,
     SessionParticipant,
+    Theme,
     UserBadge,
     UserProfile,
 )
@@ -204,8 +206,15 @@ class BookThemeWriteSerializer(serializers.ModelSerializer):
 
 
 class BookSerializer(serializers.ModelSerializer):
+    """
+    Admin variant. Exposes the storage key and the publish gate, so it must not
+    be handed to customers — see `BookCatalogSerializer`.
+    """
+
     pdf_view_url = serializers.SerializerMethodField()
     theme = BookThemeSerializer(read_only=True)
+    theme_name = serializers.CharField(source="theme_category.name", read_only=True, default="")
+    theme_accent = serializers.CharField(source="theme_category.accent", read_only=True, default="")
 
     class Meta:
         model = Book
@@ -223,9 +232,12 @@ class BookSerializer(serializers.ModelSerializer):
             "asset_type",
             "s3_key",
             "theme",
+            "theme_category",
+            "theme_name",
+            "theme_accent",
             "created_at",
         )
-        read_only_fields = ("id", "created_at")
+        read_only_fields = ("id", "theme_name", "theme_accent", "created_at")
 
     def get_pdf_view_url(self, obj):
         if obj.asset_type != Book.AssetType.PDF:
@@ -237,6 +249,87 @@ class BookSerializer(serializers.ModelSerializer):
         # Resolve stored cover value (local/media key or external URL) to a fetchable URL.
         data["cover_image"] = resolve_media_url(instance.cover_image)
         return data
+
+
+class BookCatalogSerializer(BookSerializer):
+    """
+    Customer variant. `s3_key` is internal storage detail and `published` is an
+    internal gate — a customer only ever receives published books, so the flag
+    tells them nothing and the key is a needless disclosure.
+    """
+
+    class Meta(BookSerializer.Meta):
+        fields = tuple(f for f in BookSerializer.Meta.fields if f not in ("s3_key", "published"))
+        read_only_fields = fields
+
+
+class ThemeSerializer(serializers.ModelSerializer):
+    """Shared taxonomy across books and adventures. Safe for customers."""
+
+    class Meta:
+        model = Theme
+        fields = ("id", "name", "slug", "description", "accent", "cover_image", "sort_order")
+        read_only_fields = ("id",)
+
+
+class ActivityGroupSerializer(serializers.ModelSerializer):
+    """Admin variant — includes the publish flag and a live activity count."""
+
+    theme_name = serializers.CharField(source="theme.name", read_only=True, default="")
+    theme_accent = serializers.CharField(source="theme.accent", read_only=True, default="")
+    activity_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ActivityGroup
+        fields = (
+            "id",
+            "title",
+            "slug",
+            "description",
+            "theme",
+            "theme_name",
+            "theme_accent",
+            "cover_image",
+            "age_band",
+            "sort_order",
+            "published",
+            "activity_count",
+            "created_at",
+        )
+        read_only_fields = ("id", "theme_name", "theme_accent", "activity_count", "created_at")
+
+    def get_activity_count(self, obj):
+        return obj.activity_configs.filter(is_active=True).count()
+
+
+class ActivityGroupCatalogSerializer(serializers.ModelSerializer):
+    """
+    Customer variant. Mirrors the BadgeSerializer / BadgeCatalogSerializer
+    split: `published` is an internal gate and is not exposed to parents.
+    """
+
+    theme_name = serializers.CharField(source="theme.name", read_only=True, default="")
+    theme_accent = serializers.CharField(source="theme.accent", read_only=True, default="")
+    activity_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ActivityGroup
+        fields = (
+            "id",
+            "title",
+            "slug",
+            "description",
+            "theme",
+            "theme_name",
+            "theme_accent",
+            "cover_image",
+            "age_band",
+            "activity_count",
+        )
+        read_only_fields = fields
+
+    def get_activity_count(self, obj):
+        return obj.activity_configs.filter(is_active=True).count()
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -292,11 +385,19 @@ class FavoriteBookSerializer(serializers.ModelSerializer):
 
 
 class ActivityConfigSerializer(serializers.ModelSerializer):
+    """Admin variant: full record, including which container owns it."""
+
+    book_title = serializers.CharField(source="book.title", read_only=True, default="")
+    group_title = serializers.CharField(source="activity_group.title", read_only=True, default="")
+
     class Meta:
         model = ActivityConfig
         fields = (
             "id",
             "book",
+            "book_title",
+            "activity_group",
+            "group_title",
             "title",
             "activity_type",
             "config",
@@ -305,11 +406,21 @@ class ActivityConfigSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("id", "created_at", "updated_at")
+        read_only_fields = ("id", "book_title", "group_title", "created_at", "updated_at")
 
     def validate(self, attrs):
         instance = self.instance or ActivityConfig()
-        for field in ("book", "title", "activity_type", "config", "sort_order", "is_active"):
+        # Whitelist, so a new writable field must be added here too or it skips
+        # full_clean() — which is what enforces the one-owner rule.
+        for field in (
+            "book",
+            "activity_group",
+            "title",
+            "activity_type",
+            "config",
+            "sort_order",
+            "is_active",
+        ):
             if field in attrs:
                 setattr(instance, field, attrs[field])
         try:
@@ -444,7 +555,12 @@ class ReadingReminderSerializer(serializers.ModelSerializer):
 
 class ReadingSessionSerializer(serializers.ModelSerializer):
     invite_token = serializers.CharField(source="invite.token", read_only=True)
-    book_title = serializers.CharField(source="book.title", read_only=True)
+    # `target_title` rather than `book.title`: a session can target an
+    # adventure, which has no book, and the client shows one label either way.
+    book_title = serializers.CharField(source="target_title", read_only=True)
+    activity_group_title = serializers.CharField(
+        source="activity_group.title", read_only=True, default=""
+    )
     child_name = serializers.CharField(source="child_profile.display_name", read_only=True)
     reading_duration_seconds = serializers.IntegerField(read_only=True)
 
@@ -456,6 +572,8 @@ class ReadingSessionSerializer(serializers.ModelSerializer):
             "room_type",
             "book",
             "book_title",
+            "activity_group",
+            "activity_group_title",
             "child_profile",
             "child_name",
             "livekit_room_name",
@@ -599,17 +717,48 @@ class AdminSessionEventSerializer(serializers.ModelSerializer):
 
 
 class SessionCreateSerializer(serializers.Serializer):
-    book_id = serializers.UUIDField()
+    """
+    A session targets a published book OR a published activity group.
+
+    `book_id` and `room_type` were both required. They are optional now so an
+    adventure can be launched without a storybook existing to host it; exactly
+    one target must still be supplied, and `room_type` is derived when omitted.
+    """
+
+    book_id = serializers.UUIDField(required=False, allow_null=True)
+    activity_group_id = serializers.UUIDField(required=False, allow_null=True)
     child_profile_id = serializers.UUIDField()
-    room_type = serializers.ChoiceField(choices=ReadingSession.RoomType.choices)
+    room_type = serializers.ChoiceField(
+        choices=ReadingSession.RoomType.choices, required=False
+    )
 
     def validate(self, attrs):
         user = self.context["request"].user
+        book_id = attrs.get("book_id")
+        group_id = attrs.get("activity_group_id")
 
-        try:
-            attrs["book"] = Book.objects.get(id=attrs["book_id"], published=True)
-        except Book.DoesNotExist as exc:
-            raise serializers.ValidationError({"book_id": "Published book not found."}) from exc
+        if bool(book_id) == bool(group_id):
+            raise serializers.ValidationError(
+                "Provide exactly one of book_id or activity_group_id."
+            )
+
+        if book_id:
+            try:
+                attrs["book"] = Book.objects.get(id=book_id, published=True)
+            except Book.DoesNotExist as exc:
+                raise serializers.ValidationError({"book_id": "Published book not found."}) from exc
+            attrs["activity_group"] = None
+            attrs.setdefault("room_type", attrs["book"].room_type)
+        else:
+            try:
+                attrs["activity_group"] = ActivityGroup.objects.get(id=group_id, published=True)
+            except ActivityGroup.DoesNotExist as exc:
+                raise serializers.ValidationError(
+                    {"activity_group_id": "Published adventure not found."}
+                ) from exc
+            attrs["book"] = None
+            # An adventure is always an activity room; there is nothing to read.
+            attrs["room_type"] = ReadingSession.RoomType.ACTIVITY
 
         try:
             attrs["child_profile"] = ChildProfile.objects.get(
@@ -629,6 +778,7 @@ class SessionCreateSerializer(serializers.Serializer):
         timer_seconds = effective_session_timer_seconds()
         session = ReadingSession.objects.create(
             book=validated_data["book"],
+            activity_group=validated_data["activity_group"],
             child_profile=validated_data["child_profile"],
             created_by=user,
             room_type=validated_data["room_type"],
@@ -646,6 +796,6 @@ class SessionCreateSerializer(serializers.Serializer):
         SessionEvent.objects.create(
             session=session,
             event_type=SessionEvent.EventType.CREATED,
-            payload={"room_type": session.room_type, "book_slug": slugify(session.book.title)},
+            payload={"room_type": session.room_type, "book_slug": slugify(session.target_title)},
         )
         return session

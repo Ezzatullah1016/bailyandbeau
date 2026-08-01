@@ -13,7 +13,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from .models import ActivityConfig, Badge, Book, BookTheme, ChildProfile, Entitlement, FavoriteBook, NotificationPreference, ReadingReminder, ReadingSession, SessionEvent, SessionParticipant, SessionSnapshot, UserBadge
+from .models import ActivityConfig, ActivityGroup, Badge, Book, BookTheme, ChildProfile, Entitlement, FavoriteBook, NotificationPreference, ReadingReminder, ReadingSession, SessionEvent, SessionParticipant, SessionSnapshot, Theme, UserBadge
 
 User = get_user_model()
 
@@ -2715,3 +2715,146 @@ class ActivityConfigValidationTests(TestCase):
     def test_accepts_referencing_an_unknown_label_is_rejected(self):
         with self.assertRaises(ValidationError):
             self._drag_drop("nope").full_clean()
+
+
+class ThemedAdventureTests(TestCase):
+    """
+    Activities and sessions may target a book OR an activity group, never both
+    and never neither. The DB constraint is the guard; these cover it and the
+    endpoints built on top.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            username="adv-admin", email="adv-admin@example.com",
+            password="strong-password-123", is_staff=True, is_superuser=True,
+        )
+        self.parent = User.objects.create_user(
+            username="adv-parent", email="adv-parent@example.com", password="strong-password-123",
+        )
+        self.child = ChildProfile.objects.create(
+            user=self.parent, display_name="Ada", age_band="3-5",
+        )
+        # Session creation is gated on remaining sessions.
+        Entitlement.objects.update_or_create(
+            user=self.parent, defaults={"sessions_remaining": 10},
+        )
+        self.theme = Theme.objects.create(name="Ocean", slug="ocean-test", accent="#3b85a6")
+        self.group = ActivityGroup.objects.create(
+            title="Ocean Adventure", slug="ocean-adventure-test",
+            theme=self.theme, published=True,
+        )
+        self.book = Book.objects.create(
+            title="Themed Book", slug="themed-book", published=True,
+            theme_category=self.theme,
+        )
+
+    def _drawing_config(self):
+        return {
+            "schema_version": "1.1",
+            "activity_type": "drawing",
+            "ui": {"title": "Draw", "instructions": ""},
+            "payload": {"palette": ["#000"], "brush_sizes": [4], "allow_eraser": True},
+        }
+
+    # ── the one-owner rule ────────────────────────────────────────────────
+    def test_activity_may_belong_to_a_group_with_no_book(self):
+        activity = ActivityConfig.objects.create(
+            activity_group=self.group, title="Group activity",
+            activity_type=ActivityConfig.ActivityType.DRAWING, config=self._drawing_config(),
+        )
+        self.assertIsNone(activity.book_id)
+
+    def test_activity_with_neither_owner_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            ActivityConfig(
+                title="Orphan", activity_type=ActivityConfig.ActivityType.DRAWING,
+                config=self._drawing_config(),
+            ).full_clean()
+
+    def test_activity_with_both_owners_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            ActivityConfig(
+                book=self.book, activity_group=self.group, title="Both",
+                activity_type=ActivityConfig.ActivityType.DRAWING, config=self._drawing_config(),
+            ).full_clean()
+
+    # ── endpoints ─────────────────────────────────────────────────────────
+    def test_themes_and_groups_are_listed(self):
+        self.client.force_authenticate(self.parent)
+        res = self.client.get("/api/v1/themes/")
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertIn("ocean-test", [t["slug"] for t in res.json()["data"]])
+
+        res = self.client.get("/api/v1/activity-groups/")
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertIn("Ocean Adventure", [g["title"] for g in res.json()["data"]])
+
+    def test_draft_group_is_hidden_from_customers_but_visible_to_staff(self):
+        ActivityGroup.objects.create(title="Secret", slug="secret-adv", published=False)
+        self.client.force_authenticate(self.parent)
+        titles = [g["title"] for g in self.client.get("/api/v1/activity-groups/").json()["data"]]
+        self.assertNotIn("Secret", titles)
+
+        self.client.force_authenticate(self.admin)
+        titles = [g["title"] for g in self.client.get("/api/v1/activity-groups/").json()["data"]]
+        self.assertIn("Secret", titles)
+
+    def test_group_activities_endpoint_returns_its_activities(self):
+        ActivityConfig.objects.create(
+            activity_group=self.group, title="In the group",
+            activity_type=ActivityConfig.ActivityType.DRAWING, config=self._drawing_config(),
+        )
+        self.client.force_authenticate(self.parent)
+        res = self.client.get(f"/api/v1/activity-groups/{self.group.id}/activities/")
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual([a["title"] for a in res.json()["data"]], ["In the group"])
+
+    def test_books_can_be_filtered_by_theme(self):
+        self.client.force_authenticate(self.parent)
+        res = self.client.get("/api/v1/books/?theme=ocean-test")
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual([b["title"] for b in res.json()["data"]], ["Themed Book"])
+
+    def test_customer_book_payload_hides_storage_key_and_publish_flag(self):
+        self.client.force_authenticate(self.parent)
+        book = self.client.get("/api/v1/books/").json()["data"][0]
+        self.assertNotIn("s3_key", book)
+        self.assertNotIn("published", book)
+
+    # ── sessions ──────────────────────────────────────────────────────────
+    def test_session_can_target_an_activity_group(self):
+        self.client.force_authenticate(self.parent)
+        res = self.client.post(
+            "/api/v1/sessions/",
+            {"activity_group_id": str(self.group.id), "child_profile_id": str(self.child.id)},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201, res.content)
+        data = res.json()["data"]
+        self.assertIsNone(data["book"])
+        self.assertEqual(data["book_title"], "Ocean Adventure")
+        # An adventure has nothing to read, so it is always an activity room.
+        self.assertEqual(data["room_type"], "activity")
+
+    def test_session_still_works_for_a_book(self):
+        self.client.force_authenticate(self.parent)
+        res = self.client.post(
+            "/api/v1/sessions/",
+            {"book_id": str(self.book.id), "child_profile_id": str(self.child.id),
+             "room_type": "reading"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201, res.content)
+        self.assertEqual(res.json()["data"]["book_title"], "Themed Book")
+
+    def test_session_needs_exactly_one_target(self):
+        self.client.force_authenticate(self.parent)
+        for payload in (
+            {"child_profile_id": str(self.child.id)},
+            {"book_id": str(self.book.id), "activity_group_id": str(self.group.id),
+             "child_profile_id": str(self.child.id)},
+        ):
+            res = self.client.post("/api/v1/sessions/", payload, format="json")
+            self.assertEqual(res.status_code, 400, res.content)

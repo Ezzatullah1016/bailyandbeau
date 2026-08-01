@@ -32,7 +32,7 @@ except ImportError:  # poppler/pdf2image not available on all environments
     pdf2image = None
 
 from . import portal_settings as portal_conf
-from .models import ActivityConfig, Badge, Book, BookPage, BookTheme, ChildProfile, Entitlement, FavoriteBook, NotificationPreference, ReadingReminder, ReadingSession, SessionEvent, SessionInvite, SessionParticipant, SessionSnapshot, UserBadge
+from .models import ActivityConfig, ActivityGroup, Badge, Book, BookPage, BookTheme, ChildProfile, Entitlement, FavoriteBook, NotificationPreference, ReadingReminder, ReadingSession, SessionEvent, SessionInvite, SessionParticipant, SessionSnapshot, Theme, UserBadge
 from .serializers import (
     BookThemeSerializer,
     BookThemeWriteSerializer,
@@ -46,6 +46,10 @@ from .serializers import (
     BadgeSerializer,
     BookPageSerializer,
     BookSerializer,
+    BookCatalogSerializer,
+    ThemeSerializer,
+    ActivityGroupSerializer,
+    ActivityGroupCatalogSerializer,
     ChildProfileSerializer,
     EntitlementSerializer,
     FavoriteBookSerializer,
@@ -355,7 +359,7 @@ def build_recent_sessions_payload(sessions):
     return [
         {
             "id": str(session.id),
-            "book_title": session.book.title,
+            "book_title": session.target_title,
             "child_name": session.child_profile.display_name,
             "status": session.status,
             "room_type": session.room_type,
@@ -698,7 +702,7 @@ class AdminSessionReportView(APIView):
         data = [
             {
                 "id": str(session.id),
-                "book_title": session.book.title,
+                "book_title": session.target_title,
                 "child_name": session.child_profile.display_name,
                 "created_by": session.created_by.username,
                 "status": session.status,
@@ -722,7 +726,7 @@ class AdminSessionExportView(APIView):
         for session in sessions:
             writer.writerow([
                 str(session.id),
-                session.book.title,
+                session.target_title,
                 session.child_profile.display_name,
                 session.created_by.username,
                 session.status,
@@ -906,18 +910,105 @@ class CheckoutSessionView(APIView):
         )
 
 
+class ThemeListView(APIView):
+    """Shared taxonomy (Ocean, Jungle, Museum). Read-only for everyone."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        themes = Theme.objects.filter(is_active=True)
+        serializer = ThemeSerializer(themes, many=True)
+        return Response({"data": serializer.data, "meta": {"count": themes.count()}, "error": None})
+
+
+class ActivityGroupListView(APIView):
+    """
+    Themed adventures. Staff see drafts; customers see published only, matching
+    how BookListView gates on `published`.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        groups = ActivityGroup.objects.select_related("theme")
+        if not (request.user and request.user.is_staff):
+            groups = groups.filter(published=True)
+
+        theme = request.query_params.get("theme")
+        if theme:
+            # Accept either a slug or an id, so callers do not need a lookup.
+            groups = groups.filter(Q(theme__slug=theme) | Q(theme__id__iexact=theme))
+
+        serializer = (
+            ActivityGroupSerializer if request.user.is_staff else ActivityGroupCatalogSerializer
+        )(groups, many=True)
+        return Response({"data": serializer.data, "meta": {"count": groups.count()}, "error": None})
+
+
+class ActivityGroupActivityListView(APIView):
+    """
+    GET /api/v1/activity-groups/{group_id}/activities/
+
+    Mirror of BookActivityListView for group-owned activities, including its
+    guest `?participant_id=` path so a guest in an adventure session can load
+    the activities without an account.
+    """
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, group_id):
+        is_staff = bool(request.user and request.user.is_staff)
+        group = ActivityGroup.objects.filter(pk=group_id).first()
+        if not group or (not group.published and not is_staff):
+            return Response(
+                {"data": None, "meta": {}, "error": {"code": "not_found", "message": "Adventure not found."}},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        is_authenticated = bool(request.user and request.user.is_authenticated)
+        participant_id = request.query_params.get("participant_id")
+
+        if not is_authenticated and not participant_id:
+            return Response(
+                {"data": None, "meta": {}, "error": {"code": "unauthenticated", "message": "Authentication required."}},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        if participant_id and not is_authenticated:
+            participant = (
+                SessionParticipant.objects.filter(
+                    id=participant_id,
+                    participant_type=SessionParticipant.ParticipantType.GUEST,
+                )
+                .select_related("session")
+                .first()
+            )
+            if not participant or str(participant.session.activity_group_id) != str(group_id):
+                return Response(
+                    {"data": None, "meta": {}, "error": {"code": "permission_denied", "message": "Invalid participant."}},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        activities = group.activity_configs.filter(is_active=True).order_by("sort_order", "title")
+        serializer = ActivityConfigSerializer(activities, many=True)
+        return Response({"data": serializer.data, "meta": {"count": activities.count()}, "error": None})
+
+
 class BookListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         # Staff/admin can preview unpublished (draft) books; customers see published only.
-        if request.user and request.user.is_staff:
+        is_staff = bool(request.user and request.user.is_staff)
+        if is_staff:
             books = Book.objects.all()
         else:
             books = Book.objects.filter(published=True)
+        books = books.select_related("theme_category")
 
         room_type = request.query_params.get("room_type")
         age_band = request.query_params.get("age_band")
+        theme = request.query_params.get("theme")
         search = request.query_params.get("search")
         ordering = request.query_params.get("ordering", "title")
 
@@ -925,12 +1016,15 @@ class BookListView(APIView):
             books = books.filter(room_type=room_type)
         if age_band:
             books = books.filter(age_band=age_band)
+        if theme:
+            books = books.filter(Q(theme_category__slug=theme) | Q(theme_category__id__iexact=theme))
         if search:
             books = books.filter(title__icontains=search)
         if ordering.lstrip("-") in {"title", "created_at", "age_band"}:
             books = books.order_by(ordering)
 
-        serializer = BookSerializer(books, many=True)
+        # Customers must not receive s3_key or the publish gate.
+        serializer = (BookSerializer if is_staff else BookCatalogSerializer)(books, many=True)
         return Response({"data": serializer.data, "meta": {"count": books.count()}, "error": None})
 
 
@@ -1299,10 +1393,21 @@ class AdminActivityListCreateView(APIView):
     permission_classes = [permissions.IsAdminUser]
 
     def get(self, request):
-        activities = ActivityConfig.objects.select_related("book").all()
+        activities = ActivityConfig.objects.select_related("book", "activity_group").all()
         book_id = request.query_params.get("book_id")
+        group_id = request.query_params.get("group_id")
+        activity_type = request.query_params.get("activity_type")
         if book_id:
             activities = activities.filter(book_id=book_id)
+        if group_id:
+            # `ungrouped` surfaces the legacy book-owned activities, which would
+            # otherwise be unreachable once the admin list filters by adventure.
+            if group_id == "ungrouped":
+                activities = activities.filter(activity_group__isnull=True)
+            else:
+                activities = activities.filter(activity_group_id=group_id)
+        if activity_type:
+            activities = activities.filter(activity_type=activity_type)
         serializer = ActivityConfigSerializer(activities, many=True)
         return Response({"data": serializer.data, "meta": {"count": activities.count()}, "error": None})
 
@@ -1763,7 +1868,14 @@ class SessionCompleteView(APIView):
         activity_id = request.data.get("activity_id")
         activity_title = request.data.get("activity_title")
         if activity_id:
-            activity = ActivityConfig.objects.filter(pk=activity_id, book=session.book).first()
+            # A session owns either a book or an adventure; scope the lookup
+            # to whichever it is, so an activity cannot be pulled in from
+            # another container by id.
+            owner = (
+                {"book": session.book} if session.book_id
+                else {"activity_group": session.activity_group}
+            )
+            activity = ActivityConfig.objects.filter(pk=activity_id, **owner).first()
             if activity:
                 session.completed_activity = activity
                 session.completed_activity_title = activity.title

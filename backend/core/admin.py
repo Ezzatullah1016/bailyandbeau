@@ -1,6 +1,8 @@
 from django.contrib import admin
 
 from .models import (
+    ActivityGroup,
+    Theme,
     BookTheme,
     ActivityConfig,
     Badge,
@@ -109,3 +111,19 @@ class BookThemeAdmin(admin.ModelAdmin):
     list_display = ("book", "backdrop_kind", "chrome_mode", "accent", "updated_at")
     list_filter = ("backdrop_kind", "chrome_mode")
     search_fields = ("book__title",)
+
+
+@admin.register(Theme)
+class ThemeAdmin(admin.ModelAdmin):
+    list_display = ("name", "slug", "accent", "sort_order", "is_active")
+    list_filter = ("is_active",)
+    search_fields = ("name", "slug")
+    prepopulated_fields = {"slug": ("name",)}
+
+
+@admin.register(ActivityGroup)
+class ActivityGroupAdmin(admin.ModelAdmin):
+    list_display = ("title", "theme", "age_band", "sort_order", "published")
+    list_filter = ("published", "theme")
+    search_fields = ("title", "slug")
+    prepopulated_fields = {"slug": ("title",)}
