@@ -28,7 +28,22 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    # Staff portal.
+    location /staff/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Pre-rename URLs. Django redirects these; kept so old bookmarks do not
+    # fall through to Next.js and 404. Remove once they are no longer in use.
     location /super-admin/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /django-admin/ {
         proxy_pass http://127.0.0.1:8000;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;

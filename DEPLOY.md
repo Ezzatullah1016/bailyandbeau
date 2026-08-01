@@ -15,7 +15,7 @@ The EC2 box is already provisioned. Deploys are **just**: push code → SSH in �
 | Repo | `/home/ubuntu/app`, tracks `origin/main` |
 | Backend | Django + DRF, gunicorn on `127.0.0.1:8000`, systemd unit `gunicorn.service`, venv at `backend/venv` |
 | Frontend | Next.js production build, pm2 process `bailyandbeau-frontend` on `127.0.0.1:3001` |
-| Reverse proxy | nginx terminates TLS on `:443`, routes `/api`, `/admin`, `/super-admin`, `/webhooks` → gunicorn, everything else → Next.js |
+| Reverse proxy | nginx terminates TLS on `:443`, routes `/api`, `/admin`, `/staff`, `/webhooks` → gunicorn, everything else → Next.js |
 | Secrets | `/home/ubuntu/app/backend/.env` (only on the server, gitignored) |
 
 `deploy/update.sh` runs the canonical update sequence on the server:
@@ -35,7 +35,7 @@ If the subdomain **times out** but SSH works:
 
 1. **Route 53 / DNS:** `reading-room` **A** record → **`51.21.140.88`** (same Elastic IP as the app server).
 2. **Security group** (`baileyandbeauco-sg` or equivalent): inbound **TCP 80** and **TCP 443** from **`0.0.0.0/0`** (and **`::/0`** if you use IPv6).
-3. **nginx:** add a `server { server_name reading-room.baileyandbeauco.com; ... }` that mirrors your main TLS site (proxy `/api`, `/admin`, `/super-admin`, `/webhooks` → gunicorn; `/` → `127.0.0.1:3001`). Copy from **`deploy/nginx-reading-room.baileyandbeauco.conf.example`**, set real **`ssl_certificate`** paths, then `sudo nginx -t && sudo systemctl reload nginx`.  
+3. **nginx:** add a `server { server_name reading-room.baileyandbeauco.com; ... }` that mirrors your main TLS site (proxy `/api`, `/admin`, `/staff`, `/webhooks` → gunicorn; `/` → `127.0.0.1:3001`). Copy from **`deploy/nginx-reading-room.baileyandbeauco.conf.example`**, set real **`ssl_certificate`** paths, then `sudo nginx -t && sudo systemctl reload nginx`.  
    **Automated (from laptop, with PEM):** `.\deploy\reading-room-from-laptop.ps1` copies and runs **`deploy/reading-room-vhost-install.sh`** on the server (uses an existing Let’s Encrypt dir if present, otherwise set **`$env:CERTBOT_EMAIL`** first for `certbot certonly --webroot`). Requires **SSH (22)** reachable from your PC.
 4. **TLS:** e.g. `sudo certbot --nginx -d reading-room.baileyandbeauco.com` if using Let’s Encrypt.
 

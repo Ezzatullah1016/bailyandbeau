@@ -72,9 +72,9 @@ class SuperAdminDashboardTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         # Unauthenticated staff must be sent to the Django-served portal login
-        # (/super-admin/login/), NOT the bare /login owned by the Next.js app.
+        # (/staff/login/), NOT the bare /login owned by the Next.js app.
         self.assertIn(reverse("super_admin_login"), response.url)
-        self.assertEqual(reverse("super_admin_login"), "/super-admin/login/")
+        self.assertEqual(reverse("super_admin_login"), "/staff/login/")
 
     def test_super_admin_login_serves_django_portal_form(self):
         response = self.client.get(reverse("super_admin_login"))
@@ -82,17 +82,27 @@ class SuperAdminDashboardTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-validate-form="login-form"')
 
-    def test_public_admin_url_redirects_to_super_admin_dashboard(self):
-        response = self.client.get("/admin/", follow=False)
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, reverse("super_admin_dashboard"))
-        response = self.client.get(reverse("admin:login"))
+    def test_admin_url_serves_django_admin(self):
+        """
+        /admin/ is Django's own admin, where a Django developer expects it.
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Sign In")
-        self.assertContains(response, "Use your admin username and password.")
-        self.assertContains(response, "core/css/tailwind.css")
-        self.assertContains(response, 'data-validate-form="admin-login-form"')
+        It used to redirect to the staff portal while the real admin sat at
+        /django-admin/ — an inversion that made the stock admin look missing.
+        """
+        response = self.client.get("/admin/", follow=False)
+        # Anonymous: Django admin bounces to its own login, not to the portal.
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/admin/login/", response.url)
+
+    def test_legacy_prefixes_redirect_to_their_new_homes(self):
+        response = self.client.get("/django-admin/", follow=False)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/admin/")
+
+        # The staff portal moved from /super-admin/ to /staff/.
+        response = self.client.get("/super-admin/dashboard/", follow=False)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/staff/dashboard/")
 
     def test_public_login_page_renders_login_and_signup_form(self):
         response = self.client.get("/login/")
@@ -2862,7 +2872,7 @@ class ThemedAdventureTests(TestCase):
 
 class PortalActivityAuthoringTests(TestCase):
     """
-    Authoring lives in the super-admin portal. Replaces the two tests removed
+    Authoring lives in the staff portal. Replaces the two tests removed
     when the form was retired, at schema 1.1 rather than the 1.0 they covered.
     """
 

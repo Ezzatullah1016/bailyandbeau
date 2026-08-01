@@ -43,21 +43,30 @@ User = get_user_model()
 def staff_member_required(view_func):
     """Like Django's, but unauthenticated/non-staff users go to our portal login.
 
-    Redirect to ``super_admin_login`` (/super-admin/login/), which nginx routes to
+    Redirect to ``super_admin_login`` (/staff/login/), which nginx routes to
     Django. The bare ``/login`` path is served by the Next.js customer app, so
     sending staff there would land them on the customer sign-in page.
     """
     return _django_staff_member_required(login_url="super_admin_login")(view_func)
 
 
-def redirect_admin_root(request):
-    """Public ``/admin/`` opens the custom super admin dashboard instead of Django admin."""
-    return redirect("super_admin_dashboard")
+def redirect_super_admin_to_staff(request, path=""):
+    """Forward the pre-rename ``/super-admin/...`` prefix to ``/staff/...``."""
+    target = f"/staff/{path}"
+    qs = request.META.get("QUERY_STRING", "")
+    if qs:
+        target = f"{target}?{qs}"
+    return redirect(target)
 
 
-def redirect_admin_to_django_admin(request, path):
-    """Legacy ``/admin/...`` URLs (e.g. bookmarks) forward to ``/django-admin/...``."""
-    target = f"/django-admin/{path}"
+def redirect_django_admin_root(request):
+    """``/django-admin/`` moved back to ``/admin/``; keep old bookmarks alive."""
+    return redirect("/admin/")
+
+
+def redirect_django_admin_to_admin(request, path):
+    """Forward ``/django-admin/...`` to the same path under ``/admin/``."""
+    target = f"/admin/{path}"
     qs = request.META.get("QUERY_STRING", "")
     if qs:
         target = f"{target}?{qs}"
@@ -98,7 +107,7 @@ def _normalize_cover_image_url(raw_url):
 
 
 def home(request):
-    # Staff entry point: the backend root lands on the super-admin dashboard.
+    # Staff entry point: the backend root lands on the staff dashboard.
     # Unauthenticated users hit staff_member_required there and are sent to /login.
     if request.user.is_authenticated and not request.user.is_staff:
         # Customer accounts have no Django UI — send them to the app frontend.
@@ -116,7 +125,7 @@ def _auth_redirect_target(request, user=None):
     default_target = reverse("super_admin_dashboard") if user and user.is_staff else reverse("home")
     candidate = request.POST.get("next") or request.GET.get("next") or default_target
 
-    if candidate in {"/login", "/login/", "/super-admin/login/",
+    if candidate in {"/login", "/login/", "/staff/login/",
                      reverse("login"), reverse("super_admin_login")}:
         candidate = default_target
 
@@ -125,7 +134,7 @@ def _auth_redirect_target(request, user=None):
         allowed_hosts={request.get_host()},
         require_https=request.is_secure(),
     ):
-        if user and not user.is_staff and candidate.startswith("/super-admin"):
+        if user and not user.is_staff and candidate.startswith("/staff"):
             return reverse("home")
         return candidate
 

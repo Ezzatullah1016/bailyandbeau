@@ -11,7 +11,7 @@ from django.core.management.base import BaseCommand
 
 from core.models import Book, BookTheme
 
-# Named presets, also usable as a starting point in the super-admin portal.
+# Named presets, also usable as a starting point in the staff portal.
 PRESETS = {
     "daylight": {
         "backdrop_kind": BookTheme.Backdrop.GRADIENT,

@@ -723,7 +723,7 @@ class ReadingReminder(TimeStampedModel):
 
 
 class PortalSettings(models.Model):
-    """Singleton (pk=1) settings editable from the super-admin portal; overrides env when filled."""
+    """Singleton (pk=1) settings editable from the staff portal; overrides env when filled."""
 
     id = models.PositiveSmallIntegerField(primary_key=True, default=1)
 
