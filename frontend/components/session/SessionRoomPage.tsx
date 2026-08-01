@@ -1449,8 +1449,13 @@ function RoomContent({
     );
   };
 
+  // Drives the header breadcrumb. Prefers the authored `ui.title` (what the
+  // child is shown) over the admin-facing record title.
+  const currentActivityTitle =
+    activities[activityIndex]?.config?.ui?.title || activities[activityIndex]?.title || '';
+
   // One activity element, rendered either as the reading-mode popup (modal) or,
-  // in activity mode, as the in-flow card that sits in the center stage.
+  // in activity mode, in-flow on the stage canvas.
   const activityElement = (activities.length > 0) ? (
       <ActivityRoom
         role={role}
@@ -1534,14 +1539,51 @@ function RoomContent({
             book. The old header was a full-width frosted strip carrying a
             duplicate sound toggle and a third copy of the page counter. */}
         <header className="room-recede pointer-events-none fixed left-0 right-0 top-0 z-50 flex w-full items-start justify-between px-4 pt-[max(10px,env(safe-area-inset-top))] sm:px-6">
-          <div className="pointer-events-auto flex min-w-0 items-center gap-3">
+          <div className="pointer-events-auto flex min-w-0 items-center gap-2 sm:gap-3">
             <BrandLogo variant="dark" className="h-7 shrink-0 sm:h-8" />
+            {/* Breadcrumb: book / activity. Replaces a "← Choose another
+                activity" link that sat `self-start` on the full-width stage,
+                stranding it in the far top-left with no relationship to the
+                activity — and which only the host could see, so a guest had no
+                indication of where they were at all. */}
             <h1
               className="font-baloo min-w-0 truncate text-sm font-semibold tracking-tight sm:text-base"
               style={{ color: 'var(--room-ink)' }}
             >
               {bookTitle}
             </h1>
+            {isActivityMode && activityEntered && currentActivityTitle ? (
+              <>
+                <span
+                  className="shrink-0 text-sm opacity-40"
+                  style={{ color: 'var(--room-ink)' }}
+                  aria-hidden
+                >
+                  /
+                </span>
+                {role === 'host' ? (
+                  <button
+                    type="button"
+                    onClick={handleBackToPicker}
+                    title="Back to all activities"
+                    className="room-tap font-baloo flex min-w-0 cursor-pointer items-center gap-1 rounded-full pl-1.5 pr-3 text-sm font-semibold transition-colors"
+                    style={{ background: 'var(--room-chrome-strong)', color: 'var(--room-ink)' }}
+                  >
+                    <ChevronLeft className="h-4 w-4 shrink-0" aria-hidden />
+                    <span className="truncate">{currentActivityTitle}</span>
+                  </button>
+                ) : (
+                  // Navigation is synced, so a guest pressing back would move
+                  // the host. They get the location without the control.
+                  <span
+                    className="font-baloo min-w-0 truncate text-sm font-semibold"
+                    style={{ color: 'var(--room-ink)' }}
+                  >
+                    {currentActivityTitle}
+                  </span>
+                )}
+              </>
+            ) : null}
           </div>
 
           <div className="pointer-events-auto flex shrink-0 items-center gap-2">
@@ -1759,21 +1801,20 @@ function RoomContent({
             <div className="flex min-h-0 flex-1 flex-col">
               <div
                 ref={readingHudBoundsRef}
-                className="relative flex min-h-0 flex-1 items-center justify-center px-3 py-4 sm:px-5 sm:py-5"
+                /* An entered activity is top-aligned so it reads as page
+                   content on the canvas; the book and the picker stay centred. */
+                className={`relative flex min-h-0 flex-1 justify-center px-3 py-4 sm:px-5 sm:py-5 ${
+                  isActivityMode && activityEntered ? 'items-stretch' : 'items-center'
+                }`}
               >
                 {isActivityMode ? (
                   activityEntered ? (
-                    <div className="w-full flex flex-col items-center">
-                      {role === 'host' && activities.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={handleBackToPicker}
-                          className="room-tap font-karla mb-2 flex cursor-pointer items-center gap-1 self-start rounded-full px-3 text-xs font-bold"
-                          style={{ color: 'var(--room-ink-soft)' }}
-                        >
-                          ← Choose another activity
-                        </button>
-                      )}
+                    // Top-aligned and scrollable: the activity is content on the
+                    // canvas now, not a centred card, so a tall one (drawing,
+                    // drag & drop) must be able to run past the fold rather
+                    // than being squeezed into the viewport's middle.
+                    // Back-to-picker lives in the header breadcrumb.
+                    <div className="h-full w-full overflow-y-auto py-2">
                       {activityElement}
                     </div>
                   ) : (

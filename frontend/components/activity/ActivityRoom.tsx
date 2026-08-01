@@ -202,80 +202,95 @@ export default function ActivityRoom({
     </div>
   ) : null;
 
-  const CardInner = (
-    /*
-     * No coloured header band, and no forced height.
-     *
-     * The band was a solid fill of the book's accent, which for Colour
-     * Adventure is the `sunset` preset's #8F4314 — a heavy brown slab across the
-     * top of every activity. And `min-h-[78vh]` applied regardless of content,
-     * so a 250px quiz sat in a 700px box with the remainder painted blank.
-     * The card now sizes to what is in it, and the title sits on the surface.
-     */
-    <div
-      className={
-        isStage
-          ? 'room-activity-card flex w-full max-w-5xl flex-col overflow-hidden'
-          : 'room-activity-card flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden'
-      }
-      style={{ background: 'var(--activity-paper)' }}
-    >
-      <header className="flex items-start justify-between gap-4 px-5 pt-4 md:px-6">
-        <div className="min-w-0">
-          {activities.length > 1 ? (
-            <div className="mb-1.5 flex items-center gap-2">
-              <p
-                className="text-[10px] font-bold uppercase tracking-widest"
-                style={{ color: 'var(--room-ink-soft)' }}
-              >
-                {index + 1} / {activities.length}
-              </p>
-              <div className="flex items-center gap-1" aria-hidden>
-                {activities.map((a, i) => (
-                  <span
-                    key={a.id}
-                    className="h-1.5 rounded-full transition-all duration-200"
-                    style={{
-                      width: i === index ? 16 : 6,
-                      background: i === index ? 'var(--room-accent)' : 'var(--room-chrome-line)',
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-          ) : null}
-          <h2
-            className="font-baloo truncate text-xl font-bold md:text-2xl"
-            style={{ color: 'var(--room-ink)' }}
-          >
-            {ui.title || current.title}
-          </h2>
-          {ui.instructions ? (
-            <p className="mt-0.5 max-w-xl text-sm" style={{ color: 'var(--room-ink-soft)' }}>
-              {ui.instructions}
+  const header = (
+    <header className="mb-4 flex items-start justify-between gap-4">
+      <div className="min-w-0">
+        {activities.length > 1 ? (
+          <div className="mb-1.5 flex items-center gap-2">
+            <p
+              className="text-[10px] font-bold uppercase tracking-widest"
+              style={{ color: 'var(--room-ink-soft)' }}
+            >
+              {index + 1} / {activities.length}
             </p>
-          ) : null}
-        </div>
-        {hostControls}
-      </header>
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-5 pt-4 md:px-6">
-        {/* keyed on index so switching activities fades in cleanly */}
-        <div key={current.id} className="activity-in">
-          <ActivityBody
-            activity={current}
-            payload={payload}
-            role={role}
-            state={currentState}
-            patchCurrent={patchCurrent}
-          />
-        </div>
+            <div className="flex items-center gap-1" aria-hidden>
+              {activities.map((a, i) => (
+                <span
+                  key={a.id}
+                  className="h-1.5 rounded-full transition-all duration-200"
+                  style={{
+                    width: i === index ? 16 : 6,
+                    background: i === index ? 'var(--room-accent)' : 'var(--room-chrome-line)',
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        ) : null}
+        <h2
+          className="font-baloo truncate text-2xl font-bold md:text-3xl"
+          style={{ color: 'var(--room-ink)' }}
+        >
+          {ui.title || current.title}
+        </h2>
+        {ui.instructions ? (
+          <p className="mt-0.5 max-w-2xl text-sm" style={{ color: 'var(--room-ink-soft)' }}>
+            {ui.instructions}
+          </p>
+        ) : null}
       </div>
+      {hostControls}
+    </header>
+  );
+
+  const body = (
+    // keyed on index so switching activities fades in cleanly
+    <div key={current.id} className="activity-in">
+      <ActivityBody
+        activity={current}
+        payload={payload}
+        role={role}
+        state={currentState}
+        patchCurrent={patchCurrent}
+      />
     </div>
   );
 
-  // Stage: card sits in the normal flow (center stage). Modal: centered overlay.
-  if (isStage) return CardInner;
+  /*
+   * Stage: no card at all.
+   *
+   * Removing the coloured header band was not enough — an opaque panel with a
+   * border and a drop shadow, centred on the stage, still reads as a dialog
+   * that opened on top of the room. The activity *is* the room in activity
+   * mode, so it gets no container of its own: title and content sit straight on
+   * the backdrop, and only the genuinely interactive pieces (option buttons,
+   * drop zones, the drawing canvas) carry a surface.
+   *
+   * Modal keeps its panel: inside the reading room it really is a popup over
+   * the book, and there it should look like one.
+   */
+  if (isStage) {
+    return (
+      // pr on large screens keeps the host controls clear of the participant
+      // tile, which is fixed at right:20px/top:50px and would otherwise clip
+      // Reset and the prev/next arrows.
+      <div className="mx-auto w-full max-w-5xl px-1 lg:pr-[190px]">
+        {header}
+        {body}
+      </div>
+    );
+  }
+
+  const CardInner = (
+    <div
+      className="room-activity-card flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden"
+      style={{ background: 'var(--activity-paper)' }}
+    >
+      <div className="px-5 pt-4 md:px-6">{header}</div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-5 md:px-6">{body}</div>
+    </div>
+  );
+
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center bg-brand-navy/95 backdrop-blur-md p-4">
       {CardInner}

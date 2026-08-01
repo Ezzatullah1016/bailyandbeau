@@ -22,6 +22,10 @@ function OptionButton({
 }) {
   const m = usePaneMotion();
 
+  // Idle options take the room's own surface tokens rather than a hardcoded
+  // white: sitting directly on the canvas, they have to work on a dark book
+  // theme too. Verdict states keep literal brand colours — right and wrong must
+  // read the same in every book.
   const shell =
     state === 'correct'
       ? 'border-brand-teal bg-brand-teal/15'
@@ -29,7 +33,7 @@ function OptionButton({
         ? 'border-brand-pink bg-brand-pink/10'
         : state === 'selected'
           ? 'border-brand-purple bg-brand-blush/80'
-          : 'border-brand-purple/25 bg-white hover:border-brand-purple';
+          : 'hover:border-brand-purple';
 
   const badge =
     state === 'correct'
@@ -61,7 +65,16 @@ function OptionButton({
       transition={m.spring}
       whileHover={state === 'idle' ? m.hover : undefined}
       whileTap={m.press}
-      className={`flex min-h-[56px] w-full cursor-pointer items-center gap-3 rounded-2xl border-2 px-4 py-3 text-left font-medium text-brand-navy transition-colors ${shell}`}
+      className={`flex min-h-[56px] w-full cursor-pointer items-center gap-3 rounded-2xl border-2 px-4 py-3 text-left font-medium transition-colors ${shell}`}
+      style={
+        state === 'idle'
+          ? {
+              background: 'var(--activity-paper)',
+              borderColor: 'var(--room-chrome-line)',
+              color: 'var(--room-ink)',
+            }
+          : { color: 'var(--room-ink)' }
+      }
     >
       <motion.span
         className="flex min-w-0 flex-1 items-center gap-3"
@@ -187,13 +200,18 @@ export function QuizPane({ payload, role: hostRole, state, patchCurrent }: PaneP
                 variants={m.riseIn}
                 src={q.image_url}
                 alt=""
-                className="max-h-[220px] w-full rounded-2xl border border-brand-purple/20 bg-white object-contain"
+                /* No frame: the illustration sits on the canvas like the rest
+                   of the activity. A bordered white box around a transparent
+                   PNG was one more nested panel inside what was already a
+                   panel inside a card. */
+                className="mx-auto max-h-60 w-auto max-w-full object-contain"
               />
             ) : null}
 
             <motion.p
               variants={m.riseIn}
-              className="font-baloo text-center text-xl font-bold text-brand-navy"
+              className="font-baloo text-center text-xl font-bold"
+              style={{ color: 'var(--room-ink)' }}
             >
               {q.prompt}
             </motion.p>
@@ -295,7 +313,8 @@ export function QuizPane({ payload, role: hostRole, state, patchCurrent }: PaneP
     <motion.div variants={m.stagger} initial="hidden" animate="show" className="space-y-4">
       <motion.p
         variants={m.riseIn}
-        className="font-baloo text-center text-xl font-bold text-brand-navy"
+        className="font-baloo text-center text-xl font-bold"
+              style={{ color: 'var(--room-ink)' }}
       >
         {question}
       </motion.p>
