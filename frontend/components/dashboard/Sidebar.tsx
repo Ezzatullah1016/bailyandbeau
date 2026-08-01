@@ -37,10 +37,6 @@ export function Sidebar({ me, currentPath }: SidebarProps) {
     { href: '/dashboard/sessions',  icon: 'history_edu',  label: 'Sessions' },
     { href: '/dashboard/billing',   icon: 'payments',     label: 'Billing' },
     { href: '/dashboard/settings',  icon: 'settings',     label: 'Settings' },
-    // The activity builder had no entry point at all — you had to know the URL.
-    ...(me?.is_staff
-      ? [{ href: '/admin/activities', icon: 'extension', label: 'Activities' }]
-      : []),
   ];
 
   const sidebarContent = (
