@@ -2987,3 +2987,145 @@ class PortalActivityAuthoringTests(TestCase):
         self.assertTrue(group.published)
         # Slug is derived when the operator leaves it blank.
         self.assertEqual(group.slug, "jungle-adventure")
+
+
+class SeededAdventureContentTests(TestCase):
+    """
+    The seed is what the demo runs on, so its shape is worth asserting: four
+    adventures with covers, activities that own no book, and books carrying a
+    theme so the library filter has data.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        call_command("seed_demo_data", verbosity=0)
+        call_command("seed_themes", verbosity=0)
+
+    def test_four_published_adventures_with_covers(self):
+        groups = ActivityGroup.objects.filter(published=True)
+        self.assertGreaterEqual(groups.count(), 4)
+        for slug in ("ocean-adventure", "jungle-adventure", "museum-adventure", "bedtime-adventure"):
+            group = ActivityGroup.objects.get(slug=slug)
+            self.assertTrue(group.cover_image, f"{slug} has no cover")
+            self.assertIsNotNone(group.theme, f"{slug} has no theme")
+            self.assertGreaterEqual(group.activity_configs.count(), 4)
+
+    def test_adventure_activities_own_no_book(self):
+        owned = ActivityConfig.objects.filter(activity_group__isnull=False, book__isnull=False)
+        self.assertEqual(owned.count(), 0)
+
+    def test_seeded_books_carry_a_theme(self):
+        # Without this the library's theme chips and badges have nothing to show.
+        self.assertTrue(Book.objects.filter(theme_category__isnull=False).exists())
+
+    def test_seed_is_idempotent(self):
+        before = (ActivityGroup.objects.count(), ActivityConfig.objects.count())
+        call_command("seed_themes", verbosity=0)
+        self.assertEqual((ActivityGroup.objects.count(), ActivityConfig.objects.count()), before)
+
+    def test_books_can_be_filtered_by_a_seeded_theme(self):
+        user = User.objects.create_user(
+            username="lib-parent", email="lib@example.com", password="strong-password-123"
+        )
+        client = APIClient()
+        client.force_authenticate(user)
+        book = Book.objects.filter(theme_category__isnull=False).first()
+        res = client.get(f"/api/v1/books/?theme={book.theme_category.slug}")
+        self.assertEqual(res.status_code, 200, res.content)
+        titles = [b["title"] for b in res.json()["data"]]
+        self.assertIn(book.title, titles)
+
+    def test_customer_sees_adventures_with_their_theme_colour(self):
+        user = User.objects.create_user(
+            username="adv-browser", email="ab@example.com", password="strong-password-123"
+        )
+        client = APIClient()
+        client.force_authenticate(user)
+        res = client.get("/api/v1/activity-groups/")
+        self.assertEqual(res.status_code, 200, res.content)
+        data = {g["title"]: g for g in res.json()["data"]}
+        self.assertIn("Jungle Adventure", data)
+        jungle = data["Jungle Adventure"]
+        self.assertEqual(jungle["theme_name"], "Jungle")
+        self.assertTrue(jungle["theme_accent"].startswith("#"))
+        self.assertGreaterEqual(jungle["activity_count"], 4)
+
+
+class PortalQuizAnswerKeyTests(TestCase):
+    """
+    Every question keeps its own answer key.
+
+    Regression guard: all questions once shared `name="q_correct[]"`, so the form
+    was a single radio group — picking question 2's answer unchecked question 1's,
+    only one value posted, and every question after the first silently saved with
+    option A as the answer. It saved cleanly and was wrong.
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username="quizkey-admin", email="qk@example.com",
+            password="strong-password-123", is_staff=True, is_superuser=True,
+        )
+        self.client.force_login(self.admin)
+        self.book = Book.objects.create(title="Quiz Key Book", slug="quiz-key-book", published=True)
+
+    def test_each_question_keeps_its_own_correct_answer(self):
+        response = self.client.post(reverse("admin_activity_config"), data={
+            "action": "save", "activity_type": "quiz",
+            "owner": f"book:{self.book.id}", "title": "Three Question Quiz",
+            "ui_title": "Three questions", "sort_order": 0, "publish": "1",
+            "quiz_reveal_mode": "instant",
+            "q_id[]": ["q1", "q2", "q3"],
+            "q_prompt[]": ["First?", "Second?", "Third?"],
+            "q_options_0[]": ["a0", "a1", "a2"],
+            "q_options_1[]": ["b0", "b1", "b2"],
+            "q_options_2[]": ["c0", "c1", "c2"],
+            # Per-question radio names — a different answer in each.
+            "q_correct_0": "0",
+            "q_correct_1": "2",
+            "q_correct_2": "1",
+        })
+        self.assertEqual(response.status_code, 302, response.content[:400])
+        questions = ActivityConfig.objects.get(title="Three Question Quiz").config["payload"]["questions"]
+        self.assertEqual([q["correct_index"] for q in questions], [0, 2, 1])
+
+    def test_correct_index_cannot_exceed_the_options_given(self):
+        self.client.post(reverse("admin_activity_config"), data={
+            "action": "save", "activity_type": "quiz",
+            "owner": f"book:{self.book.id}", "title": "Clamped Quiz",
+            "ui_title": "Clamped", "sort_order": 0, "publish": "1",
+            "quiz_reveal_mode": "instant",
+            "q_id[]": ["q1"], "q_prompt[]": ["Only two options"],
+            "q_options_0[]": ["yes", "no"],
+            "q_correct_0": "7",
+        })
+        questions = ActivityConfig.objects.get(title="Clamped Quiz").config["payload"]["questions"]
+        self.assertEqual(questions[0]["correct_index"], 1)
+
+    def test_a_question_can_carry_its_own_illustration(self):
+        self.client.post(reverse("admin_activity_config"), data={
+            "action": "save", "activity_type": "quiz",
+            "owner": f"book:{self.book.id}", "title": "Illustrated Quiz",
+            "ui_title": "With a picture", "sort_order": 0, "publish": "1",
+            "quiz_reveal_mode": "instant",
+            "q_id[]": ["q1"], "q_prompt[]": ["Which one?"],
+            "q_options_0[]": ["this", "that"], "q_correct_0": "0",
+            "q_image_url[]": ["/adventure-assets/jungle-quiz.jpg"],
+        })
+        questions = ActivityConfig.objects.get(title="Illustrated Quiz").config["payload"]["questions"]
+        self.assertEqual(questions[0]["image_url"], "/adventure-assets/jungle-quiz.jpg")
+
+    def test_form_offers_a_preview_once_the_activity_exists(self):
+        activity = ActivityConfig.objects.create(
+            book=self.book, title="Previewable",
+            activity_type=ActivityConfig.ActivityType.DRAWING,
+            config={
+                "schema_version": "1.1", "activity_type": "drawing",
+                "ui": {"title": "D", "instructions": ""},
+                "payload": {"palette": ["#000"], "brush_sizes": [4], "allow_eraser": True},
+            },
+        )
+        response = self.client.get(f"{reverse('admin_activity_config')}?selected={activity.id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Preview — what the child sees")
+        self.assertContains(response, f"/preview/activity/{activity.id}")

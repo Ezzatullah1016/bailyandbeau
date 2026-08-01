@@ -401,6 +401,10 @@ function LobbyPageContent() {
   }
 
   const bookTitle = sessionData?.book_title ?? 'Reading Session';
+  // An *activity-room book* is still a book. Only a session that targets an
+  // activity group is an adventure, so key the wording on the group rather
+  // than on room_type, which both kinds can share.
+  const isAdventure = Boolean(sessionData?.activity_group);
   const isLoading = phase === 'starting';
 
   return (
@@ -420,21 +424,21 @@ function LobbyPageContent() {
               {/* A session can target a themed adventure rather than a book,
                   and an adventure has nothing to read. */}
               <h2 className="order-10 font-baloo text-4xl font-bold text-[#3d3b62] tracking-tight">
-                {effectiveRoomType === 'activity' ? 'Ready to Play Together?' : 'Ready to Read Together?'}
+                {isAdventure ? 'Ready to Play Together?' : 'Ready to Read Together?'}
               </h2>
 
               {/* Session info / Today's Book card */}
               <div className="order-30 rounded-xl md:order-20 bg-white p-6 border border-[#eccdca] shadow-[0_6px_18px_rgba(0,0,0,0.08)]">
                 <div className="flex flex-col gap-1 mb-4">
                   <span className="font-karla uppercase tracking-widest text-[11px] font-bold text-[#764f84]">
-                    {effectiveRoomType === 'activity' ? "TODAY'S ADVENTURE" : "TODAY'S BOOK"}
+                    {isAdventure ? "TODAY'S ADVENTURE" : "TODAY'S BOOK"}
                   </span>
                   <h3 className="font-baloo text-2xl font-bold text-[#3d3b62]">{bookTitle}</h3>
                 </div>
                 <div className="font-karla flex items-center gap-4 text-[#43493d] text-sm mb-4">
                   <div className="flex items-center gap-1.5">
                     <BookOpen className="w-4 h-4" />
-                    <span>{effectiveRoomType === 'activity' ? 'Activity Room' : 'Reading Room'}</span>
+                    <span>{isAdventure || effectiveRoomType === 'activity' ? 'Activity Room' : 'Reading Room'}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <Clock className="w-4 h-4" />

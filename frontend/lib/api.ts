@@ -350,7 +350,29 @@ export async function transferHost(
   return res.data;
 }
 
-export async function createSession(bookId: string, childProfileId: string, roomType = 'reading') {
+/**
+ * Start a session against a book **or** a themed adventure.
+ *
+ * Took a positional `bookId` and hardcoded `book_id`, so an adventure could
+ * never be launched from the app even though the API has accepted
+ * `activity_group_id` since adventures shipped. Exactly one target must be
+ * given; the server derives `room_type` for an adventure.
+ */
+export async function createSession(opts: {
+  bookId?: string;
+  activityGroupId?: string;
+  childProfileId: string;
+  roomType?: string;
+}) {
+  const body: Record<string, string> = { child_profile_id: opts.childProfileId };
+  if (opts.activityGroupId) {
+    body.activity_group_id = opts.activityGroupId;
+  } else if (opts.bookId) {
+    body.book_id = opts.bookId;
+    body.room_type = opts.roomType ?? 'reading';
+  } else {
+    throw new Error('createSession needs a bookId or an activityGroupId.');
+  }
   const res = await apiRequest<{
     data: {
       id: string;
@@ -358,10 +380,7 @@ export async function createSession(bookId: string, childProfileId: string, room
       host_participant_id: string;
       participants: SessionParticipantData[];
     };
-  }>('/sessions/', {
-    method: 'POST',
-    body: JSON.stringify({ book_id: bookId, child_profile_id: childProfileId, room_type: roomType }),
-  });
+  }>('/sessions/', { method: 'POST', body: JSON.stringify(body) });
   return res.data;
 }
 
@@ -466,6 +485,44 @@ export interface MeData {
 
 export async function fetchMe(): Promise<MeData> {
   const res = await apiRequest<{ data: MeData }>('/me/');
+  return res.data;
+}
+
+// ─── Themes and adventures ───────────────────────────────────────────────────
+
+/** Shared taxonomy across books and adventures — Ocean, Jungle, Museum… */
+export interface ThemeData {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  accent: string;
+  cover_image: string;
+  sort_order: number;
+}
+
+/** A themed adventure: a set of activities with no storybook behind them. */
+export interface ActivityGroupData {
+  id: string;
+  title: string;
+  slug: string;
+  description: string;
+  theme: string | null;
+  theme_name: string;
+  theme_accent: string;
+  cover_image: string;
+  age_band: string;
+  activity_count: number;
+}
+
+export async function listThemes(): Promise<ThemeData[]> {
+  const res = await apiRequest<{ data: ThemeData[] }>('/themes/');
+  return res.data;
+}
+
+export async function listActivityGroups(theme?: string): Promise<ActivityGroupData[]> {
+  const url = theme ? `/activity-groups/?theme=${encodeURIComponent(theme)}` : '/activity-groups/';
+  const res = await apiRequest<{ data: ActivityGroupData[] }>(url);
   return res.data;
 }
 

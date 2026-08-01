@@ -18,6 +18,8 @@ const FULLSCREEN_PREFIXES = [
   // Admin screens are signed-in tooling, not marketing: the shell's "Login"
   // button makes no sense once you are staff and already authenticated.
   '/admin',
+  // Rendered inside an iframe in the staff portal — chrome would be noise.
+  '/preview',
 ];
 
 function AppShellInner({ children }: { children: React.ReactNode }) {

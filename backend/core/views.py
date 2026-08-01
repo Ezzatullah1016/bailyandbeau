@@ -1054,7 +1054,7 @@ def _row(post, name, idx, default=""):
     return values[idx] if idx < len(values) else default
 
 
-def _build_activity_payload_11(post, activity_type, image_url):
+def _build_activity_payload_11(post, activity_type, image_url, question_images=None):
     """
     Build a schema-1.1 payload from the portal form.
 
@@ -1075,10 +1075,18 @@ def _build_activity_payload_11(post, activity_type, image_url):
                 "id": (_row(post, "q_id[]", idx) or "q%d" % (idx + 1)),
                 "prompt": prompt,
                 "options": options,
+                # Per-question radio name. A shared `q_correct[]` made every
+                # question one radio group, so only the first kept its answer
+                # and the rest silently defaulted to option A.
                 "correct_index": min(
-                    max(_to_int(_row(post, "q_correct[]", idx, 0)), 0), len(options) - 1
+                    max(_to_int(post.get("q_correct_%d" % idx, 0)), 0), len(options) - 1
                 ),
             }
+            # An uploaded picture wins over a pasted URL, same as the
+            # activity-level illustration.
+            q_image = (question_images or {}).get(idx) or (_row(post, "q_image_url[]", idx) or "").strip()
+            if q_image:
+                question["image_url"] = q_image
             correct_text = (_row(post, "q_feedback_correct[]", idx) or "").strip()
             wrong_text = (_row(post, "q_feedback_wrong[]", idx) or "").strip()
             if correct_text:
@@ -1190,6 +1198,24 @@ def admin_activity_config(request):
             )
             image_url = uploaded_url or (request.POST.get("image_url") or "").strip()
 
+            # Quiz questions each get their own optional picture, named
+            # q_image_<row index> to match the indexed option fields.
+            question_images = {}
+            for field, handle in request.FILES.items():
+                if not field.startswith("q_image_"):
+                    continue
+                try:
+                    idx = int(field.rsplit("_", 1)[1])
+                except (IndexError, ValueError):
+                    continue
+                stored, err = _validate_and_store_cover_upload(
+                    request, handle, prefix="activity-images"
+                )
+                if err:
+                    upload_error = upload_error or err
+                elif stored:
+                    question_images[idx] = stored
+
             if upload_error:
                 activity_errors = [{"field": "Illustration", "message": upload_error}]
             else:
@@ -1209,7 +1235,9 @@ def admin_activity_config(request):
                         "instructions": (request.POST.get("ui_instructions") or "").strip(),
                         "theme": "default",
                     },
-                    "payload": _build_activity_payload_11(request.POST, activity_type, image_url),
+                    "payload": _build_activity_payload_11(
+                        request.POST, activity_type, image_url, question_images
+                    ),
                     "validation": {},
                 }
                 if book_id:
@@ -1301,6 +1329,15 @@ def admin_activity_config(request):
             "hotspot": ActivityConfig.objects.filter(activity_type=ActivityConfig.ActivityType.HOTSPOT).count(),
         },
         "selected_book_id": request.GET.get("book", "").strip(),
+        # The activity panes are React, so the preview lives in the Next.js app
+        # and is iframed here. Rendering the real runtime means the preview
+        # cannot drift from what the child sees.
+        "preview_url": (
+            "%s/preview/activity/%s"
+            % ((getattr(django_settings, "FRONTEND_URL", "") or "").rstrip("/"), selected_activity.id)
+            if selected_activity
+            else ""
+        ),
     }
     return render(request, "core/admin_activity_config.html", context)
 @staff_member_required

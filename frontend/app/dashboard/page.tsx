@@ -8,7 +8,8 @@ import {
   CreditCard, DoorOpen, MoreHorizontal, Play, RefreshCw, Settings,
   X,
 } from 'lucide-react';
-import { apiRequest, createSession } from '@/lib/api';
+import { apiRequest, createSession, listActivityGroups } from '@/lib/api';
+import type { ActivityGroupData } from '@/lib/api';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { HeaderProfileAvatar } from '@/components/dashboard/AccountAvatar';
 import { NotificationBell, type NotificationItem } from '@/components/dashboard/NotificationBell';
@@ -89,49 +90,67 @@ function statusPill(status: string) {
 
 function StartSessionModal({
   books,
+  adventures,
   childProfiles,
   initialBookId,
+  initialGroupId,
   onClose,
   onStart,
 }: {
   books: Book[];
+  adventures: ActivityGroupData[];
   childProfiles: ChildProfile[];
   initialBookId?: string | null;
+  initialGroupId?: string | null;
   onClose: () => void;
   onStart: (sessionId: string, participantId: string) => void;
 }) {
-  const [bookId, setBookId] = useState(books[0]?.id ?? '');
+  // One selector for both kinds of target, prefixed so the value says which it
+  // is — the same shape the staff portal's owner selector uses.
+  const [target, setTarget] = useState(books[0] ? `book:${books[0].id}` : '');
+  const bookId = target.startsWith('book:') ? target.slice(5) : '';
+  const groupId = target.startsWith('group:') ? target.slice(6) : '';
   const [childId, setChildId] = useState(childProfiles[0]?.id ?? '');
   const [roomType, setRoomType] = useState<'reading' | 'activity'>('reading');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   // Which room types the selected book supports. 'hybrid' books offer both;
-  // 'reading'/'activity' books lock to that one.
+  // 'reading'/'activity' books lock to that one. An adventure is always the
+  // activity room — there is nothing to read — so the toggle is hidden for it.
   const selectedBook = books.find((b) => b.id === bookId);
   const bookRoom = selectedBook?.room_type ?? 'reading';
-  const canReading = bookRoom === 'reading' || bookRoom === 'hybrid';
-  const canActivity = bookRoom === 'activity' || bookRoom === 'hybrid';
+  const canReading = !groupId && (bookRoom === 'reading' || bookRoom === 'hybrid');
+  const canActivity = !groupId && (bookRoom === 'activity' || bookRoom === 'hybrid');
 
   // Keep the chosen room type valid for the selected book.
   useEffect(() => {
+    if (groupId) return;
     if (roomType === 'reading' && !canReading) setRoomType('activity');
     else if (roomType === 'activity' && !canActivity) setRoomType('reading');
-  }, [bookId, canReading, canActivity, roomType]);
+  }, [bookId, groupId, canReading, canActivity, roomType]);
 
   useEffect(() => {
-    if (!initialBookId || books.length === 0) return;
-    if (books.some((b) => b.id === initialBookId)) {
-      setBookId(initialBookId);
+    if (initialBookId && books.some((b) => b.id === initialBookId)) {
+      setTarget(`book:${initialBookId}`);
+    } else if (initialGroupId && adventures.some((g) => g.id === initialGroupId)) {
+      setTarget(`group:${initialGroupId}`);
     }
-  }, [initialBookId, books]);
+  }, [initialBookId, initialGroupId, books, adventures]);
 
   async function handleStart() {
-    if (!bookId || !childId) { setError('Select a book and child profile.'); return; }
+    if ((!bookId && !groupId) || !childId) {
+      setError('Select something to play and a child profile.');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
-      const data = await createSession(bookId, childId, roomType);
+      const data = await createSession(
+        groupId
+          ? { activityGroupId: groupId, childProfileId: childId }
+          : { bookId, childProfileId: childId, roomType },
+      );
       localStorage.setItem(`bb_participant_${data.id}`, data.host_participant_id);
       onStart(data.id, data.host_participant_id);
     } catch (e) {
@@ -153,17 +172,30 @@ function StartSessionModal({
 
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-[#43493d] mb-2">Book</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-[#43493d] mb-2">What shall we do?</label>
             <select
-              value={bookId}
-              onChange={(e) => setBookId(e.target.value)}
-              disabled={books.length === 0}
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
+              disabled={books.length === 0 && adventures.length === 0}
               className="font-karla w-full px-4 py-3 rounded-xl border border-[#eccdca] bg-white text-[#1d1b16] text-sm focus:outline-none focus:ring-2 focus:ring-[#3b85a6]"
             >
-              {books.length === 0 && <option value="">No books available</option>}
-              {books.map((b) => (
-                <option key={b.id} value={b.id}>{b.title}</option>
-              ))}
+              {books.length === 0 && adventures.length === 0 && <option value="">Nothing available</option>}
+              {books.length > 0 && (
+                <optgroup label="Books">
+                  {books.map((b) => (
+                    <option key={b.id} value={`book:${b.id}`}>{b.title}</option>
+                  ))}
+                </optgroup>
+              )}
+              {adventures.length > 0 && (
+                <optgroup label="Adventures">
+                  {adventures.map((g) => (
+                    <option key={g.id} value={`group:${g.id}`}>
+                      {g.title} · {g.activity_count} activities
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </div>
 
@@ -234,6 +266,8 @@ function DashboardInner() {
   const router = useRouter();
   const pathname = usePathname();
   const [startBook, setStartBook] = useState<string | null>(null);
+  const [startGroup, setStartGroup] = useState<string | null>(null);
+  const [adventures, setAdventures] = useState<ActivityGroupData[]>([]);
   const [me, setMe] = useState<MeData | null>(null);
   const [dash, setDash] = useState<DashboardData | null>(null);
   const [entitlement, setEntitlement] = useState<EntitlementData | null>(null);
@@ -248,6 +282,7 @@ function DashboardInner() {
     if (typeof window === 'undefined') return;
     const q = new URLSearchParams(window.location.search);
     setStartBook(q.get('startBook'));
+    setStartGroup(q.get('startGroup'));
   }, [pathname]);
 
   useEffect(() => {
@@ -272,6 +307,7 @@ function DashboardInner() {
       apiRequest<{ data: DashboardData }>('/dashboard/').then((r) => { if (!cancelled) setDash(r.data); }),
       apiRequest<{ data: EntitlementData }>('/billing/entitlement/').then((r) => { if (!cancelled) setEntitlement(r.data); }),
       apiRequest<{ data: Book[] }>('/books/').then((r) => { if (!cancelled) setBooks(r.data); }),
+      listActivityGroups().then((g) => { if (!cancelled) setAdventures(g); }).catch(() => {}),
       apiRequest<{ data: ChildProfile[] }>('/children/').then((r) => { if (!cancelled) setChildren(r.data); }),
     ])
       .catch((e) => {
@@ -298,11 +334,10 @@ function DashboardInner() {
   }, [router, reloadKey]);
 
   useEffect(() => {
-    if (!startBook || books.length === 0 || children.length === 0) return;
-    if (books.some((b) => b.id === startBook)) {
-      setShowModal(true);
-    }
-  }, [startBook, books, children]);
+    if (children.length === 0) return;
+    if (startBook && books.some((b) => b.id === startBook)) setShowModal(true);
+    else if (startGroup && adventures.some((g) => g.id === startGroup)) setShowModal(true);
+  }, [startBook, startGroup, books, adventures, children]);
 
   function handleSessionStarted(sessionId: string) {
     setShowModal(false);
@@ -372,8 +407,10 @@ function DashboardInner() {
       {showModal && (
         <StartSessionModal
           books={books}
+          adventures={adventures}
           childProfiles={children}
           initialBookId={startBook}
+          initialGroupId={startGroup}
           onClose={() => setShowModal(false)}
           onStart={handleSessionStarted}
         />
