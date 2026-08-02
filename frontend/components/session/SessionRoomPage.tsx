@@ -556,7 +556,9 @@ function RoomContent({
   // Fall back to the bundled sample only if the book has no PDF either.
   const pdfToRender =
     loadingPages || backendPages.length > 0 ? '' : bookPdfUrl || '/Book-lulu.pdf';
-  const placeholderPages = usePlaceholderPdf(pdfToRender);
+  // The hook returns { pages, settled } — `settled` distinguishes "still
+  // rasterising" from "failed", so the room can stop waiting either way.
+  const { pages: placeholderPages, settled: placeholderSettled } = usePlaceholderPdf(pdfToRender);
   const pages = backendPages.length > 0 ? backendPages : placeholderPages;
   const spreadItems = useMemo(() => bookSpreadItems(pages), [pages]);
   const [currentPage, setCurrentPage] = useState(0);
@@ -1840,10 +1842,18 @@ function RoomContent({
                   )
                 ) : (
                 <div ref={bookMeasureRef} className="relative flex h-full w-full items-center justify-center">
-                  {loadingPages || pages.length === 0 ? (
+                  {/* Stop spinning once the placeholder load has settled, even if
+                      it failed — otherwise a broken PDF spins "Loading book…"
+                      forever with no way to tell it is never coming. */}
+                  {loadingPages || (pages.length === 0 && !placeholderSettled) ? (
                     <div className="flex flex-col items-center gap-3" style={{ color: 'var(--room-ink-soft)' }}>
                       <Loader2 className="h-12 w-12 animate-spin" />
                       <span className="text-sm font-medium">Loading book…</span>
+                    </div>
+                  ) : pages.length === 0 ? (
+                    <div className="flex flex-col items-center gap-2 text-center" style={{ color: 'var(--room-ink-soft)' }}>
+                      <BookOpen className="h-10 w-10 opacity-60" />
+                      <span className="text-sm font-medium">This book has no pages yet.</span>
                     </div>
                   ) : (
                     <>
