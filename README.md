@@ -17,6 +17,8 @@ The frontend lives in `frontend/` and expects Node.js 20+.
 
 Then open `http://127.0.0.1:8000/`.
 
+The URL **`/admin/`** redirects to the **super admin dashboard** (`/super-admin/dashboard/`). The stock **Django model admin** is mounted at **`/django-admin/`** if you need raw model CRUD.
+
 ## M1 foundation coverage
 
 This repo now covers the M1 scope only:
@@ -130,8 +132,9 @@ Relevant M1 frontend values:
 
 - `/` — home page
 - `/login/` — public login and signup portal
-- `/admin/` — Django admin
-- `/admin/login/` — themed admin login
+- `/admin/` — redirects to super admin dashboard
+- `/django-admin/` — Django model admin (users, groups, raw models)
+- `/django-admin/login/` — themed Django admin sign-in
 - `/super-admin/dashboard/` — super admin overview UI
 - `/super-admin/sessions/` — session monitor UI
 - `/super-admin/live-sessions/` — live session operations UI

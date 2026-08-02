@@ -23,6 +23,14 @@ frontend/public/pdf.worker.min.js
 frontend/.env.local
 frontend/.env.production.local
 
+# ─── Environment files (real secrets — never commit; only *.example is tracked) ─
+.env.*
+!.env.example
+!.env.local.example
+frontend/.env.production
+backend/.env.bak.*
+frontend/.env.production.bak.*
+
 # ─── IDE & OS ─────────────────────────────────────────────────────────────────
 .vscode/
 .DS_Store
@@ -34,6 +42,8 @@ Thumbs.db
 !DEPLOY.md
 !NGROK.md
 !README.md
+!docs/CLIENT_ACCESS.md
+!docs/DEPLOY_AWS_FILEZILLA.md
 
 # ─── Deploy (local only — never commit keys) ─────────────────────────────────
 deploy/.env
@@ -47,3 +57,4 @@ backend/keys/
 .claude/settings.json
 temp_auto_push.bat
 temp_interactive_push.bat
+branch_structure.json

@@ -8,7 +8,7 @@ for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":3000 "') do taskkill /PID %
 
 :: Start Django backend in a new window
 echo Starting Django backend (listening on all interfaces — LAN access) ...
-start "Django Backend" cmd /k "cd /d %~dp0backend && .\venv\Scripts\python.exe manage.py runserver 0.0.0.0:8000"
+start "Django Backend" cmd /k "cd /d %~dp0backend && if exist .venv\Scripts\python.exe (.venv\Scripts\python.exe manage.py runserver 0.0.0.0:8000) else (venv\Scripts\python.exe manage.py runserver 0.0.0.0:8000)"
 
 :: Wait a moment then start Next.js frontend
 timeout /t 2 /nobreak >nul

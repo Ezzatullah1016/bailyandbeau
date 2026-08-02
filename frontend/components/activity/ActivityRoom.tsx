@@ -13,6 +13,15 @@ interface Props {
   initialStateByActivity?: Record<string, Record<string, unknown>>;
   onClose: () => void;
   onActivityStateSync?: (state: Record<string, unknown>) => void;
+  /**
+   * Presentation:
+   * - 'modal' (default): centered popup overlay (reading-room in-book activities).
+   * - 'stage': in-flow card that sits in the center stage (Activity Room); no
+   *   overlay, no close button — the room framing (video, dock) stays visible.
+   */
+  variant?: 'modal' | 'stage';
+  /** @deprecated use variant. `fullscreen` maps to 'stage'. */
+  fullscreen?: boolean;
 }
 
 type Line = { points: number[]; color: string; width: number; eraser?: boolean };
@@ -30,8 +39,11 @@ export default function ActivityRoom({
   initialStateByActivity,
   onClose,
   onActivityStateSync,
+  variant,
+  fullscreen = false,
 }: Props) {
   const room = useRoomContext();
+  const isStage = variant === 'stage' || fullscreen;
 
   const [index, setIndex] = useState(initialIndex);
   const [stateByActivity, setStateByActivity] = useState<Record<string, Record<string, unknown>>>(
@@ -128,15 +140,36 @@ export default function ActivityRoom({
   const ui = current.config.ui;
   const payload = current.config.payload;
 
-  return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-[#3d3b62]/95 backdrop-blur-md p-4">
-      <div className="w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl bg-[#eccdca] shadow-2xl flex flex-col border border-[#764f84]/40">
+  // Stage variant is an in-flow card that lives in the center stage (Activity
+  // Room). Modal variant is the centered popup used inside the reading room.
+  const CardInner = (
+      <div
+        className={
+          isStage
+            ? 'flex w-full max-w-5xl flex-col overflow-hidden rounded-[1.65rem] border border-[#764f84]/40 bg-gradient-to-b from-[#e8dfd4] via-[#faf6ee] to-[#e6ded4] shadow-[0_52px_100px_-22px_rgba(5,5,12,0.88)] min-h-[min(78vh,calc(100dvh-15rem))]'
+            : 'w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl bg-[#eccdca] shadow-2xl flex flex-col border border-[#764f84]/40'
+        }
+      >
         <header className="flex items-start justify-between gap-4 px-6 py-4 bg-[#3d3b62] text-[#eccdca]">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-[#eccdca]/70">
-              Activity {index + 1} / {activities.length}
-            </p>
-            <h2 className="font-headline text-xl md:text-2xl font-bold text-[#eccdca]">{ui.title || current.title}</h2>
+          <div className="min-w-0">
+            <div className="flex items-center gap-3">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[#eccdca]/70">
+                Activity {index + 1} / {activities.length}
+              </p>
+              {activities.length > 1 && (
+                <div className="flex items-center gap-1" aria-hidden>
+                  {activities.map((a, i) => (
+                    <span
+                      key={a.id}
+                      className={`h-1.5 rounded-full transition-all duration-200 ${
+                        i === index ? 'w-4 bg-[#f0c75e]' : 'w-1.5 bg-[#eccdca]/40'
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+            <h2 className="font-headline text-xl md:text-2xl font-bold text-[#eccdca] truncate">{ui.title || current.title}</h2>
             {ui.instructions ? (
               <p className="text-sm text-[#eccdca]/90 mt-1 max-w-xl">{ui.instructions}</p>
             ) : null}
@@ -147,7 +180,7 @@ export default function ActivityRoom({
                 <button
                   type="button"
                   onClick={resetCurrent}
-                  className="flex items-center gap-1 px-3 py-2 rounded-lg bg-[#764f84] text-[#eccdca] text-xs font-bold hover:opacity-90"
+                  className="flex min-h-11 items-center gap-1 px-3 py-2 rounded-lg bg-[#764f84] text-[#eccdca] text-xs font-bold transition-opacity hover:opacity-90 cursor-pointer"
                 >
                   <RotateCcw className="w-4 h-4" />
                   Reset
@@ -156,7 +189,7 @@ export default function ActivityRoom({
                   type="button"
                   onClick={goPrev}
                   disabled={index <= 0}
-                  className="p-2 rounded-lg bg-[#3b85a6] text-white disabled:opacity-40"
+                  className="grid h-11 w-11 place-items-center rounded-lg bg-[#3b85a6] text-white transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                   aria-label="Previous activity"
                 >
                   <ChevronLeft className="w-5 h-5" />
@@ -165,21 +198,21 @@ export default function ActivityRoom({
                   type="button"
                   onClick={goNext}
                   disabled={index >= activities.length - 1}
-                  className="p-2 rounded-lg bg-[#3b85a6] text-white disabled:opacity-40"
+                  className="grid h-11 w-11 place-items-center rounded-lg bg-[#3b85a6] text-white transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                   aria-label="Next activity"
                 >
                   <ChevronRight className="w-5 h-5" />
                 </button>
               </>
             )}
-            {role === 'host' ? (
+            {role === 'host' && !isStage ? (
               <button
                 type="button"
                 onClick={() => {
                   room.localParticipant.publishData(buildMsg('ACTIVITY_CLOSE', {}), { reliable: true });
                   onClose();
                 }}
-                className="p-2 rounded-lg bg-[#c84a71] text-white hover:opacity-90"
+                className="p-2 rounded-lg bg-[#c84a71] text-white hover:opacity-90 cursor-pointer"
                 aria-label="Close activities"
               >
                 <X className="w-5 h-5" />
@@ -189,15 +222,25 @@ export default function ActivityRoom({
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-[#faf6f5]">
-          <ActivityBody
-            activity={current}
-            payload={payload}
-            role={role}
-            state={currentState}
-            patchCurrent={patchCurrent}
-          />
+          {/* keyed on index so switching activities fades in cleanly */}
+          <div key={current.id} className="activity-in">
+            <ActivityBody
+              activity={current}
+              payload={payload}
+              role={role}
+              state={currentState}
+              patchCurrent={patchCurrent}
+            />
+          </div>
         </div>
       </div>
+  );
+
+  // Stage: card sits in the normal flow (center stage). Modal: centered overlay.
+  if (isStage) return CardInner;
+  return (
+    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-[#3d3b62]/95 backdrop-blur-md p-4">
+      {CardInner}
     </div>
   );
 }

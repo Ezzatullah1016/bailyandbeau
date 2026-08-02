@@ -4,13 +4,14 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowRight, Bell, BookOpen, BookMarked, CalendarDays, CheckSquare,
+  ArrowRight, BookOpen, BookMarked, CalendarDays, CheckSquare,
   CreditCard, DoorOpen, Lock, Medal, MoreHorizontal, Play, RefreshCw, Settings,
   X,
 } from 'lucide-react';
 import { apiRequest, createSession, type UserBadgeData } from '@/lib/api';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { HeaderProfileAvatar } from '@/components/dashboard/AccountAvatar';
+import { NotificationBell, type NotificationItem } from '@/components/dashboard/NotificationBell';
 import { usePathname } from 'next/navigation';
 import { Icon } from '@/components/ui/Icon';
 
@@ -109,8 +110,22 @@ function StartSessionModal({
 }) {
   const [bookId, setBookId] = useState(books[0]?.id ?? '');
   const [childId, setChildId] = useState(childProfiles[0]?.id ?? '');
+  const [roomType, setRoomType] = useState<'reading' | 'activity'>('reading');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Which room types the selected book supports. 'hybrid' books offer both;
+  // 'reading'/'activity' books lock to that one.
+  const selectedBook = books.find((b) => b.id === bookId);
+  const bookRoom = selectedBook?.room_type ?? 'reading';
+  const canReading = bookRoom === 'reading' || bookRoom === 'hybrid';
+  const canActivity = bookRoom === 'activity' || bookRoom === 'hybrid';
+
+  // Keep the chosen room type valid for the selected book.
+  useEffect(() => {
+    if (roomType === 'reading' && !canReading) setRoomType('activity');
+    else if (roomType === 'activity' && !canActivity) setRoomType('reading');
+  }, [bookId, canReading, canActivity, roomType]);
 
   useEffect(() => {
     if (!initialBookId || books.length === 0) return;
@@ -124,7 +139,7 @@ function StartSessionModal({
     setLoading(true);
     setError('');
     try {
-      const data = await createSession(bookId, childId);
+      const data = await createSession(bookId, childId, roomType);
       localStorage.setItem(`bb_participant_${data.id}`, data.host_participant_id);
       onStart(data.id, data.host_participant_id);
     } catch (e) {
@@ -182,6 +197,28 @@ function StartSessionModal({
               </p>
             )}
           </div>
+
+          {(canReading && canActivity) && (
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#3b85a6] mb-2">Room</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRoomType('reading')}
+                  className={`font-karla py-3 rounded-xl text-sm font-bold transition-all ${roomType === 'reading' ? 'bg-[#3d3b62] text-white' : 'bg-white border border-[#eccdca] text-[#3d3b62]'}`}
+                >
+                  Reading Room
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRoomType('activity')}
+                  className={`font-karla py-3 rounded-xl text-sm font-bold transition-all ${roomType === 'activity' ? 'bg-[#764f84] text-white' : 'bg-white border border-[#eccdca] text-[#764f84]'}`}
+                >
+                  Activity Room
+                </button>
+              </div>
+            </div>
+          )}
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 
@@ -285,6 +322,25 @@ function DashboardInner() {
   const firstName = me?.first_name || me?.username || 'there';
   const sessionsLeft = (entitlement?.sessions_remaining ?? 0) + (entitlement?.pack_sessions_remaining ?? 0);
 
+  const notifications: NotificationItem[] = [
+    ...badges.map((b) => ({
+      id: `badge-${b.id}`,
+      kind: 'badge' as const,
+      title: `Badge earned: ${b.badge_name}`,
+      detail: `${b.child_name} unlocked ${b.badge_name} ${BADGE_ICONS[b.badge_code] ?? '🏅'}`,
+      at: b.earned_at,
+    })),
+    ...(dash?.recent_sessions ?? [])
+      .filter((s) => s.status === 'completed' && s.ended_at)
+      .map((s) => ({
+        id: `session-${s.id}`,
+        kind: 'session' as const,
+        title: 'Reading session completed',
+        detail: `${s.child_name} finished “${s.book_title}”`,
+        at: s.ended_at as string,
+      })),
+  ];
+
   if (loading) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-[#faf7f6]">
@@ -346,10 +402,7 @@ function DashboardInner() {
       <header className="flex justify-between items-center w-full pl-16 pr-8 md:px-8 h-16 sticky top-0 z-40 bg-[#faf7f6]/80 backdrop-blur-xl shadow-sm border-b border-[#3d3b62]/10">
         <div className="font-baloo text-xl font-bold text-[#3d3b62]">Dashboard</div>
         <div className="flex items-center gap-4">
-          <button type="button" className="relative group">
-            <Bell className="w-5 h-5 text-stone-500 group-hover:text-[#3d3b62] transition-colors" />
-            <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full border-2 border-white" />
-          </button>
+          <NotificationBell items={notifications} />
           <HeaderProfileAvatar me={me} />
         </div>
       </header>

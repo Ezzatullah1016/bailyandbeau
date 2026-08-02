@@ -48,6 +48,8 @@ interface AnnotationToolbarProps {
   participantCount: number;
   /** Merged onto the root wrapper (e.g. `items-start` for left-aligned stacks). */
   className?: string;
+  /** Hide book/pen/highlighter/eraser toggles and the draw sub-panel (incl. Clear). Used in activity mode. */
+  hideAnnotationTools?: boolean;
 }
 
 /**
@@ -160,6 +162,7 @@ export function AnnotationToolbar({
   role,
   participantCount,
   className,
+  hideAnnotationTools = false,
 }: AnnotationToolbarProps) {
   const drawing = interactionMode !== 'book';
   const brushPct = ((brushSize - MIN_BRUSH) / (MAX_BRUSH - MIN_BRUSH)) * 100;
@@ -245,7 +248,7 @@ export function AnnotationToolbar({
       className={`pointer-events-auto relative flex flex-col items-center gap-3 overflow-visible ${className ?? ''}`}
     >
       {/* ── Sub-panel (above the main bar) ─────────────────────────── */}
-      {subPanel === 'draw' && (
+      {!hideAnnotationTools && subPanel === 'draw' && (
         <div className="flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-white/10 bg-stone-950/95 px-4 py-3 shadow-2xl backdrop-blur-xl">
           {/* Colors */}
           <div className="flex items-center gap-1.5">
@@ -347,40 +350,48 @@ export function AnnotationToolbar({
         className="flex max-w-full items-center gap-1.5 overflow-x-auto overflow-y-hidden rounded-full border border-white/10 bg-stone-950/90 px-3 py-2.5 shadow-2xl backdrop-blur-xl sm:gap-2 sm:px-5 sm:py-3"
       >
         {/* Book mode */}
-        <DockTip label="Book">
-          <button type="button" aria-label="Book mode — flip pages" aria-pressed={interactionMode === 'book'}
-            onClick={() => handleToolClick('book')}
-            className={`${btnBase} ${btnMd} ${ringBook}`}>
-            <BookOpen className="h-6 w-6 sm:h-7 sm:w-7" aria-hidden />
-          </button>
-        </DockTip>
+        {!hideAnnotationTools && (
+          <DockTip label="Book">
+            <button type="button" aria-label="Book mode — flip pages" aria-pressed={interactionMode === 'book'}
+              onClick={() => handleToolClick('book')}
+              className={`${btnBase} ${btnMd} ${ringBook}`}>
+              <BookOpen className="h-6 w-6 sm:h-7 sm:w-7" aria-hidden />
+            </button>
+          </DockTip>
+        )}
 
         {/* Pen */}
-        <DockTip label="Pen">
-          <button type="button" aria-label="Pen tool" aria-pressed={interactionMode === 'pen'}
-            onClick={() => handleToolClick('pen')}
-            className={`${btnBase} ${btnMd} ${ringTool('pen')}`}>
-            <Pencil className="h-6 w-6 sm:h-7 sm:w-7" aria-hidden />
-          </button>
-        </DockTip>
+        {!hideAnnotationTools && (
+          <DockTip label="Pen">
+            <button type="button" aria-label="Pen tool" aria-pressed={interactionMode === 'pen'}
+              onClick={() => handleToolClick('pen')}
+              className={`${btnBase} ${btnMd} ${ringTool('pen')}`}>
+              <Pencil className="h-6 w-6 sm:h-7 sm:w-7" aria-hidden />
+            </button>
+          </DockTip>
+        )}
 
         {/* Highlighter */}
-        <DockTip label="Highlight">
-          <button type="button" aria-label="Highlighter tool" aria-pressed={interactionMode === 'highlighter'}
-            onClick={() => handleToolClick('highlighter')}
-            className={`${btnBase} ${btnMd} ${ringTool('highlighter')}`}>
-            <Highlighter className="h-6 w-6 sm:h-7 sm:w-7" aria-hidden />
-          </button>
-        </DockTip>
+        {!hideAnnotationTools && (
+          <DockTip label="Highlight">
+            <button type="button" aria-label="Highlighter tool" aria-pressed={interactionMode === 'highlighter'}
+              onClick={() => handleToolClick('highlighter')}
+              className={`${btnBase} ${btnMd} ${ringTool('highlighter')}`}>
+              <Highlighter className="h-6 w-6 sm:h-7 sm:w-7" aria-hidden />
+            </button>
+          </DockTip>
+        )}
 
         {/* Eraser */}
-        <DockTip label="Eraser">
-          <button type="button" aria-label="Eraser tool" aria-pressed={interactionMode === 'eraser'}
-            onClick={() => handleToolClick('eraser')}
-            className={`${btnBase} ${btnMd} ${ringTool('eraser')}`}>
-            <Eraser className="h-6 w-6 sm:h-7 sm:w-7" aria-hidden />
-          </button>
-        </DockTip>
+        {!hideAnnotationTools && (
+          <DockTip label="Eraser">
+            <button type="button" aria-label="Eraser tool" aria-pressed={interactionMode === 'eraser'}
+              onClick={() => handleToolClick('eraser')}
+              className={`${btnBase} ${btnMd} ${ringTool('eraser')}`}>
+              <Eraser className="h-6 w-6 sm:h-7 sm:w-7" aria-hidden />
+            </button>
+          </DockTip>
+        )}
 
         {/* Reactions */}
         <DockTip label="React">

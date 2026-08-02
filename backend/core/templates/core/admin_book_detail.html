@@ -140,11 +140,11 @@
                 <div class="space-y-2">
                     <p class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Status</p>
                     <label class="mr-4 inline-flex items-center gap-2 text-sm text-slate-700">
-                        <input type="radio" name="publish_state" value="draft" {% if not selected_book or not selected_book.published %}checked{% endif %}>
+                        <input type="radio" name="publish_state" value="draft" {% if selected_book and not selected_book.published %}checked{% endif %}>
                         Draft
                     </label>
                     <label class="inline-flex items-center gap-2 text-sm text-slate-700">
-                        <input type="radio" name="publish_state" value="published" {% if selected_book and selected_book.published %}checked{% endif %}>
+                        <input type="radio" name="publish_state" value="published" {% if not selected_book or selected_book.published %}checked{% endif %}>
                         Published
                     </label>
                 </div>

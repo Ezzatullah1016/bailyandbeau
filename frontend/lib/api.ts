@@ -115,8 +115,8 @@ async function refreshAccessToken(): Promise<string | null> {
       body: JSON.stringify({ refresh }),
     });
     if (!res.ok) return null;
-    // The refresh endpoint returns the standard envelope: {data:{access}, ...}.
-    // Tolerate both the enveloped and bare shapes.
+    // The API wraps every response in an envelope: {data, meta, error}. The
+    // refresh endpoint returns { data: { access } }. Tolerate a bare shape too.
     const body = await res.json() as
       | { data?: { access?: string; refresh?: string }; access?: string; refresh?: string };
     const access = body?.data?.access ?? body?.access;
@@ -210,6 +210,7 @@ export interface StartSessionData {
 export interface JoinSessionData {
   session_id: string;
   room_name: string;
+  room_type?: string;
   livekit_url: string;
   participant: SessionParticipantData;
   realtime_token: string;
@@ -354,6 +355,22 @@ export async function getBookPages(bookId: string, participantId?: string): Prom
   const qs = participantId ? `?participant_id=${encodeURIComponent(participantId)}` : '';
   const res = await apiRequest<{ data: BookPageData[]; meta: { count: number; page_count: number; asset_type: string } }>(`/books/${bookId}/pages/${qs}`);
   return res.data;
+}
+
+export interface BookPagesResult {
+  pages: BookPageData[];
+  assetType: string;
+  pdfViewUrl: string;
+}
+
+/** Pages plus meta (asset type + the book's own PDF URL for client-side rendering). */
+export async function getBookPagesWithMeta(bookId: string, participantId?: string): Promise<BookPagesResult> {
+  const qs = participantId ? `?participant_id=${encodeURIComponent(participantId)}` : '';
+  const res = await apiRequest<{
+    data: BookPageData[];
+    meta: { count: number; page_count: number; asset_type: string; pdf_view_url?: string };
+  }>(`/books/${bookId}/pages/${qs}`);
+  return { pages: res.data, assetType: res.meta?.asset_type ?? '', pdfViewUrl: res.meta?.pdf_view_url ?? '' };
 }
 
 // ─── Book activities ─────────────────────────────────────────────────────────

@@ -10,10 +10,18 @@ export type ReadingSpread = {
   leftPageNumber: number;
 };
 
-function BookPageImage({ url, pageNumber }: { url: string; pageNumber: number }) {
+function BookPageImage({
+  url,
+  pageNumber,
+  objectFit,
+}: {
+  url: string;
+  pageNumber: number;
+  objectFit: 'contain' | 'cover';
+}) {
   const [loaded, setLoaded] = useState(false);
   return (
-    <div className="relative h-full w-full bg-white">
+    <div className="relative h-full w-full bg-[#f6f2ea]">
       {!loaded && (
         <div className="absolute inset-0 flex items-center justify-center">
           <Loader2 className="h-12 w-12 animate-spin text-stone-300" />
@@ -24,7 +32,7 @@ function BookPageImage({ url, pageNumber }: { url: string; pageNumber: number })
         key={url}
         src={url}
         alt={`Page ${pageNumber}`}
-        className={`h-full w-full object-contain transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+        className={`h-full w-full ${objectFit === 'cover' ? 'object-cover' : 'object-contain'} transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
         onLoad={() => setLoaded(true)}
         onError={() => setLoaded(true)}
       />
@@ -44,6 +52,8 @@ type SpreadBookViewerProps = {
   swipeEnabled?: boolean;
   onSwipePrev?: () => void;
   onSwipeNext?: () => void;
+  /** Use object-cover for page images instead of letterboxed contain (trade-off: cropping). */
+  coverPages?: boolean;
 };
 
 export function SpreadBookViewer({
@@ -55,6 +65,7 @@ export function SpreadBookViewer({
   swipeEnabled,
   onSwipePrev,
   onSwipeNext,
+  coverPages = false,
 }: SpreadBookViewerProps) {
   const swipeStartX = useRef<number | null>(null);
   const capturedPointer = useRef<number | null>(null);
@@ -97,6 +108,7 @@ export function SpreadBookViewer({
   }, []);
 
   const { left, right, leftPageNumber } = spread;
+  const objectFit: 'contain' | 'cover' = coverPages ? 'cover' : 'contain';
 
   return (
     <div
@@ -108,13 +120,13 @@ export function SpreadBookViewer({
     >
       <div
         key={transitionKey}
-        className="flex h-full w-full overflow-hidden bg-white transition-opacity duration-200 motion-reduce:transition-none"
+        className="flex h-full w-full overflow-hidden bg-gradient-to-br from-[#ede6dc] via-[#faf6ef] to-[#e9e2d9] shadow-[inset_0_0_80px_rgba(92,71,61,0.06)] transition-opacity duration-200 motion-reduce:transition-none"
       >
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           {left ? (
-            <BookPageImage url={left.image_url} pageNumber={leftPageNumber} />
+            <BookPageImage url={left.image_url} pageNumber={leftPageNumber} objectFit={objectFit} />
           ) : (
-            <div className="h-full w-full bg-white" />
+            <div className="h-full w-full bg-[#f6f2ea]" />
           )}
           {left && (
             <div className="pointer-events-none absolute bottom-4 left-4 z-20">
@@ -122,11 +134,11 @@ export function SpreadBookViewer({
             </div>
           )}
         </div>
-        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col border-l border-stone-100">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col border-l border-[#d9cfc2]/70">
           {right ? (
-            <BookPageImage url={right.image_url} pageNumber={leftPageNumber + 1} />
+            <BookPageImage url={right.image_url} pageNumber={leftPageNumber + 1} objectFit={objectFit} />
           ) : (
-            <div className="h-full w-full bg-white" />
+            <div className="h-full w-full bg-[#f6f2ea]" />
           )}
           {right && (
             <div className="pointer-events-none absolute bottom-4 right-4 z-20 text-right">

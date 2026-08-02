@@ -14,4 +14,4 @@
 
 - Start the server with the `Run Django Server` task or `& ".\.venv\Scripts\python.exe" manage.py runserver`
 - Open `http://127.0.0.1:8000/`
-- Admin is available at `http://127.0.0.1:8000/admin/`
+- Super admin dashboard: `http://127.0.0.1:8000/admin/` (redirects from `/admin/`). Stock Django admin: `http://127.0.0.1:8000/django-admin/`

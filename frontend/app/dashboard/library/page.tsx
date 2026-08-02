@@ -114,7 +114,7 @@ export default function LibraryPage() {
                   {book.description && <p className="text-stone-400 text-xs line-clamp-2 mb-4">{book.description}</p>}
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-stone-400">{book.page_count} pages</span>
-                    <Link href="/dashboard"
+                    <Link href={`/dashboard?startBook=${book.id}`}
                       className="font-baloo px-4 py-2 bg-[#3d3b62] text-xs font-bold text-white rounded-lg hover:bg-[#764f84] transition-all">
                       Start Session
                     </Link>

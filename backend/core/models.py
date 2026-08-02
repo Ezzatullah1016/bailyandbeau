@@ -8,6 +8,11 @@ from django.core.files.storage import default_storage
 from django.db import models
 from django.utils import timezone
 
+try:
+    from storages.backends.s3 import S3Storage as _S3StorageCls
+except ImportError:
+    _S3StorageCls = None  # storages optional in some dev setups
+
 
 class TimeStampedModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
@@ -101,6 +106,17 @@ class Book(TimeStampedModel):
         key = (self.s3_key or "").strip()
         if not key:
             return ""
+
+        try:
+            if _S3StorageCls is not None and isinstance(default_storage, _S3StorageCls):
+                from core.s3_presign import presigned_get_object_url
+
+                signed = presigned_get_object_url(key)
+                if signed:
+                    return signed
+        except Exception:
+            pass
+
         try:
             return default_storage.url(key)
         except Exception:

@@ -1,6 +1,5 @@
 from urllib.parse import urlparse
 
-import boto3
 from django.conf import settings as django_settings
 from django.contrib.auth import authenticate, get_user_model
 from django.utils.text import slugify
@@ -82,7 +81,58 @@ class SessionInviteSerializer(serializers.ModelSerializer):
 User = get_user_model()
 
 
+MEDIA_KEY_PREFIXES = ("book-covers/", "book-pdfs/", "book-pages/", "user-avatars/")
+
+
+def _media_key_from_value(raw: str):
+    """Extract an S3/media object key from a stored cover/url value, or None for external URLs.
+
+    Handles bare keys (book-covers/x.png), root-relative (/media/...), absolute
+    (http://host/media/...), and full — possibly already-presigned — S3 URLs
+    (https://bucket.s3.../book-covers/x.png?X-Amz-...). The query string is dropped so a
+    new key is re-signed on read (stored presigned URLs would otherwise expire). Returns
+    None for genuinely external URLs (e.g. a stock-photo CDN).
+    """
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    path = raw.split("?", 1)[0]  # drop any query string (e.g. expiring SigV4 params)
+    marker = "/media/"
+    if marker in path:
+        return path.split(marker, 1)[1].lstrip("/")
+    for prefix in MEDIA_KEY_PREFIXES:
+        idx = path.find(prefix)
+        if idx != -1:
+            return path[idx:]
+    return None
+
+
+def resolve_media_url(raw: str):
+    """Return a fetchable URL for a stored media value: presign S3 keys, pass external URLs through."""
+    raw = (raw or "").strip()
+    if not raw:
+        return ""
+    key = _media_key_from_value(raw)
+    if key:
+        from core.s3_presign import presigned_get_object_url
+
+        signed = presigned_get_object_url(key)
+        if signed:
+            return signed
+        # Fall back to local/media URL when S3 is not in play.
+        try:
+            from django.core.files.storage import default_storage
+
+            return default_storage.url(key)
+        except Exception:
+            media = (django_settings.MEDIA_URL or "/media/").rstrip("/")
+            return f"{media}/{key.lstrip('/')}"
+    return raw  # external URL — use as-is
+
+
 class BookSerializer(serializers.ModelSerializer):
+    pdf_view_url = serializers.SerializerMethodField()
+
     class Meta:
         model = Book
         fields = (
@@ -93,6 +143,7 @@ class BookSerializer(serializers.ModelSerializer):
             "room_type",
             "age_band",
             "cover_image",
+            "pdf_view_url",
             "published",
             "page_count",
             "asset_type",
@@ -100,6 +151,17 @@ class BookSerializer(serializers.ModelSerializer):
             "created_at",
         )
         read_only_fields = ("id", "created_at")
+
+    def get_pdf_view_url(self, obj):
+        if obj.asset_type != Book.AssetType.PDF:
+            return ""
+        return resolve_media_url(obj.s3_key)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Resolve stored cover value (local/media key or external URL) to a fetchable URL.
+        data["cover_image"] = resolve_media_url(instance.cover_image)
+        return data
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -111,7 +173,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_avatar_url(self, obj):
         profile = UserProfile.objects.filter(user_id=obj.pk).first()
-        return (profile.avatar_url or "").strip() if profile else ""
+        return resolve_media_url((profile.avatar_url or "").strip()) if profile else ""
 
 
 class BadgeSerializer(serializers.ModelSerializer):
@@ -355,12 +417,9 @@ class BookPageSerializer(serializers.ModelSerializer):
             else:
                 object_key = image_url.lstrip("/")
 
-            signed_url = boto3.client(
-                "s3",
-                aws_access_key_id=getattr(django_settings, "AWS_ACCESS_KEY_ID", ""),
-                aws_secret_access_key=getattr(django_settings, "AWS_SECRET_ACCESS_KEY", ""),
-                region_name=getattr(django_settings, "AWS_S3_REGION_NAME", "") or None,
-            ).generate_presigned_url(
+            from core.s3_presign import s3_client_for_media
+
+            signed_url = s3_client_for_media().generate_presigned_url(
                 "get_object",
                 Params={"Bucket": bucket_name, "Key": object_key},
                 ExpiresIn=getattr(django_settings, "AWS_QUERYSTRING_EXPIRE", 3600),
