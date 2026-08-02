@@ -186,9 +186,34 @@ export interface SessionParticipantData {
   joined_at: string | null;
 }
 
+/**
+ * Per-book reading-room styling. Null when a book has no theme, in which case
+ * the room keeps its default look.
+ */
+export interface BookThemeData {
+  id: string;
+  backdrop_kind: 'color' | 'gradient' | 'image' | 'video';
+  bg_color: string;
+  bg_color_2: string;
+  gradient_angle: number;
+  bg_image_url: string;
+  bg_video_url: string;
+  bg_video_poster_url: string;
+  accent: string;
+  ink: string;
+  chrome_mode: 'light' | 'dark';
+  book_shadow: 'none' | 'soft' | 'deep';
+  tilt_degrees: number;
+  ambient_audio_url: string;
+  ambient_volume: number;
+}
+
 export interface SessionDetailData {
   id: string;
-  book: string;
+  /** Null when the session targets a themed adventure instead of a book. */
+  book: string | null;
+  activity_group: string | null;
+  /** The target's title, whichever kind it is. */
   book_title: string;
   child_name: string;
   status: string;
@@ -196,6 +221,7 @@ export interface SessionDetailData {
   livekit_room_name: string;
   invite_token: string | null;
   created_at: string;
+  completed_activity_title?: string;
 }
 
 export interface StartSessionData {
@@ -261,10 +287,16 @@ export async function getGuestToken(sessionId: string, participantId: string): P
   return res.data;
 }
 
-export async function completeSession(id: string, participantId: string) {
+export async function completeSession(
+  id: string,
+  participantId: string,
+  activityId?: string | null,
+) {
+  const body: Record<string, unknown> = { participant_id: participantId };
+  if (activityId) body.activity_id = activityId;
   await apiRequest(`/sessions/${id}/complete/`, {
     method: 'POST',
-    body: JSON.stringify({ participant_id: participantId }),
+    body: JSON.stringify(body),
   });
 }
 
@@ -318,7 +350,29 @@ export async function transferHost(
   return res.data;
 }
 
-export async function createSession(bookId: string, childProfileId: string, roomType = 'reading') {
+/**
+ * Start a session against a book **or** a themed adventure.
+ *
+ * Took a positional `bookId` and hardcoded `book_id`, so an adventure could
+ * never be launched from the app even though the API has accepted
+ * `activity_group_id` since adventures shipped. Exactly one target must be
+ * given; the server derives `room_type` for an adventure.
+ */
+export async function createSession(opts: {
+  bookId?: string;
+  activityGroupId?: string;
+  childProfileId: string;
+  roomType?: string;
+}) {
+  const body: Record<string, string> = { child_profile_id: opts.childProfileId };
+  if (opts.activityGroupId) {
+    body.activity_group_id = opts.activityGroupId;
+  } else if (opts.bookId) {
+    body.book_id = opts.bookId;
+    body.room_type = opts.roomType ?? 'reading';
+  } else {
+    throw new Error('createSession needs a bookId or an activityGroupId.');
+  }
   const res = await apiRequest<{
     data: {
       id: string;
@@ -326,10 +380,7 @@ export async function createSession(bookId: string, childProfileId: string, room
       host_participant_id: string;
       participants: SessionParticipantData[];
     };
-  }>('/sessions/', {
-    method: 'POST',
-    body: JSON.stringify({ book_id: bookId, child_profile_id: childProfileId, room_type: roomType }),
-  });
+  }>('/sessions/', { method: 'POST', body: JSON.stringify(body) });
   return res.data;
 }
 
@@ -361,6 +412,8 @@ export interface BookPagesResult {
   pages: BookPageData[];
   assetType: string;
   pdfViewUrl: string;
+  /** Per-book room styling; null when the book uses the platform default. */
+  theme: BookThemeData | null;
 }
 
 /** Pages plus meta (asset type + the book's own PDF URL for client-side rendering). */
@@ -368,9 +421,20 @@ export async function getBookPagesWithMeta(bookId: string, participantId?: strin
   const qs = participantId ? `?participant_id=${encodeURIComponent(participantId)}` : '';
   const res = await apiRequest<{
     data: BookPageData[];
-    meta: { count: number; page_count: number; asset_type: string; pdf_view_url?: string };
+    meta: {
+      count: number;
+      page_count: number;
+      asset_type: string;
+      pdf_view_url?: string;
+      theme?: BookThemeData | null;
+    };
   }>(`/books/${bookId}/pages/${qs}`);
-  return { pages: res.data, assetType: res.meta?.asset_type ?? '', pdfViewUrl: res.meta?.pdf_view_url ?? '' };
+  return {
+    pages: res.data,
+    assetType: res.meta?.asset_type ?? '',
+    pdfViewUrl: res.meta?.pdf_view_url ?? '',
+    theme: res.meta?.theme ?? null,
+  };
 }
 
 // ─── Book activities ─────────────────────────────────────────────────────────
@@ -378,9 +442,150 @@ export async function getBookPagesWithMeta(bookId: string, participantId?: strin
 export type { ActivityConfigData } from '@/components/activity/types';
 
 export async function getBookActivities(bookId: string, participantId?: string): Promise<import('@/components/activity/types').ActivityConfigData[]> {
-  const url = participantId ? `/books/${bookId}/activities/?participant=${participantId}` : `/books/${bookId}/activities/`;
+  const url = participantId ? `/books/${bookId}/activities/?participant_id=${participantId}` : `/books/${bookId}/activities/`;
   const res = await apiRequest<{ data: import('@/components/activity/types').ActivityConfigData[] }>(url);
   return res.data;
+}
+
+/**
+ * Activities for a themed adventure.
+ *
+ * A session targets a book OR an activity group. Group-targeted sessions have
+ * no book, so the book route can never serve them — the room hung on "Loading
+ * session…" until this existed.
+ */
+export async function getGroupActivities(groupId: string, participantId?: string): Promise<import('@/components/activity/types').ActivityConfigData[]> {
+  const url = participantId
+    ? `/activity-groups/${groupId}/activities/?participant_id=${participantId}`
+    : `/activity-groups/${groupId}/activities/`;
+  const res = await apiRequest<{ data: import('@/components/activity/types').ActivityConfigData[] }>(url);
+  return res.data;
+}
+
+// ─── Admin: activity builder ─────────────────────────────────────────────────
+
+type AdminActivityData = import('@/components/activity/types').ActivityConfigData;
+
+export interface BookOption {
+  id: string;
+  title: string;
+  room_type: string;
+}
+
+export interface MeData {
+  id: string;
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  avatar_url: string;
+  /** UI hint only — admin endpoints enforce staff access server-side. */
+  is_staff: boolean;
+}
+
+export async function fetchMe(): Promise<MeData> {
+  const res = await apiRequest<{ data: MeData }>('/me/');
+  return res.data;
+}
+
+// ─── Themes and adventures ───────────────────────────────────────────────────
+
+/** Shared taxonomy across books and adventures — Ocean, Jungle, Museum… */
+export interface ThemeData {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  accent: string;
+  cover_image: string;
+  sort_order: number;
+}
+
+/** A themed adventure: a set of activities with no storybook behind them. */
+export interface ActivityGroupData {
+  id: string;
+  title: string;
+  slug: string;
+  description: string;
+  theme: string | null;
+  theme_name: string;
+  theme_accent: string;
+  cover_image: string;
+  age_band: string;
+  activity_count: number;
+}
+
+export async function listThemes(): Promise<ThemeData[]> {
+  const res = await apiRequest<{ data: ThemeData[] }>('/themes/');
+  return res.data;
+}
+
+export async function listActivityGroups(theme?: string): Promise<ActivityGroupData[]> {
+  const url = theme ? `/activity-groups/?theme=${encodeURIComponent(theme)}` : '/activity-groups/';
+  const res = await apiRequest<{ data: ActivityGroupData[] }>(url);
+  return res.data;
+}
+
+export async function listBooks(): Promise<BookOption[]> {
+  const res = await apiRequest<{ data: BookOption[] }>('/books/');
+  return res.data;
+}
+
+export async function adminListActivities(bookId?: string): Promise<AdminActivityData[]> {
+  const url = bookId ? `/admin/activities/?book_id=${bookId}` : '/admin/activities/';
+  const res = await apiRequest<{ data: AdminActivityData[] }>(url);
+  return res.data;
+}
+
+export async function adminCreateActivity(body: {
+  book: string;
+  title: string;
+  activity_type: string;
+  config: import('@/components/activity/types').ActivityEnvelope;
+  sort_order?: number;
+  is_active?: boolean;
+}): Promise<AdminActivityData> {
+  const res = await apiRequest<{ data: AdminActivityData }>('/admin/activities/', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return res.data;
+}
+
+export async function adminUpdateActivity(
+  id: string,
+  body: Partial<{ title: string; config: import('@/components/activity/types').ActivityEnvelope; sort_order: number; is_active: boolean }>,
+): Promise<AdminActivityData> {
+  const res = await apiRequest<{ data: AdminActivityData }>(`/admin/activities/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+  return res.data;
+}
+
+export async function adminDeleteActivity(id: string): Promise<void> {
+  await apiRequest(`/admin/activities/${id}/`, { method: 'DELETE' });
+}
+
+/** Upload an illustration for an activity; returns the stored URL. Multipart. */
+export async function adminUploadMedia(file: File): Promise<string> {
+  const token = getAccessToken();
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetchWithFallback('/admin/upload/', {
+    method: 'POST',
+    credentials: 'omit',
+    // No Content-Type — the browser sets the multipart boundary.
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  if (!res.ok) {
+    throw new Error(parseApiErrorBody(await res.text(), res.status));
+  }
+  const json = (await res.json()) as { data?: { url?: string } };
+  const url = json.data?.url;
+  if (!url) throw new Error('Upload did not return a URL.');
+  return url;
 }
 
 // ─── Session snapshot ────────────────────────────────────────────────────────

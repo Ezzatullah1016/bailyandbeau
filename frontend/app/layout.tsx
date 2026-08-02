@@ -3,6 +3,7 @@ import '@fontsource/cormorant-garamond';
 import '@fontsource/jost';
 import '@fontsource/baloo-2';
 import '@fontsource/karla';
+import '@fontsource/montserrat';
 import '@fontsource-variable/newsreader';
 import '@fontsource-variable/nunito';
 

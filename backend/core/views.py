@@ -18,7 +18,9 @@ from django.utils.text import slugify
 
 from .models import (
     ActivityConfig,
+    ActivityGroup,
     Badge,
+    Theme,
     Book,
     BookPage,
     ChildProfile,
@@ -41,21 +43,30 @@ User = get_user_model()
 def staff_member_required(view_func):
     """Like Django's, but unauthenticated/non-staff users go to our portal login.
 
-    Redirect to ``super_admin_login`` (/super-admin/login/), which nginx routes to
+    Redirect to ``super_admin_login`` (/staff/login/), which nginx routes to
     Django. The bare ``/login`` path is served by the Next.js customer app, so
     sending staff there would land them on the customer sign-in page.
     """
     return _django_staff_member_required(login_url="super_admin_login")(view_func)
 
 
-def redirect_admin_root(request):
-    """Public ``/admin/`` opens the custom super admin dashboard instead of Django admin."""
-    return redirect("super_admin_dashboard")
+def redirect_super_admin_to_staff(request, path=""):
+    """Forward the pre-rename ``/super-admin/...`` prefix to ``/staff/...``."""
+    target = f"/staff/{path}"
+    qs = request.META.get("QUERY_STRING", "")
+    if qs:
+        target = f"{target}?{qs}"
+    return redirect(target)
 
 
-def redirect_admin_to_django_admin(request, path):
-    """Legacy ``/admin/...`` URLs (e.g. bookmarks) forward to ``/django-admin/...``."""
-    target = f"/django-admin/{path}"
+def redirect_django_admin_root(request):
+    """``/django-admin/`` moved back to ``/admin/``; keep old bookmarks alive."""
+    return redirect("/admin/")
+
+
+def redirect_django_admin_to_admin(request, path):
+    """Forward ``/django-admin/...`` to the same path under ``/admin/``."""
+    target = f"/admin/{path}"
     qs = request.META.get("QUERY_STRING", "")
     if qs:
         target = f"{target}?{qs}"
@@ -96,7 +107,7 @@ def _normalize_cover_image_url(raw_url):
 
 
 def home(request):
-    # Staff entry point: the backend root lands on the super-admin dashboard.
+    # Staff entry point: the backend root lands on the staff dashboard.
     # Unauthenticated users hit staff_member_required there and are sent to /login.
     if request.user.is_authenticated and not request.user.is_staff:
         # Customer accounts have no Django UI — send them to the app frontend.
@@ -114,7 +125,7 @@ def _auth_redirect_target(request, user=None):
     default_target = reverse("super_admin_dashboard") if user and user.is_staff else reverse("home")
     candidate = request.POST.get("next") or request.GET.get("next") or default_target
 
-    if candidate in {"/login", "/login/", "/super-admin/login/",
+    if candidate in {"/login", "/login/", "/staff/login/",
                      reverse("login"), reverse("super_admin_login")}:
         candidate = default_target
 
@@ -123,7 +134,7 @@ def _auth_redirect_target(request, user=None):
         allowed_hosts={request.get_host()},
         require_https=request.is_secure(),
     ):
-        if user and not user.is_staff and candidate.startswith("/super-admin"):
+        if user and not user.is_staff and candidate.startswith("/staff"):
             return reverse("home")
         return candidate
 
@@ -260,7 +271,7 @@ def _build_session_rows(sessions):
             {
                 "id": str(session.id),
                 "short_id": str(session.id)[:8].upper(),
-                "book_title": session.book.title,
+                "book_title": session.target_title,
                 "child_name": session.child_profile.display_name,
                 "host_name": session.created_by.get_full_name() or session.created_by.username,
                 "guest_name": _session_guest_name(session),
@@ -407,12 +418,12 @@ def _build_live_session_cards(sessions):
             {
                 "id": str(session.id),
                 "short_id": str(session.id)[:8].upper(),
-                "book_title": session.book.title,
+                "book_title": session.target_title,
                 "room_type": session.get_room_type_display(),
                 "host_name": host_name,
                 "guest_name": guest_name,
-                "progress_percent": min(_percentage(session.current_page, max(session.book.page_count, 1)), 100),
-                "progress_label": f"Page {session.current_page}/{max(session.book.page_count, 1)}",
+                "progress_percent": min(_percentage(session.current_page, max(session.book.page_count, 1)), 100) if session.book_id else 0,
+                "progress_label": f"Page {session.current_page}/{max(session.book.page_count, 1)}" if session.book_id else "Adventure",
                 "duration_clock": f"{elapsed_seconds // 60:02d}:{elapsed_seconds % 60:02d}",
                 "note": latest_note,
                 "status": session.get_status_display(),
@@ -437,7 +448,7 @@ def _build_log_rows():
                     "id": f"SES-{str(session.id)[:6].upper()}",
                     "severity": severity,
                     "severity_tone": "bg-rose-100 text-rose-700" if severity == "Critical" else "bg-amber-100 text-amber-700",
-                    "message": f"{session.get_status_display()} session for {session.book.title}",
+                    "message": f"{session.get_status_display()} session for {session.target_title}",
                     "source": "Session monitor",
                     "linked_session": str(session.id)[:8].upper(),
                     "timestamp": session.updated_at,
@@ -673,20 +684,27 @@ def _validate_and_store_user_avatar_upload(request, uploaded_file):
     return public_url, None
 
 
-def _validate_and_store_cover_upload(request, uploaded_file):
+def _validate_and_store_cover_upload(request, uploaded_file, prefix="book-covers"):
+    """
+    Store an uploaded image and return (url, error).
+
+    `prefix` keeps activity illustrations out of the book-cover namespace; it is
+    a fixed string chosen by the caller, never user input, so it cannot be used
+    to escape the media root.
+    """
     if not uploaded_file:
         return "", None
     max_size_bytes = 5 * 1024 * 1024
     content_type = (getattr(uploaded_file, "content_type", "") or "").lower()
     if not content_type.startswith("image/"):
-        return "", "Cover upload must be an image file (jpg, png, webp, gif)."
+        return "", "Upload must be an image file (jpg, png, webp, gif)."
     if uploaded_file.size > max_size_bytes:
-        return "", "Cover upload exceeds 5MB limit."
+        return "", "Upload exceeds 5MB limit."
 
     ext = (uploaded_file.name.rsplit(".", 1)[-1] if "." in uploaded_file.name else "jpg").lower()
     if ext not in {"jpg", "jpeg", "png", "webp", "gif"}:
         ext = "jpg"
-    unique_name = f"book-covers/{timezone.now().strftime('%Y/%m')}/{secrets.token_hex(12)}.{ext}"
+    unique_name = f"{prefix}/{timezone.now().strftime('%Y/%m')}/{secrets.token_hex(12)}.{ext}"
     stored_path = default_storage.save(unique_name, uploaded_file)
     try:
         public_url = default_storage.url(stored_path)
@@ -1016,192 +1034,407 @@ def admin_book_detail(request, book_id):
     return render(request, "core/admin_book_detail.html", context)
 
 
-@staff_member_required
-def admin_activity_config(request):
-    def _to_int(value, default=0):
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return default
+def _to_int(value, default=0):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
-    def _to_float(value):
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return None
 
-    def _build_config_from_post(post_data, activity_type, book_id, title_value):
-        ui_title = (post_data.get("ui_title") or title_value or "Activity").strip()
-        ui_instructions = (post_data.get("ui_instructions") or "Complete the activity.").strip()
-        ui_theme = (post_data.get("ui_theme") or "default").strip() or "default"
-        payload = {}
+def _to_float(value, default=0.0):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
-        if activity_type == ActivityConfig.ActivityType.DRAWING:
-            palette = [item.strip() for item in (post_data.get("drawing_palette") or "").split(",") if item.strip()]
-            brush_sizes = [
-                _to_float(item.strip())
-                for item in (post_data.get("drawing_brush_sizes") or "").split(",")
-                if item.strip()
-            ]
-            payload = {
-                "palette": palette or ["#1f2937", "#e11d48"],
-                "brush_sizes": [size for size in brush_sizes if isinstance(size, (int, float)) and size > 0] or [4, 8],
-                "allow_eraser": post_data.get("drawing_allow_eraser") == "on",
-            }
-        elif activity_type == ActivityConfig.ActivityType.QUIZ:
-            options = [item.strip() for item in post_data.getlist("quiz_options[]") if item.strip()]
-            payload = {
-                "question": (post_data.get("quiz_question") or "").strip(),
+
+def _row(post, name, idx, default=""):
+    """Value at `idx` of a repeated form field, or `default`."""
+    values = post.getlist(name)
+    return values[idx] if idx < len(values) else default
+
+
+def _build_activity_payload_11(post, activity_type, image_url, question_images=None):
+    """
+    Build a schema-1.1 payload from the portal form.
+
+    The previous version of this form emitted 1.0 — single-question quizzes,
+    flat string drop zones, no images — which rendered through the runtime's
+    legacy code paths and looked nothing like the seeded activities. Everything
+    here produces the same shape the React builder produced.
+    """
+    if activity_type == ActivityConfig.ActivityType.QUIZ:
+        questions = []
+        for idx, prompt in enumerate(post.getlist("q_prompt[]")):
+            prompt = (prompt or "").strip()
+            options = [o.strip() for o in post.getlist("q_options_%d[]" % idx) if (o or "").strip()]
+            if not prompt or len(options) < 2:
+                continue
+            options = options[:4]
+            question = {
+                "id": (_row(post, "q_id[]", idx) or "q%d" % (idx + 1)),
+                "prompt": prompt,
                 "options": options,
-                "correct_index": _to_int(post_data.get("quiz_correct_index"), 0),
-                "reveal_mode": (post_data.get("quiz_reveal_mode") or "host_controlled").strip(),
+                # Per-question radio name. A shared `q_correct[]` made every
+                # question one radio group, so only the first kept its answer
+                # and the rest silently defaulted to option A.
+                "correct_index": min(
+                    max(_to_int(post.get("q_correct_%d" % idx, 0)), 0), len(options) - 1
+                ),
             }
-        elif activity_type == ActivityConfig.ActivityType.DRAG_DROP:
-            payload = {
-                "items": [item.strip() for item in post_data.getlist("drag_items[]") if item.strip()],
-                "drop_zones": [item.strip() for item in post_data.getlist("drag_zones[]") if item.strip()],
-            }
-        elif activity_type == ActivityConfig.ActivityType.HOTSPOT:
-            hotspot_ids = post_data.getlist("hotspot_id[]")
-            hotspot_x = post_data.getlist("hotspot_x[]")
-            hotspot_y = post_data.getlist("hotspot_y[]")
-            hotspot_w = post_data.getlist("hotspot_w[]")
-            hotspot_h = post_data.getlist("hotspot_h[]")
-            hotspot_content = post_data.getlist("hotspot_content[]")
-            max_len = max(
-                len(hotspot_ids),
-                len(hotspot_x),
-                len(hotspot_y),
-                len(hotspot_w),
-                len(hotspot_h),
-                len(hotspot_content),
-                default=0,
-            )
-            hotspots = []
-            for idx in range(max_len):
-                row = {
-                    "id": (hotspot_ids[idx] if idx < len(hotspot_ids) else "").strip(),
-                    "x": _to_float(hotspot_x[idx] if idx < len(hotspot_x) else 0),
-                    "y": _to_float(hotspot_y[idx] if idx < len(hotspot_y) else 0),
-                    "w": _to_float(hotspot_w[idx] if idx < len(hotspot_w) else 0),
-                    "h": _to_float(hotspot_h[idx] if idx < len(hotspot_h) else 0),
-                    "content": (hotspot_content[idx] if idx < len(hotspot_content) else "").strip(),
-                }
-                if row["id"] or row["content"]:
-                    row["x"] = row["x"] if row["x"] is not None else 0
-                    row["y"] = row["y"] if row["y"] is not None else 0
-                    row["w"] = row["w"] if row["w"] is not None else 0
-                    row["h"] = row["h"] if row["h"] is not None else 0
-                    hotspots.append(row)
-            payload = {
-                "image_url": (post_data.get("hotspot_image_url") or "").strip(),
-                "hotspots": hotspots,
-            }
-
+            # An uploaded picture wins over a pasted URL, same as the
+            # activity-level illustration.
+            q_image = (question_images or {}).get(idx) or (_row(post, "q_image_url[]", idx) or "").strip()
+            if q_image:
+                question["image_url"] = q_image
+            correct_text = (_row(post, "q_feedback_correct[]", idx) or "").strip()
+            wrong_text = (_row(post, "q_feedback_wrong[]", idx) or "").strip()
+            if correct_text:
+                question["feedback_correct"] = correct_text
+            if wrong_text:
+                question["feedback_wrong"] = wrong_text
+            questions.append(question)
         return {
-            "schema_version": ActivityConfig.SCHEMA_VERSION,
-            "activity_type": activity_type,
-            "book_id": str(book_id),
-            "ui": {
-                "title": ui_title,
-                "instructions": ui_instructions,
-                "theme": ui_theme,
-            },
-            "payload": payload,
-            "validation": {},
+            "questions": questions,
+            "reveal_mode": (post.get("quiz_reveal_mode") or "instant").strip(),
         }
 
+    if activity_type == ActivityConfig.ActivityType.DRAG_DROP:
+        labels = []
+        for idx, text in enumerate(post.getlist("label_text[]")):
+            text = (text or "").strip()
+            if not text:
+                continue
+            labels.append({
+                "id": (_row(post, "label_id[]", idx) or "l%d" % (idx + 1)),
+                "text": text,
+            })
+        zones = []
+        for idx, zone_id in enumerate(post.getlist("zone_id[]")):
+            zone = {
+                "id": (zone_id or "z%d" % (idx + 1)),
+                "x": _to_float(_row(post, "zone_x[]", idx)),
+                "y": _to_float(_row(post, "zone_y[]", idx)),
+                "w": _to_float(_row(post, "zone_w[]", idx), 18.0),
+                "h": _to_float(_row(post, "zone_h[]", idx), 14.0),
+            }
+            label = (_row(post, "zone_label[]", idx) or "").strip()
+            if label:
+                zone["label"] = label
+            accepts = (_row(post, "zone_accepts[]", idx) or "").strip()
+            if accepts:
+                zone["accepts"] = accepts
+            zones.append(zone)
+        return {"image_url": image_url, "labels": labels, "drop_zones": zones}
+
+    if activity_type == ActivityConfig.ActivityType.HOTSPOT:
+        hotspots = []
+        for idx, hotspot_id in enumerate(post.getlist("hotspot_id[]")):
+            content = (_row(post, "hotspot_content[]", idx) or "").strip()
+            if not content:
+                continue
+            hotspots.append({
+                "id": (hotspot_id or "h%d" % (idx + 1)),
+                "x": _to_float(_row(post, "hotspot_x[]", idx)),
+                "y": _to_float(_row(post, "hotspot_y[]", idx)),
+                "w": _to_float(_row(post, "hotspot_w[]", idx), 12.0),
+                "h": _to_float(_row(post, "hotspot_h[]", idx), 14.0),
+                "content": content,
+            })
+        return {"image_url": image_url, "display": "popup", "hotspots": hotspots}
+
+    palette = [c.strip() for c in (post.get("drawing_palette") or "").split(",") if c.strip()]
+    brushes = [
+        _to_float(b.strip())
+        for b in (post.get("drawing_brush_sizes") or "").split(",")
+        if b.strip()
+    ]
+    payload = {
+        "palette": palette or ["#3d3b62", "#c84a71", "#f0c75e", "#3b85a6"],
+        "brush_sizes": [b for b in brushes if b > 0] or [3, 6, 12, 24],
+        "allow_eraser": post.get("drawing_allow_eraser") == "on",
+        "allow_submit": post.get("drawing_allow_submit") == "on",
+    }
+    if image_url:
+        payload["background_url"] = image_url
+    return payload
+
+
+@staff_member_required
+def admin_activity_config(request):
+    """
+    Create, edit and delete activities, in the portal where the rest of the
+    admin lives.
+
+    Emits schema 1.1 for every type, so activities authored here are identical
+    in shape to the seeded ones and render through the same runtime paths.
+    """
     selected_activity = None
     activity_errors = []
-    selected_activity_json = "{}"
     selected_activity_config = {}
-    selected_book_id = request.GET.get("book", "").strip()
-    return_to = _safe_local_path_or_default(request, request.GET.get("return_to", ""), reverse("admin_activity_config"))
-    create_mode = request.GET.get("create") == "1"
 
     if request.method == "POST":
         action = request.POST.get("action")
 
-        if action == "save":
-            activity_id = request.POST.get("activity_id")
-            selected_activity = ActivityConfig.objects.filter(pk=activity_id).first() if activity_id else None
-            raw_json = request.POST.get("config_json", "{}").strip() or "{}"
-            activity_type = request.POST.get("activity_type", ActivityConfig.ActivityType.DRAWING)
-            book_id = request.POST.get("book")
-            title_value = request.POST.get("title", "").strip()
-            try:
-                parsed_config = json.loads(raw_json)
-            except json.JSONDecodeError:
-                parsed_config = None
-
-            if not isinstance(parsed_config, dict) or not parsed_config or parsed_config.get("schema_version") != ActivityConfig.SCHEMA_VERSION:
-                parsed_config = _build_config_from_post(request.POST, activity_type, book_id, title_value)
-
-            payload = {
-                "book": book_id,
-                "title": title_value,
-                "activity_type": activity_type,
-                "config": parsed_config,
-                "sort_order": request.POST.get("sort_order") or 0,
-                "is_active": request.POST.get("is_active") == "on",
-            }
-            serializer = ActivityConfigSerializer(selected_activity, data=payload, partial=bool(selected_activity))
-            if serializer.is_valid():
-                saved_activity = serializer.save()
-                messages.success(request, f"Activity config '{saved_activity.title}' saved successfully.")
-                posted_return_to = _safe_local_path_or_default(request, request.POST.get("return_to", ""), "")
-                if posted_return_to:
-                    return redirect(posted_return_to)
-                return redirect(f"{reverse('admin_activity_config')}?selected={saved_activity.id}")
-            activity_errors = _flatten_serializer_errors(serializer.errors)
-            selected_activity_json = json.dumps(parsed_config or {}, indent=2)
-        elif action == "delete":
+        if action == "delete":
             activity = get_object_or_404(ActivityConfig, pk=request.POST.get("activity_id"))
             title = activity.title
             activity.delete()
-            messages.success(request, f"Deleted activity config '{title}'.")
+            messages.success(request, "Deleted activity config '%s'." % title)
             return redirect(reverse("admin_activity_config"))
+
+        if action == "save":
+            activity_id = request.POST.get("activity_id")
+            selected_activity = (
+                ActivityConfig.objects.filter(pk=activity_id).first() if activity_id else None
+            )
+            activity_type = request.POST.get("activity_type", ActivityConfig.ActivityType.QUIZ)
+            title_value = (request.POST.get("title") or "").strip()
+
+            # Reuses the book-cover upload helper; only the storage prefix differs.
+            uploaded = request.FILES.get("illustration_file")
+            uploaded_url, upload_error = _validate_and_store_cover_upload(
+                request, uploaded, prefix="activity-images"
+            )
+            image_url = uploaded_url or (request.POST.get("image_url") or "").strip()
+
+            # Quiz questions each get their own optional picture, named
+            # q_image_<row index> to match the indexed option fields.
+            question_images = {}
+            for field, handle in request.FILES.items():
+                if not field.startswith("q_image_"):
+                    continue
+                try:
+                    idx = int(field.rsplit("_", 1)[1])
+                except (IndexError, ValueError):
+                    continue
+                stored, err = _validate_and_store_cover_upload(
+                    request, handle, prefix="activity-images"
+                )
+                if err:
+                    upload_error = upload_error or err
+                elif stored:
+                    question_images[idx] = stored
+
+            if upload_error:
+                activity_errors = [{"field": "Illustration", "message": upload_error}]
+            else:
+                # An activity belongs to a book OR an adventure, never both.
+                owner = (request.POST.get("owner") or "").strip()
+                book_id = group_id = None
+                if owner.startswith("group:"):
+                    group_id = owner.split(":", 1)[1]
+                elif owner.startswith("book:"):
+                    book_id = owner.split(":", 1)[1]
+
+                envelope = {
+                    "schema_version": "1.1",
+                    "activity_type": activity_type,
+                    "ui": {
+                        "title": (request.POST.get("ui_title") or title_value or "Activity").strip(),
+                        "instructions": (request.POST.get("ui_instructions") or "").strip(),
+                        "theme": "default",
+                    },
+                    "payload": _build_activity_payload_11(
+                        request.POST, activity_type, image_url, question_images
+                    ),
+                    "validation": {},
+                }
+                if book_id:
+                    envelope["book_id"] = str(book_id)
+
+                payload = {
+                    "book": book_id,
+                    "activity_group": group_id,
+                    "title": title_value,
+                    "activity_type": activity_type,
+                    "config": envelope,
+                    "sort_order": request.POST.get("sort_order") or 0,
+                    # Two submit buttons: Publish sets it live, Save draft does not.
+                    "is_active": request.POST.get("publish") == "1",
+                }
+                serializer = ActivityConfigSerializer(
+                    selected_activity, data=payload, partial=bool(selected_activity)
+                )
+                if serializer.is_valid():
+                    saved = serializer.save()
+                    state = "published" if saved.is_active else "saved as a draft"
+                    messages.success(request, "Activity '%s' %s." % (saved.title, state))
+                    posted_return_to = _safe_local_path_or_default(
+                        request, request.POST.get("return_to", ""), ""
+                    )
+                    if posted_return_to:
+                        return redirect(posted_return_to)
+                    return redirect("%s?selected=%s" % (reverse("admin_activity_config"), saved.id))
+                activity_errors = _flatten_serializer_errors(serializer.errors)
 
     if not selected_activity:
         selected_id = request.GET.get("selected")
         if selected_id:
-            selected_activity = ActivityConfig.objects.filter(pk=selected_id).select_related("book").first()
-            if selected_activity:
-                selected_activity_json = json.dumps(selected_activity.config, indent=2)
-                selected_activity_config = selected_activity.config or {}
-    elif selected_activity and not selected_activity_config:
+            selected_activity = (
+                ActivityConfig.objects.filter(pk=selected_id)
+                .select_related("book", "activity_group")
+                .first()
+            )
+    if selected_activity and not selected_activity_config:
         selected_activity_config = selected_activity.config or {}
 
-    activities = ActivityConfig.objects.select_related("book").order_by("book__title", "sort_order", "title")
+    activities = ActivityConfig.objects.select_related("book", "activity_group").order_by(
+        "activity_group__title", "book__title", "sort_order", "title"
+    )
     query = request.GET.get("q", "").strip()
     type_filter = request.GET.get("activity_type", "").strip()
+    group_filter = request.GET.get("group", "").strip()
     if query:
         activities = activities.filter(Q(title__icontains=query) | Q(book__title__icontains=query))
     if type_filter:
         activities = activities.filter(activity_type=type_filter)
+    if group_filter == "ungrouped":
+        activities = activities.filter(activity_group__isnull=True)
+    elif group_filter:
+        activities = activities.filter(activity_group_id=group_filter)
+
+    create_type = request.GET.get("type", "").strip()
+    if not create_type and selected_activity:
+        create_type = selected_activity.activity_type
+
+    selected_owner = ""
+    if selected_activity:
+        if selected_activity.activity_group_id:
+            selected_owner = "group:%s" % selected_activity.activity_group_id
+        elif selected_activity.book_id:
+            selected_owner = "book:%s" % selected_activity.book_id
 
     context = {
         "active_nav": "activities",
-        "activities": activities[:100],
+        "activities": activities[:200],
         "selected_activity": selected_activity,
-        "selected_activity_json": selected_activity_json,
         "selected_activity_config": selected_activity_config,
+        "selected_payload": (selected_activity_config or {}).get("payload", {}),
+        "selected_ui": (selected_activity_config or {}).get("ui", {}),
+        "selected_owner": selected_owner,
         "activity_errors": activity_errors,
         "query": query,
         "type_filter": type_filter,
+        "group_filter": group_filter,
+        "create_type": create_type or ActivityConfig.ActivityType.QUIZ,
         "books": Book.objects.order_by("title"),
+        "activity_groups": ActivityGroup.objects.order_by("title"),
         "activity_type_choices": ActivityConfig.ActivityType.choices,
         "activity_stats": {
             "total": ActivityConfig.objects.count(),
             "drawing": ActivityConfig.objects.filter(activity_type=ActivityConfig.ActivityType.DRAWING).count(),
             "drag_drop": ActivityConfig.objects.filter(activity_type=ActivityConfig.ActivityType.DRAG_DROP).count(),
             "quiz": ActivityConfig.objects.filter(activity_type=ActivityConfig.ActivityType.QUIZ).count(),
+            "hotspot": ActivityConfig.objects.filter(activity_type=ActivityConfig.ActivityType.HOTSPOT).count(),
         },
-        "selected_book_id": selected_book_id,
-        "return_to": return_to if return_to != reverse("admin_activity_config") else "",
-        "create_mode": create_mode,
+        "selected_book_id": request.GET.get("book", "").strip(),
+        # The activity panes are React, so the preview lives in the Next.js app
+        # and is iframed here. Rendering the real runtime means the preview
+        # cannot drift from what the child sees.
+        "preview_url": (
+            "%s/preview/activity/%s"
+            % ((getattr(django_settings, "FRONTEND_URL", "") or "").rstrip("/"), selected_activity.id)
+            if selected_activity
+            else ""
+        ),
     }
     return render(request, "core/admin_activity_config.html", context)
+@staff_member_required
+def admin_activity_groups(request):
+    """
+    Themed adventures — the container a child enters, holding activities of
+    mixed type without a storybook having to exist for them.
+    """
+    selected_group = None
+    group_errors = []
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+
+        if action == "delete":
+            group = get_object_or_404(ActivityGroup, pk=request.POST.get("group_id"))
+            title = group.title
+            if group.sessions.exists():
+                messages.error(
+                    request,
+                    "Cannot delete '%s' — sessions reference it." % title,
+                )
+            else:
+                group.delete()
+                messages.success(request, "Deleted adventure '%s'." % title)
+            return redirect(reverse("admin_activity_groups"))
+
+        if action == "save":
+            group_id = request.POST.get("group_id")
+            selected_group = (
+                ActivityGroup.objects.filter(pk=group_id).first() if group_id else None
+            )
+            title = (request.POST.get("title") or "").strip()
+            slug = (request.POST.get("slug") or "").strip() or slugify(title)
+            theme_id = (request.POST.get("theme") or "").strip() or None
+
+            uploaded = request.FILES.get("cover_image_file")
+            uploaded_url, upload_error = _validate_and_store_cover_upload(
+                request, uploaded, prefix="adventure-covers"
+            )
+
+            if upload_error:
+                group_errors = [{"field": "Cover", "message": upload_error}]
+            elif not title:
+                group_errors = [{"field": "Title", "message": "A title is required."}]
+            elif (
+                ActivityGroup.objects.filter(slug=slug)
+                .exclude(pk=selected_group.pk if selected_group else None)
+                .exists()
+            ):
+                group_errors = [{"field": "Slug", "message": "That slug is already in use."}]
+            else:
+                fields = {
+                    "title": title,
+                    "slug": slug,
+                    "description": (request.POST.get("description") or "").strip(),
+                    "theme_id": theme_id,
+                    "age_band": (request.POST.get("age_band") or "").strip(),
+                    "sort_order": _to_int(request.POST.get("sort_order"), 0),
+                    "published": request.POST.get("published") == "on",
+                }
+                if uploaded_url:
+                    fields["cover_image"] = uploaded_url
+                elif request.POST.get("cover_image") is not None:
+                    fields["cover_image"] = (request.POST.get("cover_image") or "").strip()
+
+                if selected_group:
+                    for key, value in fields.items():
+                        setattr(selected_group, key, value)
+                    selected_group.save()
+                    saved = selected_group
+                else:
+                    saved = ActivityGroup.objects.create(**fields)
+                messages.success(request, "Adventure '%s' saved." % saved.title)
+                return redirect("%s?selected=%s" % (reverse("admin_activity_groups"), saved.id))
+
+    if not selected_group:
+        selected_id = request.GET.get("selected")
+        if selected_id:
+            selected_group = ActivityGroup.objects.filter(pk=selected_id).first()
+
+    groups = (
+        ActivityGroup.objects.select_related("theme")
+        .annotate(activity_total=Count("activity_configs"))
+        .order_by("sort_order", "title")
+    )
+
+    context = {
+        "active_nav": "activities",
+        "groups": groups,
+        "selected_group": selected_group,
+        "group_errors": group_errors,
+        "themes": Theme.objects.filter(is_active=True).order_by("sort_order", "name"),
+        "age_band_choices": Book.AgeBand.choices,
+    }
+    return render(request, "core/admin_activity_groups.html", context)
+
 
 
 @staff_member_required

@@ -249,7 +249,7 @@ export function AnnotationToolbar({
     >
       {/* ── Sub-panel (above the main bar) ─────────────────────────── */}
       {!hideAnnotationTools && subPanel === 'draw' && (
-        <div className="flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-white/10 bg-stone-950/95 px-4 py-3 shadow-2xl backdrop-blur-xl">
+        <div className="flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-white/10 bg-[#2b2a3f]/92 px-4 py-3 shadow-2xl backdrop-blur-xl">
           {/* Colors */}
           <div className="flex items-center gap-1.5">
             {COLORS.map((c) => (
@@ -327,7 +327,7 @@ export function AnnotationToolbar({
       )}
 
       {subPanel === 'react' && (
-        <div className="flex flex-wrap items-center justify-center gap-1 rounded-2xl border border-white/10 bg-stone-950/95 px-4 py-3 shadow-2xl backdrop-blur-xl sm:gap-2">
+        <div className="flex flex-wrap items-center justify-center gap-1 rounded-2xl border border-white/10 bg-[#2b2a3f]/92 px-4 py-3 shadow-2xl backdrop-blur-xl sm:gap-2">
           {REACTIONS.map((e) => (
             <DockTip key={e} label={e}>
               <button
@@ -347,7 +347,7 @@ export function AnnotationToolbar({
       <div
         role="toolbar"
         aria-label="Reading and session controls"
-        className="flex max-w-full items-center gap-1.5 overflow-x-auto overflow-y-hidden rounded-full border border-white/10 bg-stone-950/90 px-3 py-2.5 shadow-2xl backdrop-blur-xl sm:gap-2 sm:px-5 sm:py-3"
+        className="flex max-w-full items-center gap-1.5 overflow-x-auto overflow-y-hidden rounded-full border border-white/10 bg-[#2b2a3f]/92 px-3 py-2.5 shadow-2xl backdrop-blur-xl sm:gap-2 sm:px-5 sm:py-3"
       >
         {/* Book mode */}
         {!hideAnnotationTools && (

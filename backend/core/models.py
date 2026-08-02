@@ -5,6 +5,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.files.storage import default_storage
+from django.core.validators import RegexValidator
 from django.db import models
 from django.utils import timezone
 
@@ -64,6 +65,66 @@ class UserProfile(TimeStampedModel):
         return f"{self.user}"
 
 
+class Theme(TimeStampedModel):
+    """
+    A shared taxonomy across books and activity groups — Ocean, Jungle, Museum.
+
+    Categories used to be `Book.room_type` (reading/activity/hybrid), which is
+    really a *behaviour* switch that also drives `ReadingSession.room_type`, not
+    a subject. A theme lets a storybook and a set of activities sit under one
+    banner without either owning the other.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=120)
+    slug = models.SlugField(unique=True)
+    description = models.TextField(blank=True)
+    #: Drives the chip and card colour wherever the theme is surfaced.
+    accent = models.CharField(max_length=9, default="#3d3b62")
+    cover_image = models.URLField(blank=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+
+    def __str__(self):
+        return self.name
+
+
+class ActivityGroup(TimeStampedModel):
+    """
+    A themed adventure — "Ocean Adventure" — holding activities of mixed type.
+
+    Distinct from Theme: a theme is the label, a group is the container a child
+    actually enters. Kept separate from Book because an adventure has no pages,
+    no PDF and no page count, and should not inherit reading-book semantics.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    title = models.CharField(max_length=255)
+    slug = models.SlugField(unique=True)
+    description = models.TextField(blank=True)
+    theme = models.ForeignKey(
+        Theme,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="activity_groups",
+    )
+    cover_image = models.URLField(blank=True)
+    age_band = models.CharField(max_length=10, blank=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    #: Mirrors Book.published — an adventure is invisible to customers until set.
+    published = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["sort_order", "title"]
+
+    def __str__(self):
+        return self.title
+
+
 class Book(TimeStampedModel):
     class RoomType(models.TextChoices):
         READING = "reading", "Reading"
@@ -91,6 +152,15 @@ class Book(TimeStampedModel):
     page_count = models.PositiveIntegerField(default=1)
     asset_type = models.CharField(max_length=10, choices=AssetType.choices, default=AssetType.IMAGES)
     s3_key = models.CharField(max_length=512, blank=True, help_text="S3 key prefix for this book's assets (e.g. books/uuid/)")
+    #: Named `theme_category`, not `theme`: `BookTheme` already occupies the
+    #: `theme` reverse accessor and is per-book *styling*, unrelated to subject.
+    theme_category = models.ForeignKey(
+        Theme,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="books",
+    )
 
     class Meta:
         ordering = ["title"]
@@ -158,11 +228,30 @@ class ActivityConfig(TimeStampedModel):
         QUIZ = "quiz", "Quiz"
         HOTSPOT = "hotspot", "Hotspot"
 
-    SCHEMA_VERSION = "1.0"
+    SCHEMA_VERSION = "1.1"
+    SUPPORTED_SCHEMA_VERSIONS = frozenset({"1.0", "1.1"})
     QUIZ_REVEAL_MODES = frozenset({"host_controlled", "instant"})
+    HOTSPOT_DISPLAY_MODES = frozenset({"popup", "panel"})
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name="activity_configs")
+    #: An activity belongs to a book OR an activity group, never both and never
+    #: neither — see the check constraint below. `book` was required until
+    #: adventures existed; it is nullable now so a group can own activities
+    #: without a storybook having to exist for them.
+    book = models.ForeignKey(
+        Book,
+        on_delete=models.CASCADE,
+        related_name="activity_configs",
+        null=True,
+        blank=True,
+    )
+    activity_group = models.ForeignKey(
+        "ActivityGroup",
+        on_delete=models.CASCADE,
+        related_name="activity_configs",
+        null=True,
+        blank=True,
+    )
     title = models.CharField(max_length=255)
     activity_type = models.CharField(max_length=20, choices=ActivityType.choices)
     config = models.JSONField(default=dict, blank=True)
@@ -171,12 +260,35 @@ class ActivityConfig(TimeStampedModel):
 
     class Meta:
         ordering = ["sort_order", "title"]
+        constraints = [
+            # Without this the two nullable columns silently permit orphans
+            # (neither set) and ambiguous ownership (both set), and every
+            # consumer would need a defensive branch for cases the data model
+            # should have made impossible.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(book__isnull=False, activity_group__isnull=True)
+                    | models.Q(book__isnull=True, activity_group__isnull=False)
+                ),
+                name="activityconfig_exactly_one_owner",
+            ),
+        ]
 
     @staticmethod
     def _is_non_empty_list(value):
         return isinstance(value, list) and len(value) > 0
 
-    def _validate_drawing_payload(self, payload):
+    @staticmethod
+    def _validate_coords(obj, label):
+        """Return an error string if x/y/w/h on ``obj`` are not all numbers, else None."""
+        for coord in ("x", "y", "w", "h"):
+            if coord not in obj:
+                return f"{label} missing required field {coord}."
+            if not isinstance(obj[coord], (int, float)):
+                return f"{label} {coord} must be a number."
+        return None
+
+    def _validate_drawing_payload(self, payload, version="1.0"):
         errors = []
         pal = payload.get("palette")
         if not self._is_non_empty_list(pal) or not all(isinstance(c, str) and c.strip() for c in pal):
@@ -190,18 +302,89 @@ class ActivityConfig(TimeStampedModel):
             errors.append("drawing payload requires allow_eraser (boolean).")
         elif not isinstance(payload.get("allow_eraser"), bool):
             errors.append("allow_eraser must be a boolean.")
+        if version == "1.1":
+            # Optional coloring-page background + tool toggles.
+            if "background_url" in payload and not isinstance(payload.get("background_url"), str):
+                errors.append("background_url must be a string when present.")
+            for flag in ("allow_fill", "allow_shapes", "allow_submit"):
+                if flag in payload and not isinstance(payload.get(flag), bool):
+                    errors.append(f"{flag} must be a boolean when present.")
         return errors
 
-    def _validate_drag_drop_payload(self, payload):
+    def _validate_drag_drop_payload(self, payload, version="1.0"):
         errors = []
+        if version == "1.1":
+            # Image-anchored: one illustration, draggable text labels, positioned zones.
+            if not isinstance(payload.get("image_url"), str) or not payload.get("image_url"):
+                errors.append("drag_drop 1.1 payload requires image_url (string).")
+            labels = payload.get("labels")
+            if not self._is_non_empty_list(labels):
+                errors.append("drag_drop 1.1 payload requires labels (non-empty list).")
+            else:
+                label_ids = set()
+                for i, lb in enumerate(labels):
+                    if not isinstance(lb, dict) or not isinstance(lb.get("id"), str) or not isinstance(lb.get("text"), str):
+                        errors.append(f"labels[{i}] must be an object with string id and text.")
+                    else:
+                        label_ids.add(lb["id"])
+                zones = payload.get("drop_zones")
+                if not self._is_non_empty_list(zones):
+                    errors.append("drag_drop 1.1 payload requires drop_zones (non-empty list).")
+                else:
+                    for i, z in enumerate(zones):
+                        if not isinstance(z, dict) or not isinstance(z.get("id"), str):
+                            errors.append(f"drop_zones[{i}] must be an object with a string id.")
+                            continue
+                        coord_err = self._validate_coords(z, f"drop_zones[{i}]")
+                        if coord_err:
+                            errors.append(coord_err)
+                        # `accepts` is a single label id. Check the type first:
+                        # an unhashable value (a list, say) would otherwise raise
+                        # TypeError here and surface as a 500 rather than a
+                        # validation error.
+                        if "accepts" in z:
+                            if not isinstance(z["accepts"], str):
+                                errors.append(f"drop_zones[{i}].accepts must be a label id (string).")
+                            elif z["accepts"] not in label_ids:
+                                errors.append(f"drop_zones[{i}].accepts must reference a label id.")
+            return errors
+        # 1.0: flat string lists.
         if not self._is_non_empty_list(payload.get("items")):
             errors.append("drag_drop payload requires items (non-empty list).")
         if not self._is_non_empty_list(payload.get("drop_zones")):
             errors.append("drag_drop payload requires drop_zones (non-empty list).")
         return errors
 
-    def _validate_quiz_payload(self, payload):
+    def _validate_quiz_payload(self, payload, version="1.0"):
         errors = []
+        if version == "1.1":
+            # Multi-question sequence, optional per-question image + feedback.
+            questions = payload.get("questions")
+            if not self._is_non_empty_list(questions):
+                errors.append("quiz 1.1 payload requires questions (non-empty list).")
+            else:
+                for i, q in enumerate(questions):
+                    if not isinstance(q, dict):
+                        errors.append(f"questions[{i}] must be an object.")
+                        continue
+                    if not isinstance(q.get("id"), str):
+                        errors.append(f"questions[{i}] requires string id.")
+                    if not isinstance(q.get("prompt"), str) or not q.get("prompt"):
+                        errors.append(f"questions[{i}] requires prompt (string).")
+                    opts = q.get("options")
+                    if not isinstance(opts, list) or not (2 <= len(opts) <= 4) or not all(isinstance(o, str) and o for o in opts):
+                        errors.append(f"questions[{i}] requires options (2 to 4 non-empty strings).")
+                    ci = q.get("correct_index")
+                    if not isinstance(ci, int) or ci < 0 or (isinstance(opts, list) and ci >= len(opts)):
+                        errors.append(f"questions[{i}] correct_index must be an int within options.")
+                    for opt_key in ("image_url", "feedback_correct", "feedback_wrong"):
+                        if opt_key in q and not isinstance(q[opt_key], str):
+                            errors.append(f"questions[{i}].{opt_key} must be a string when present.")
+            rm = payload.get("reveal_mode")
+            if rm not in self.QUIZ_REVEAL_MODES:
+                errors.append("quiz payload requires reveal_mode (host_controlled or instant).")
+            return errors
+        # 1.0: single question.
         q = payload.get("question")
         if not q or not isinstance(q, str):
             errors.append("quiz payload requires question (string).")
@@ -218,11 +401,13 @@ class ActivityConfig(TimeStampedModel):
             errors.append("quiz payload requires reveal_mode (host_controlled or instant).")
         return errors
 
-    def _validate_hotspot_payload(self, payload):
+    def _validate_hotspot_payload(self, payload, version="1.0"):
         errors = []
         url = payload.get("image_url")
         if not url or not isinstance(url, str):
             errors.append("hotspot payload requires image_url (string).")
+        if version == "1.1" and "display" in payload and payload["display"] not in self.HOTSPOT_DISPLAY_MODES:
+            errors.append("hotspot display must be 'popup' or 'panel' when present.")
         hs = payload.get("hotspots")
         if not isinstance(hs, list) or len(hs) < 1:
             errors.append("hotspot payload requires hotspots (non-empty list).")
@@ -231,17 +416,11 @@ class ActivityConfig(TimeStampedModel):
             if not isinstance(h, dict):
                 errors.append(f"hotspots[{i}] must be an object.")
                 continue
-            for key in ("id", "x", "y", "w", "h", "content"):
-                if key not in h:
-                    errors.append(f"hotspots[{i}] missing required field {key}.")
-                    break
-            else:
-                if not isinstance(h["id"], str) or not isinstance(h["content"], str):
-                    errors.append(f"hotspots[{i}] id and content must be strings.")
-                for coord in ("x", "y", "w", "h"):
-                    if not isinstance(h[coord], (int, float)):
-                        errors.append(f"hotspots[{i}] {coord} must be a number.")
-                        break
+            if not isinstance(h.get("id"), str) or not isinstance(h.get("content"), str):
+                errors.append(f"hotspots[{i}] id and content must be strings.")
+            coord_err = self._validate_coords(h, f"hotspots[{i}]")
+            if coord_err:
+                errors.append(coord_err)
         return errors
 
     def clean(self):
@@ -251,8 +430,9 @@ class ActivityConfig(TimeStampedModel):
             raise ValidationError({"config": "Config must be a JSON object."})
 
         schema_version = config.get("schema_version")
-        if schema_version != self.SCHEMA_VERSION:
-            raise ValidationError({"config": f'config.schema_version must be "{self.SCHEMA_VERSION}".'})
+        if schema_version not in self.SUPPORTED_SCHEMA_VERSIONS:
+            supported = '", "'.join(sorted(self.SUPPORTED_SCHEMA_VERSIONS))
+            raise ValidationError({"config": f'config.schema_version must be one of "{supported}".'})
 
         config_activity_type = config.get("activity_type")
         if not config_activity_type:
@@ -260,9 +440,19 @@ class ActivityConfig(TimeStampedModel):
         if config_activity_type != self.activity_type:
             raise ValidationError({"config": "config.activity_type must match activity_type."})
 
+        # Only meaningful for book-owned activities. A group-owned activity has
+        # no book_id to agree with, and comparing against None here would reject
+        # every adventure activity outright.
         config_book_id = config.get("book_id")
-        if config_book_id and str(config_book_id) != str(self.book_id):
+        if self.book_id and config_book_id and str(config_book_id) != str(self.book_id):
             raise ValidationError({"config": "config.book_id must match book."})
+
+        # The DB constraint is the real guard; this turns the IntegrityError
+        # into a field error that serializers and the admin can render.
+        if bool(self.book_id) == bool(self.activity_group_id):
+            raise ValidationError(
+                "An activity must belong to either a book or an activity group, not both."
+            )
 
         ui = config.get("ui")
         if not isinstance(ui, dict):
@@ -278,13 +468,13 @@ class ActivityConfig(TimeStampedModel):
 
         errors = []
         if self.activity_type == self.ActivityType.DRAWING:
-            errors.extend(self._validate_drawing_payload(payload))
+            errors.extend(self._validate_drawing_payload(payload, schema_version))
         elif self.activity_type == self.ActivityType.DRAG_DROP:
-            errors.extend(self._validate_drag_drop_payload(payload))
+            errors.extend(self._validate_drag_drop_payload(payload, schema_version))
         elif self.activity_type == self.ActivityType.QUIZ:
-            errors.extend(self._validate_quiz_payload(payload))
+            errors.extend(self._validate_quiz_payload(payload, schema_version))
         elif self.activity_type == self.ActivityType.HOTSPOT:
-            errors.extend(self._validate_hotspot_payload(payload))
+            errors.extend(self._validate_hotspot_payload(payload, schema_version))
 
         if errors:
             raise ValidationError({"config": " ".join(errors)})
@@ -313,7 +503,19 @@ class ReadingSession(TimeStampedModel):
         EXPIRED = "expired", "Expired"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    book = models.ForeignKey(Book, on_delete=models.PROTECT, related_name="sessions")
+    #: A session targets a book OR an activity group — see the check constraint
+    #: on Meta. Nullable so an adventure can be launched without a storybook
+    #: existing purely to host it.
+    book = models.ForeignKey(
+        Book, on_delete=models.PROTECT, related_name="sessions", null=True, blank=True
+    )
+    activity_group = models.ForeignKey(
+        "ActivityGroup",
+        on_delete=models.PROTECT,
+        related_name="sessions",
+        null=True,
+        blank=True,
+    )
     child_profile = models.ForeignKey(ChildProfile, on_delete=models.PROTECT, related_name="sessions")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="created_sessions")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
@@ -324,9 +526,37 @@ class ReadingSession(TimeStampedModel):
     timer_remaining_seconds = models.PositiveIntegerField(default=1200)
     started_at = models.DateTimeField(null=True, blank=True)
     ended_at = models.DateTimeField(null=True, blank=True)
+    # The activity a session finished on (Activity Room). Denormalized title
+    # survives config deletion so the completion screen can still name it.
+    completed_activity = models.ForeignKey(
+        "ActivityConfig",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="completed_in_sessions",
+    )
+    completed_activity_title = models.CharField(max_length=255, blank=True)
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(book__isnull=False, activity_group__isnull=True)
+                    | models.Q(book__isnull=True, activity_group__isnull=False)
+                ),
+                name="readingsession_exactly_one_target",
+            ),
+        ]
+
+    @property
+    def target_title(self):
+        """What the session is about, whichever kind of target it has."""
+        if self.book_id:
+            return self.book.title
+        if self.activity_group_id:
+            return self.activity_group.title
+        return ""
 
     def save(self, *args, **kwargs):
         if not self.livekit_room_name:
@@ -493,7 +723,7 @@ class ReadingReminder(TimeStampedModel):
 
 
 class PortalSettings(models.Model):
-    """Singleton (pk=1) settings editable from the super-admin portal; overrides env when filled."""
+    """Singleton (pk=1) settings editable from the staff portal; overrides env when filled."""
 
     id = models.PositiveSmallIntegerField(primary_key=True, default=1)
 
@@ -560,3 +790,99 @@ class UserBadge(TimeStampedModel):
 
     def __str__(self):
         return f"{self.child_profile} · {self.badge}"
+
+
+HEX_COLOR_VALIDATOR = RegexValidator(
+    regex=r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+    message="Enter a hex colour such as #3D3B62.",
+)
+
+
+class BookTheme(TimeStampedModel):
+    """Per-book styling for the reading room.
+
+    The room reads these values as CSS custom properties, so a book can bring
+    its own world (a night sky, an ocean, a meadow) instead of every session
+    looking identical. Books without a theme fall back to the platform default.
+    """
+
+    class Backdrop(models.TextChoices):
+        COLOR = "color", "Solid colour"
+        GRADIENT = "gradient", "Gradient"
+        IMAGE = "image", "Image"
+        VIDEO = "video", "Video"
+
+    class ChromeMode(models.TextChoices):
+        LIGHT = "light", "Light chrome"
+        DARK = "dark", "Dark chrome"
+
+    class BookShadow(models.TextChoices):
+        NONE = "none", "None"
+        SOFT = "soft", "Soft"
+        DEEP = "deep", "Deep"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    book = models.OneToOneField(Book, related_name="theme", on_delete=models.CASCADE)
+
+    # ── Backdrop ─────────────────────────────────────────────────────────────
+    backdrop_kind = models.CharField(
+        max_length=10, choices=Backdrop.choices, default=Backdrop.GRADIENT
+    )
+    bg_color = models.CharField(max_length=9, blank=True, validators=[HEX_COLOR_VALIDATOR])
+    bg_color_2 = models.CharField(max_length=9, blank=True, validators=[HEX_COLOR_VALIDATOR])
+    gradient_angle = models.PositiveSmallIntegerField(default=170)
+    bg_image = models.ImageField(upload_to="themes/bg/", blank=True)
+    bg_video = models.FileField(upload_to="themes/video/", blank=True)
+    bg_video_poster = models.ImageField(upload_to="themes/poster/", blank=True)
+
+    # ── Chrome ───────────────────────────────────────────────────────────────
+    accent = models.CharField(
+        max_length=9, default="#3D3B62", validators=[HEX_COLOR_VALIDATOR]
+    )
+    ink = models.CharField(max_length=9, default="#23324A", validators=[HEX_COLOR_VALIDATOR])
+    chrome_mode = models.CharField(
+        max_length=10, choices=ChromeMode.choices, default=ChromeMode.LIGHT
+    )
+
+    # ── Book presentation ────────────────────────────────────────────────────
+    book_shadow = models.CharField(
+        max_length=10, choices=BookShadow.choices, default=BookShadow.SOFT
+    )
+    tilt_degrees = models.SmallIntegerField(default=-2)
+
+    # ── Ambience ─────────────────────────────────────────────────────────────
+    ambient_audio = models.FileField(upload_to="themes/audio/", blank=True)
+    ambient_volume = models.PositiveSmallIntegerField(default=20)
+
+    class Meta:
+        ordering = ["book__title"]
+
+    def __str__(self):
+        return f"Theme · {self.book.title}"
+
+    def clean(self):
+        super().clean()
+        errors = {}
+
+        if self.backdrop_kind == self.Backdrop.COLOR and not self.bg_color:
+            errors["bg_color"] = "A solid-colour backdrop needs a colour."
+        if self.backdrop_kind == self.Backdrop.GRADIENT and not (self.bg_color and self.bg_color_2):
+            errors["bg_color_2"] = "A gradient backdrop needs both colours."
+        if self.backdrop_kind == self.Backdrop.IMAGE and not self.bg_image:
+            errors["bg_image"] = "An image backdrop needs an image."
+        if self.backdrop_kind == self.Backdrop.VIDEO and not self.bg_video:
+            errors["bg_video"] = "A video backdrop needs a video file."
+
+        if self.gradient_angle > 360:
+            errors["gradient_angle"] = "Angle must be between 0 and 360 degrees."
+        if not -8 <= self.tilt_degrees <= 8:
+            errors["tilt_degrees"] = "Tilt must be between -8 and 8 degrees."
+        if self.ambient_volume > 100:
+            errors["ambient_volume"] = "Volume must be between 0 and 100."
+
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)

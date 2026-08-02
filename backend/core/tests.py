@@ -1,24 +1,45 @@
 import json
+import shutil
+import tempfile
 from io import StringIO
 
+from django.conf import settings as django_settings
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.exceptions import ValidationError
 from django.core import mail
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from rest_framework.test import APIClient
 
-from .models import ActivityConfig, Badge, Book, ChildProfile, Entitlement, FavoriteBook, NotificationPreference, ReadingReminder, ReadingSession, SessionEvent, SessionParticipant, SessionSnapshot, UserBadge
+from .models import ActivityConfig, ActivityGroup, Badge, Book, BookTheme, ChildProfile, Entitlement, FavoriteBook, NotificationPreference, ReadingReminder, ReadingSession, SessionEvent, SessionParticipant, SessionSnapshot, Theme, UserBadge
 
 User = get_user_model()
 
 
 class HomePageTests(TestCase):
-    def test_home_page_loads(self):
+    """
+    The backend root is a staff entry point, not a landing page: it redirects
+    rather than rendering the old scaffold, which no longer exists.
+    """
+
+    def test_anonymous_visitor_is_redirected_to_the_staff_portal(self):
         response = self.client.get(reverse("home"))
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Django project is running")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers.get("Location"), reverse("super_admin_dashboard"))
+
+    def test_signed_in_customer_is_sent_to_the_app_frontend(self):
+        User.objects.create_user(
+            username="home-parent", email="home-parent@example.com", password="strong-password-123"
+        )
+        self.client.login(username="home-parent", password="strong-password-123")
+
+        response = self.client.get(reverse("home"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertNotEqual(response.headers.get("Location"), reverse("super_admin_dashboard"))
 
 
 class SuperAdminDashboardTests(TestCase):
@@ -51,9 +72,9 @@ class SuperAdminDashboardTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         # Unauthenticated staff must be sent to the Django-served portal login
-        # (/super-admin/login/), NOT the bare /login owned by the Next.js app.
+        # (/staff/login/), NOT the bare /login owned by the Next.js app.
         self.assertIn(reverse("super_admin_login"), response.url)
-        self.assertEqual(reverse("super_admin_login"), "/super-admin/login/")
+        self.assertEqual(reverse("super_admin_login"), "/staff/login/")
 
     def test_super_admin_login_serves_django_portal_form(self):
         response = self.client.get(reverse("super_admin_login"))
@@ -61,17 +82,27 @@ class SuperAdminDashboardTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-validate-form="login-form"')
 
-    def test_public_admin_url_redirects_to_super_admin_dashboard(self):
-        response = self.client.get("/admin/", follow=False)
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, reverse("super_admin_dashboard"))
-        response = self.client.get(reverse("admin:login"))
+    def test_admin_url_serves_django_admin(self):
+        """
+        /admin/ is Django's own admin, where a Django developer expects it.
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Sign In")
-        self.assertContains(response, "Use your admin username and password.")
-        self.assertContains(response, "core/css/tailwind.css")
-        self.assertContains(response, 'data-validate-form="admin-login-form"')
+        It used to redirect to the staff portal while the real admin sat at
+        /django-admin/ — an inversion that made the stock admin look missing.
+        """
+        response = self.client.get("/admin/", follow=False)
+        # Anonymous: Django admin bounces to its own login, not to the portal.
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/admin/login/", response.url)
+
+    def test_legacy_prefixes_redirect_to_their_new_homes(self):
+        response = self.client.get("/django-admin/", follow=False)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/admin/")
+
+        # The staff portal moved from /super-admin/ to /staff/.
+        response = self.client.get("/super-admin/dashboard/", follow=False)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/staff/dashboard/")
 
     def test_public_login_page_renders_login_and_signup_form(self):
         response = self.client.get("/login/")
@@ -350,66 +381,38 @@ class AdminPortalPageTests(TestCase):
         self.assertContains(response, "Detail Activity")
         self.assertContains(response, self.book.title)
 
-    def test_activity_save_redirects_back_to_book_detail_with_return_to(self):
+    def test_activity_config_page_points_at_the_builder(self):
+        """Authoring moved to the React builder; this page only lists and deletes."""
         self.client.force_login(self.admin_user)
-        return_to = reverse("admin_book_detail", args=[self.book.id])
-        response = self.client.post(
-            reverse("admin_activity_config"),
-            data={
-                "action": "save",
-                "book": str(self.book.id),
-                "title": "Return Quiz",
-                "activity_type": ActivityConfig.ActivityType.QUIZ,
-                "sort_order": 1,
-                "is_active": "on",
-                "return_to": return_to,
-                "config_json": "{}",
-                "ui_title": "Return Quiz",
-                "ui_instructions": "Pick one answer.",
-                "ui_theme": "default",
-                "quiz_question": "What color is the moon?",
-                "quiz_options[]": ["Blue", "Silver"],
-                "quiz_correct_index": 1,
-                "quiz_reveal_mode": "instant",
-            },
-            follow=False,
-        )
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.headers.get("Location"), return_to)
-        self.assertTrue(ActivityConfig.objects.filter(title="Return Quiz").exists())
-    def test_admin_activity_config_can_create_config_from_form(self):
-        self.client.force_login(self.admin_user)
-
-        response = self.client.post(
-            reverse("admin_activity_config"),
-            data={
-                "action": "save",
-                "book": str(self.book.id),
-                "title": "Forest Quiz",
-                "activity_type": ActivityConfig.ActivityType.QUIZ,
-                "sort_order": 1,
-                "is_active": "on",
-                "config_json": json.dumps(
-                    {
-                        "schema_version": "1.0",
-                        "activity_type": "quiz",
-                        "book_id": str(self.book.id),
-                        "ui": {"title": "Forest Quiz", "instructions": "", "theme": "default"},
-                        "payload": {
-                            "question": "What color is the door?",
-                            "options": ["Red", "Blue"],
-                            "correct_index": 0,
-                            "reveal_mode": "instant",
-                        },
-                        "validation": {},
-                    }
-                ),
-            },
-            follow=True,
-        )
+        response = self.client.get(reverse("admin_activity_config"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(ActivityConfig.objects.filter(title="Forest Quiz").exists())
+        self.assertContains(response, "/admin/activities")
+        self.assertNotContains(response, 'data-form-type="activity"')
+
+    def test_activity_config_page_can_still_delete(self):
+        self.client.force_login(self.admin_user)
+        activity = ActivityConfig.objects.create(
+            book=self.book,
+            title="Doomed Activity",
+            activity_type=ActivityConfig.ActivityType.DRAWING,
+            sort_order=0,
+            is_active=True,
+            config={
+                "schema_version": "1.0",
+                "activity_type": "drawing",
+                "book_id": str(self.book.id),
+                "ui": {"title": "Draw", "instructions": "Draw", "theme": "default"},
+                "payload": {"palette": ["#000"], "brush_sizes": [2], "allow_eraser": True},
+                "validation": {},
+            },
+        )
+        response = self.client.post(
+            reverse("admin_activity_config"),
+            data={"action": "delete", "activity_id": str(activity.id)},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(ActivityConfig.objects.filter(pk=activity.id).exists())
 
     def test_admin_users_api_lists_users_for_staff(self):
         self.client.force_login(self.admin_user)
@@ -495,7 +498,6 @@ class AdminPortalPageTests(TestCase):
 
         book_response = self.client.get(reverse("admin_book_library"))
         detail_response = self.client.get(reverse("admin_book_detail", args=[self.book.id]))
-        activity_response = self.client.get(reverse("admin_activity_config"))
         user_detail_response = self.client.get(reverse("admin_user_detail", args=[self.parent_user.id]))
 
         self.assertContains(book_response, 'View details')
@@ -505,8 +507,6 @@ class AdminPortalPageTests(TestCase):
         self.assertContains(detail_response, 'cover_image_file')
         self.assertContains(detail_response, 'data-required-message="Book title is required."')
         self.assertContains(detail_response, 'data-confirm-message="Delete this book from the library?"')
-        self.assertContains(activity_response, 'data-validate-form="activity-form"')
-        self.assertContains(activity_response, 'novalidate')
         self.assertContains(user_detail_response, "User activity snapshot")
 
 
@@ -2499,3 +2499,633 @@ class AdminSessionEventExportViewTests(TestCase):
         content = response.content.decode()
         lines = [l for l in content.strip().splitlines() if l and not l.startswith("event_id")]
         self.assertEqual(len(lines), 0)
+
+
+class BookThemeModelTests(TestCase):
+    """Per-book reading-room theming."""
+
+    def setUp(self):
+        self.book = Book.objects.create(title="Night Sky", slug="night-sky")
+
+    def test_gradient_theme_requires_both_colours(self):
+        theme = BookTheme(book=self.book, backdrop_kind="gradient", bg_color="#123456")
+        with self.assertRaises(ValidationError):
+            theme.save()
+
+    def test_image_theme_requires_an_image(self):
+        theme = BookTheme(book=self.book, backdrop_kind="image")
+        with self.assertRaises(ValidationError):
+            theme.save()
+
+    def test_rejects_malformed_hex_colour(self):
+        theme = BookTheme(
+            book=self.book, backdrop_kind="color", bg_color="nope", accent="#3D3B62"
+        )
+        with self.assertRaises(ValidationError):
+            theme.save()
+
+    def test_rejects_out_of_range_tilt(self):
+        theme = BookTheme(
+            book=self.book,
+            backdrop_kind="color",
+            bg_color="#BFDCF7",
+            tilt_degrees=45,
+        )
+        with self.assertRaises(ValidationError):
+            theme.save()
+
+    def test_valid_gradient_theme_saves(self):
+        theme = BookTheme.objects.create(
+            book=self.book,
+            backdrop_kind="gradient",
+            bg_color="#CFE6FB",
+            bg_color_2="#A9D3F5",
+        )
+        self.assertEqual(theme.book, self.book)
+        self.assertEqual(self.book.theme, theme)
+
+    def test_book_without_theme_is_valid(self):
+        """No theme means "use the platform default", not an error."""
+        self.assertFalse(BookTheme.objects.filter(book=self.book).exists())
+
+
+class BookThemeApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            username="theme-admin", password="Admin123!", is_staff=True, is_superuser=True
+        )
+        self.book = Book.objects.create(title="Ocean Deep", slug="ocean-deep")
+        self.url = f"/api/v1/admin/books/{self.book.id}/theme/"
+
+    def test_requires_admin(self):
+        self.assertEqual(self.client.get(self.url).status_code, 401)
+
+    def test_get_returns_null_when_no_theme(self):
+        self.client.force_authenticate(self.admin)
+        res = self.client.get(self.url)
+        self.assertEqual(res.status_code, 200)
+        self.assertIsNone(res.json()["data"])
+
+    def test_put_creates_then_updates_theme(self):
+        self.client.force_authenticate(self.admin)
+        res = self.client.put(
+            self.url,
+            {"backdrop_kind": "gradient", "bg_color": "#CFE6FB", "bg_color_2": "#A9D3F5"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual(res.json()["data"]["bg_color"], "#CFE6FB")
+
+        res = self.client.put(self.url, {"accent": "#764F84"}, format="json")
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual(res.json()["data"]["accent"], "#764F84")
+        self.assertEqual(BookTheme.objects.filter(book=self.book).count(), 1)
+
+    def test_theme_is_embedded_in_book_payload(self):
+        BookTheme.objects.create(
+            book=self.book, backdrop_kind="color", bg_color="#0E1626", chrome_mode="dark"
+        )
+        self.client.force_authenticate(self.admin)
+        res = self.client.get("/api/v1/admin/books/")
+        self.assertEqual(res.status_code, 200, res.content)
+        book = next(b for b in res.json()["data"] if b["id"] == str(self.book.id))
+        self.assertEqual(book["theme"]["chrome_mode"], "dark")
+
+    def test_invalid_theme_is_rejected(self):
+        self.client.force_authenticate(self.admin)
+        res = self.client.put(self.url, {"backdrop_kind": "image"}, format="json")
+        self.assertEqual(res.status_code, 400, res.content)
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp(prefix="bb-test-media-"))
+class MediaUploadTests(TestCase):
+    """
+    The upload endpoint writes attacker-named files under MEDIA_ROOT, so the
+    allowlist and the filename sanitising are load-bearing, not cosmetic.
+    """
+
+    @classmethod
+    def tearDownClass(cls):
+        # Written files are real; do not leave them behind between runs.
+        shutil.rmtree(django_settings.MEDIA_ROOT, ignore_errors=True)
+        super().tearDownClass()
+
+    #: 1x1 transparent GIF — a real, decodable image small enough to inline.
+    TINY_GIF = (
+        b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!"
+        b"\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00"
+        b"\x00\x02\x02D\x01\x00;"
+    )
+
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            username="upload-admin",
+            email="upload-admin@example.com",
+            password="strong-password-123",
+            is_staff=True,
+            is_superuser=True,
+        )
+        self.url = "/api/v1/admin/upload/"
+
+    def _upload(self, name, content, content_type):
+        return self.client.post(
+            self.url,
+            {"file": SimpleUploadedFile(name, content, content_type=content_type)},
+            format="multipart",
+        )
+
+    def test_requires_staff(self):
+        res = self._upload("a.gif", self.TINY_GIF, "image/gif")
+        self.assertEqual(res.status_code, 401)
+
+        parent = User.objects.create_user(
+            username="upload-parent", email="p@example.com", password="strong-password-123"
+        )
+        self.client.force_authenticate(parent)
+        res = self._upload("a.gif", self.TINY_GIF, "image/gif")
+        self.assertEqual(res.status_code, 403)
+
+    def test_accepts_an_image(self):
+        self.client.force_authenticate(self.admin)
+        res = self._upload("bedtime scene.gif", self.TINY_GIF, "image/gif")
+        self.assertEqual(res.status_code, 201, res.content)
+        url = res.json()["data"]["url"]
+        self.assertTrue(url.endswith(".gif"), url)
+        self.assertIn("/uploads/", url)
+
+    def test_rejects_non_image_type(self):
+        self.client.force_authenticate(self.admin)
+        res = self._upload("notes.txt", b"hello", "text/plain")
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertEqual(res.json()["error"]["code"], "unsupported_file_type")
+
+    def test_rejects_image_content_type_with_executable_extension(self):
+        """A spoofed content type must not get a .php/.html file written to disk."""
+        self.client.force_authenticate(self.admin)
+        res = self._upload("shell.php", self.TINY_GIF, "image/gif")
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertEqual(res.json()["error"]["code"], "unsupported_file_type")
+
+    def test_rejects_oversized_file(self):
+        self.client.force_authenticate(self.admin)
+        res = self._upload("huge.png", b"\x00" * (5 * 1024 * 1024 + 1), "image/png")
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertEqual(res.json()["error"]["code"], "file_too_large")
+
+    def test_rejects_missing_file(self):
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(self.url, {}, format="multipart")
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertEqual(res.json()["error"]["code"], "no_file")
+
+    def test_traversal_in_filename_is_stripped(self):
+        self.client.force_authenticate(self.admin)
+        res = self._upload("../../../evil.png", self.TINY_GIF, "image/png")
+        self.assertEqual(res.status_code, 201, res.content)
+        url = res.json()["data"]["url"]
+        self.assertNotIn("..", url)
+        self.assertRegex(url, r"/uploads/[0-9a-f]{32}_evil\.png$")
+
+
+class ActivityConfigValidationTests(TestCase):
+    """Malformed configs must fail validation, never crash the request."""
+
+    def setUp(self):
+        self.book = Book.objects.create(title="Validation Book", slug="validation-book")
+
+    def _drag_drop(self, accepts):
+        return ActivityConfig(
+            book=self.book,
+            title="Zones",
+            activity_type=ActivityConfig.ActivityType.DRAG_DROP,
+            config={
+                "schema_version": "1.1",
+                "activity_type": "drag_drop",
+                "book_id": str(self.book.id),
+                "ui": {"title": "Zones", "instructions": ""},
+                "payload": {
+                    "image_url": "http://example.test/i.png",
+                    "labels": [{"id": "l1", "text": "Happy"}],
+                    "drop_zones": [{"id": "z1", "x": 1, "y": 1, "w": 1, "h": 1, "accepts": accepts}],
+                },
+            },
+        )
+
+    def test_accepts_as_a_label_id_is_valid(self):
+        self._drag_drop("l1").full_clean()
+
+    def test_accepts_with_an_unhashable_value_is_a_validation_error(self):
+        # A list here used to raise TypeError ("unhashable type") from the
+        # `in label_ids` membership test, surfacing as a 500.
+        with self.assertRaises(ValidationError):
+            self._drag_drop(["l1"]).full_clean()
+
+    def test_accepts_referencing_an_unknown_label_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            self._drag_drop("nope").full_clean()
+
+
+class ThemedAdventureTests(TestCase):
+    """
+    Activities and sessions may target a book OR an activity group, never both
+    and never neither. The DB constraint is the guard; these cover it and the
+    endpoints built on top.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            username="adv-admin", email="adv-admin@example.com",
+            password="strong-password-123", is_staff=True, is_superuser=True,
+        )
+        self.parent = User.objects.create_user(
+            username="adv-parent", email="adv-parent@example.com", password="strong-password-123",
+        )
+        self.child = ChildProfile.objects.create(
+            user=self.parent, display_name="Ada", age_band="3-5",
+        )
+        # Session creation is gated on remaining sessions.
+        Entitlement.objects.update_or_create(
+            user=self.parent, defaults={"sessions_remaining": 10},
+        )
+        self.theme = Theme.objects.create(name="Ocean", slug="ocean-test", accent="#3b85a6")
+        self.group = ActivityGroup.objects.create(
+            title="Ocean Adventure", slug="ocean-adventure-test",
+            theme=self.theme, published=True,
+        )
+        self.book = Book.objects.create(
+            title="Themed Book", slug="themed-book", published=True,
+            theme_category=self.theme,
+        )
+
+    def _drawing_config(self):
+        return {
+            "schema_version": "1.1",
+            "activity_type": "drawing",
+            "ui": {"title": "Draw", "instructions": ""},
+            "payload": {"palette": ["#000"], "brush_sizes": [4], "allow_eraser": True},
+        }
+
+    # ── the one-owner rule ────────────────────────────────────────────────
+    def test_activity_may_belong_to_a_group_with_no_book(self):
+        activity = ActivityConfig.objects.create(
+            activity_group=self.group, title="Group activity",
+            activity_type=ActivityConfig.ActivityType.DRAWING, config=self._drawing_config(),
+        )
+        self.assertIsNone(activity.book_id)
+
+    def test_activity_with_neither_owner_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            ActivityConfig(
+                title="Orphan", activity_type=ActivityConfig.ActivityType.DRAWING,
+                config=self._drawing_config(),
+            ).full_clean()
+
+    def test_activity_with_both_owners_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            ActivityConfig(
+                book=self.book, activity_group=self.group, title="Both",
+                activity_type=ActivityConfig.ActivityType.DRAWING, config=self._drawing_config(),
+            ).full_clean()
+
+    # ── endpoints ─────────────────────────────────────────────────────────
+    def test_themes_and_groups_are_listed(self):
+        self.client.force_authenticate(self.parent)
+        res = self.client.get("/api/v1/themes/")
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertIn("ocean-test", [t["slug"] for t in res.json()["data"]])
+
+        res = self.client.get("/api/v1/activity-groups/")
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertIn("Ocean Adventure", [g["title"] for g in res.json()["data"]])
+
+    def test_draft_group_is_hidden_from_customers_but_visible_to_staff(self):
+        ActivityGroup.objects.create(title="Secret", slug="secret-adv", published=False)
+        self.client.force_authenticate(self.parent)
+        titles = [g["title"] for g in self.client.get("/api/v1/activity-groups/").json()["data"]]
+        self.assertNotIn("Secret", titles)
+
+        self.client.force_authenticate(self.admin)
+        titles = [g["title"] for g in self.client.get("/api/v1/activity-groups/").json()["data"]]
+        self.assertIn("Secret", titles)
+
+    def test_group_activities_endpoint_returns_its_activities(self):
+        ActivityConfig.objects.create(
+            activity_group=self.group, title="In the group",
+            activity_type=ActivityConfig.ActivityType.DRAWING, config=self._drawing_config(),
+        )
+        self.client.force_authenticate(self.parent)
+        res = self.client.get(f"/api/v1/activity-groups/{self.group.id}/activities/")
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual([a["title"] for a in res.json()["data"]], ["In the group"])
+
+    def test_books_can_be_filtered_by_theme(self):
+        self.client.force_authenticate(self.parent)
+        res = self.client.get("/api/v1/books/?theme=ocean-test")
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual([b["title"] for b in res.json()["data"]], ["Themed Book"])
+
+    def test_customer_book_payload_hides_storage_key_and_publish_flag(self):
+        self.client.force_authenticate(self.parent)
+        book = self.client.get("/api/v1/books/").json()["data"][0]
+        self.assertNotIn("s3_key", book)
+        self.assertNotIn("published", book)
+
+    # ── sessions ──────────────────────────────────────────────────────────
+    def test_session_can_target_an_activity_group(self):
+        self.client.force_authenticate(self.parent)
+        res = self.client.post(
+            "/api/v1/sessions/",
+            {"activity_group_id": str(self.group.id), "child_profile_id": str(self.child.id)},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201, res.content)
+        data = res.json()["data"]
+        self.assertIsNone(data["book"])
+        self.assertEqual(data["book_title"], "Ocean Adventure")
+        # An adventure has nothing to read, so it is always an activity room.
+        self.assertEqual(data["room_type"], "activity")
+
+    def test_session_still_works_for_a_book(self):
+        self.client.force_authenticate(self.parent)
+        res = self.client.post(
+            "/api/v1/sessions/",
+            {"book_id": str(self.book.id), "child_profile_id": str(self.child.id),
+             "room_type": "reading"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201, res.content)
+        self.assertEqual(res.json()["data"]["book_title"], "Themed Book")
+
+    def test_session_needs_exactly_one_target(self):
+        self.client.force_authenticate(self.parent)
+        for payload in (
+            {"child_profile_id": str(self.child.id)},
+            {"book_id": str(self.book.id), "activity_group_id": str(self.group.id),
+             "child_profile_id": str(self.child.id)},
+        ):
+            res = self.client.post("/api/v1/sessions/", payload, format="json")
+            self.assertEqual(res.status_code, 400, res.content)
+
+
+class PortalActivityAuthoringTests(TestCase):
+    """
+    Authoring lives in the staff portal. Replaces the two tests removed
+    when the form was retired, at schema 1.1 rather than the 1.0 they covered.
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username="portal-admin", email="portal-admin@example.com",
+            password="strong-password-123", is_staff=True, is_superuser=True,
+        )
+        self.client.force_login(self.admin)
+        self.book = Book.objects.create(title="Portal Book", slug="portal-book", published=True)
+        self.group = ActivityGroup.objects.create(
+            title="Portal Adventure", slug="portal-adventure", published=True,
+        )
+
+    def test_activity_page_renders_the_form(self):
+        response = self.client.get(reverse("admin_activity_config"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="activity-form"')
+        self.assertContains(response, "Publish")
+
+    def test_creates_a_multi_question_quiz_at_schema_1_1(self):
+        response = self.client.post(reverse("admin_activity_config"), data={
+            "action": "save", "activity_type": "quiz",
+            "owner": f"book:{self.book.id}", "title": "Portal Test Quiz",
+            "ui_title": "Pick one", "ui_instructions": "Tap an answer.",
+            "sort_order": 3, "publish": "1", "quiz_reveal_mode": "instant",
+            "q_id[]": ["q1"], "q_prompt[]": ["Which is blue?"],
+            "q_options_0[]": ["Sky", "Grass"], "q_correct[]": ["0"],
+            "q_feedback_correct[]": ["Yes!"], "q_feedback_wrong[]": ["Try again."],
+        })
+        self.assertEqual(response.status_code, 302)
+        activity = ActivityConfig.objects.get(title="Portal Test Quiz")
+        self.assertEqual(activity.config["schema_version"], "1.1")
+        # 1.1 is a `questions` list; the old form could only emit a single
+        # `question` string, which renders through the legacy runtime path.
+        payload = activity.config["payload"]
+        self.assertEqual(len(payload["questions"]), 1)
+        self.assertEqual(payload["questions"][0]["correct_index"], 0)
+        self.assertEqual(payload["questions"][0]["feedback_correct"], "Yes!")
+        self.assertTrue(activity.is_active)
+        self.assertEqual(activity.book_id, self.book.id)
+
+    def test_creates_an_image_anchored_drag_drop_for_a_group(self):
+        response = self.client.post(reverse("admin_activity_config"), data={
+            "action": "save", "activity_type": "drag_drop",
+            "owner": f"group:{self.group.id}", "title": "Portal Test Zones",
+            "ui_title": "Match them", "sort_order": 0, "publish": "1",
+            "image_url": "/activity-samples/dragdrop-sample.png",
+            "label_id[]": ["l1", "l2"], "label_text[]": ["Fish", "Crab"],
+            "zone_id[]": ["z1", "z2"],
+            "zone_x[]": ["10", "50"], "zone_y[]": ["20", "20"],
+            "zone_w[]": ["18", "18"], "zone_h[]": ["14", "14"],
+            "zone_label[]": ["Reef", "Pool"], "zone_accepts[]": ["l1", "l2"],
+        })
+        self.assertEqual(response.status_code, 302)
+        activity = ActivityConfig.objects.get(title="Portal Test Zones")
+        payload = activity.config["payload"]
+        self.assertEqual(payload["image_url"], "/activity-samples/dragdrop-sample.png")
+        self.assertEqual(len(payload["labels"]), 2)
+        # `accepts` is what makes Check My Answers possible at runtime.
+        self.assertEqual(payload["drop_zones"][0]["accepts"], "l1")
+        self.assertIsNone(activity.book_id)
+        self.assertEqual(activity.activity_group_id, self.group.id)
+
+    def test_save_draft_leaves_the_activity_hidden(self):
+        self.client.post(reverse("admin_activity_config"), data={
+            "action": "save", "activity_type": "drawing",
+            "owner": f"book:{self.book.id}", "title": "Portal Draft Activity",
+            "ui_title": "Draw", "sort_order": 0, "publish": "0",
+            "drawing_palette": "#000000", "drawing_brush_sizes": "4",
+        })
+        self.assertFalse(ActivityConfig.objects.get(title="Portal Draft Activity").is_active)
+
+    def test_invalid_config_is_rejected_and_not_saved(self):
+        response = self.client.post(reverse("admin_activity_config"), data={
+            "action": "save", "activity_type": "quiz",
+            "owner": f"book:{self.book.id}", "title": "Portal Broken",
+            "ui_title": "Broken", "sort_order": 0, "publish": "1",
+            "quiz_reveal_mode": "instant",
+            "q_id[]": ["q1"], "q_prompt[]": ["Only one option?"],
+            "q_options_0[]": ["Just this"], "q_correct[]": ["0"],
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(ActivityConfig.objects.filter(title="Portal Broken").exists())
+
+    def test_activity_can_still_be_deleted(self):
+        activity = ActivityConfig.objects.create(
+            book=self.book, title="Portal Doomed",
+            activity_type=ActivityConfig.ActivityType.DRAWING,
+            config={
+                "schema_version": "1.1", "activity_type": "drawing",
+                "ui": {"title": "D", "instructions": ""},
+                "payload": {"palette": ["#000"], "brush_sizes": [4], "allow_eraser": True},
+            },
+        )
+        response = self.client.post(reverse("admin_activity_config"), data={
+            "action": "delete", "activity_id": str(activity.id),
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(ActivityConfig.objects.filter(pk=activity.id).exists())
+
+    def test_adventures_page_creates_a_group(self):
+        response = self.client.get(reverse("admin_activity_groups"))
+        self.assertEqual(response.status_code, 200)
+
+        response = self.client.post(reverse("admin_activity_groups"), data={
+            "action": "save", "title": "Jungle Adventure",
+            "description": "Vines and canopies.", "sort_order": 2, "published": "on",
+        })
+        self.assertEqual(response.status_code, 302)
+        group = ActivityGroup.objects.get(title="Jungle Adventure")
+        self.assertTrue(group.published)
+        # Slug is derived when the operator leaves it blank.
+        self.assertEqual(group.slug, "jungle-adventure")
+
+
+class SeededAdventureContentTests(TestCase):
+    """
+    The seed is what the demo runs on, so its shape is worth asserting: four
+    adventures with covers, activities that own no book, and books carrying a
+    theme so the library filter has data.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        call_command("seed_demo_data", verbosity=0)
+        call_command("seed_themes", verbosity=0)
+
+    def test_four_published_adventures_with_covers(self):
+        groups = ActivityGroup.objects.filter(published=True)
+        self.assertGreaterEqual(groups.count(), 4)
+        for slug in ("ocean-adventure", "jungle-adventure", "museum-adventure", "bedtime-adventure"):
+            group = ActivityGroup.objects.get(slug=slug)
+            self.assertTrue(group.cover_image, f"{slug} has no cover")
+            self.assertIsNotNone(group.theme, f"{slug} has no theme")
+            self.assertGreaterEqual(group.activity_configs.count(), 4)
+
+    def test_adventure_activities_own_no_book(self):
+        owned = ActivityConfig.objects.filter(activity_group__isnull=False, book__isnull=False)
+        self.assertEqual(owned.count(), 0)
+
+    def test_seeded_books_carry_a_theme(self):
+        # Without this the library's theme chips and badges have nothing to show.
+        self.assertTrue(Book.objects.filter(theme_category__isnull=False).exists())
+
+    def test_seed_is_idempotent(self):
+        before = (ActivityGroup.objects.count(), ActivityConfig.objects.count())
+        call_command("seed_themes", verbosity=0)
+        self.assertEqual((ActivityGroup.objects.count(), ActivityConfig.objects.count()), before)
+
+    def test_books_can_be_filtered_by_a_seeded_theme(self):
+        user = User.objects.create_user(
+            username="lib-parent", email="lib@example.com", password="strong-password-123"
+        )
+        client = APIClient()
+        client.force_authenticate(user)
+        book = Book.objects.filter(theme_category__isnull=False).first()
+        res = client.get(f"/api/v1/books/?theme={book.theme_category.slug}")
+        self.assertEqual(res.status_code, 200, res.content)
+        titles = [b["title"] for b in res.json()["data"]]
+        self.assertIn(book.title, titles)
+
+    def test_customer_sees_adventures_with_their_theme_colour(self):
+        user = User.objects.create_user(
+            username="adv-browser", email="ab@example.com", password="strong-password-123"
+        )
+        client = APIClient()
+        client.force_authenticate(user)
+        res = client.get("/api/v1/activity-groups/")
+        self.assertEqual(res.status_code, 200, res.content)
+        data = {g["title"]: g for g in res.json()["data"]}
+        self.assertIn("Jungle Adventure", data)
+        jungle = data["Jungle Adventure"]
+        self.assertEqual(jungle["theme_name"], "Jungle")
+        self.assertTrue(jungle["theme_accent"].startswith("#"))
+        self.assertGreaterEqual(jungle["activity_count"], 4)
+
+
+class PortalQuizAnswerKeyTests(TestCase):
+    """
+    Every question keeps its own answer key.
+
+    Regression guard: all questions once shared `name="q_correct[]"`, so the form
+    was a single radio group — picking question 2's answer unchecked question 1's,
+    only one value posted, and every question after the first silently saved with
+    option A as the answer. It saved cleanly and was wrong.
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username="quizkey-admin", email="qk@example.com",
+            password="strong-password-123", is_staff=True, is_superuser=True,
+        )
+        self.client.force_login(self.admin)
+        self.book = Book.objects.create(title="Quiz Key Book", slug="quiz-key-book", published=True)
+
+    def test_each_question_keeps_its_own_correct_answer(self):
+        response = self.client.post(reverse("admin_activity_config"), data={
+            "action": "save", "activity_type": "quiz",
+            "owner": f"book:{self.book.id}", "title": "Three Question Quiz",
+            "ui_title": "Three questions", "sort_order": 0, "publish": "1",
+            "quiz_reveal_mode": "instant",
+            "q_id[]": ["q1", "q2", "q3"],
+            "q_prompt[]": ["First?", "Second?", "Third?"],
+            "q_options_0[]": ["a0", "a1", "a2"],
+            "q_options_1[]": ["b0", "b1", "b2"],
+            "q_options_2[]": ["c0", "c1", "c2"],
+            # Per-question radio names — a different answer in each.
+            "q_correct_0": "0",
+            "q_correct_1": "2",
+            "q_correct_2": "1",
+        })
+        self.assertEqual(response.status_code, 302, response.content[:400])
+        questions = ActivityConfig.objects.get(title="Three Question Quiz").config["payload"]["questions"]
+        self.assertEqual([q["correct_index"] for q in questions], [0, 2, 1])
+
+    def test_correct_index_cannot_exceed_the_options_given(self):
+        self.client.post(reverse("admin_activity_config"), data={
+            "action": "save", "activity_type": "quiz",
+            "owner": f"book:{self.book.id}", "title": "Clamped Quiz",
+            "ui_title": "Clamped", "sort_order": 0, "publish": "1",
+            "quiz_reveal_mode": "instant",
+            "q_id[]": ["q1"], "q_prompt[]": ["Only two options"],
+            "q_options_0[]": ["yes", "no"],
+            "q_correct_0": "7",
+        })
+        questions = ActivityConfig.objects.get(title="Clamped Quiz").config["payload"]["questions"]
+        self.assertEqual(questions[0]["correct_index"], 1)
+
+    def test_a_question_can_carry_its_own_illustration(self):
+        self.client.post(reverse("admin_activity_config"), data={
+            "action": "save", "activity_type": "quiz",
+            "owner": f"book:{self.book.id}", "title": "Illustrated Quiz",
+            "ui_title": "With a picture", "sort_order": 0, "publish": "1",
+            "quiz_reveal_mode": "instant",
+            "q_id[]": ["q1"], "q_prompt[]": ["Which one?"],
+            "q_options_0[]": ["this", "that"], "q_correct_0": "0",
+            "q_image_url[]": ["/adventure-assets/jungle-quiz.jpg"],
+        })
+        questions = ActivityConfig.objects.get(title="Illustrated Quiz").config["payload"]["questions"]
+        self.assertEqual(questions[0]["image_url"], "/adventure-assets/jungle-quiz.jpg")
+
+    def test_form_offers_a_preview_once_the_activity_exists(self):
+        activity = ActivityConfig.objects.create(
+            book=self.book, title="Previewable",
+            activity_type=ActivityConfig.ActivityType.DRAWING,
+            config={
+                "schema_version": "1.1", "activity_type": "drawing",
+                "ui": {"title": "D", "instructions": ""},
+                "payload": {"palette": ["#000"], "brush_sizes": [4], "allow_eraser": True},
+            },
+        )
+        response = self.client.get(f"{reverse('admin_activity_config')}?selected={activity.id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Preview — what the child sees")
+        self.assertContains(response, f"/preview/activity/{activity.id}")

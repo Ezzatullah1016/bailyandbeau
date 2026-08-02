@@ -2,13 +2,14 @@
 
 import dynamic from 'next/dynamic';
 import {
+  forwardRef,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from 'react';
-import type { MutableRefObject } from 'react';
+import type { ComponentType, MutableRefObject, Ref } from 'react';
 import { usePlaceholderPdf } from '@/lib/usePlaceholderPdf';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -24,24 +25,33 @@ import { useSession } from '@/contexts/SessionContext';
 import {
   completeSession,
   getBookActivities,
+  getGroupActivities,
   getBookPagesWithMeta,
   getGuestToken,
   getSession,
   getSnapshot,
-  getUserBadges,
   transferHost,
   updateSnapshot,
   type BookPageData,
-  type UserBadgeData,
 } from '@/lib/api';
 import { MAX_LIVEKIT_ROOM_PARTICIPANTS } from '@/lib/sessionLimits';
 import ActivityRoom from '@/components/activity/ActivityRoom';
+import { ActivityPicker } from '@/components/activity/ActivityPicker';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import type { ActivityConfigData } from '@/components/activity/types';
 import { AnnotationToolbar, DockTip, type ReadingInteractionMode } from '@/components/annotation/AnnotationToolbar';
-import type { AnnotationCanvasHandle } from '@/components/annotation/AnnotationCanvas';
-import { SpreadBookViewer } from '@/components/reading/SpreadBookViewer';
-import { TransformComponent, TransformWrapper, type ReactZoomPanPinchContentRef } from 'react-zoom-pan-pinch';
+import type {
+  AnnotationCanvasHandle,
+  AnnotationCanvasProps,
+} from '@/components/annotation/AnnotationCanvas';
+import { RoomRail, type RailItem } from '@/components/reading/RoomRail';
+import { ToolStrip } from '@/components/reading/ToolStrip';
+import { ChatPopup } from '@/components/session/ChatPopup';
+import { ParticipantStrip } from '@/components/session/ParticipantStrip';
+import type { Book3DProps } from '@/components/reading/Book3D/Scene';
+import { useRoomTheme } from '@/lib/useRoomTheme';
+import { useRoomIdle, useRoomSounds } from '@/lib/useRoomSounds';
+import type { BookThemeData } from '@/lib/api';
 import {
   AlarmClock,
   BookMarked,
@@ -49,9 +59,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Check,
-  Clock,
   Copy,
-  FileText,
   Loader2,
   Link2,
   MessageCircle,
@@ -62,7 +70,6 @@ import {
   SlidersHorizontal,
   Star,
   Timer,
-  Trophy,
   User,
   Users,
   Video,
@@ -76,14 +83,39 @@ import {
   Gamepad2,
   GripVertical,
   Phone,
-  MoreHorizontal,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 
-// Dynamic import for Fabric canvas (SSR-unsafe)
-const AnnotationCanvas = dynamic(
+// Dynamic import for Fabric canvas (SSR-unsafe).
+// `next/dynamic` returns a plain function component, so a `ref` passed to it is
+// dropped with "Function components cannot be given refs" and every imperative
+// call (undo, clear, remote ink sync) silently no-ops. Forward it explicitly.
+const AnnotationCanvasLazy = dynamic(
   () => import('@/components/annotation/AnnotationCanvas'),
   { ssr: false },
+) as unknown as ComponentType<
+  AnnotationCanvasProps & { forwardedRef?: Ref<AnnotationCanvasHandle> }
+>;
+
+const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCanvasProps>(
+  function AnnotationCanvas(props, ref) {
+    return <AnnotationCanvasLazy {...props} forwardedRef={ref} />;
+  },
 );
+
+// The 3D book carries three.js with it, so it is split out of the main bundle
+// and loaded only on this route. `ssr: false` is required — three touches
+// `window` at module scope and would break the server render.
+const Book3D = dynamic(() => import('@/components/reading/Book3D/Scene'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full w-full items-center justify-center">
+      <Loader2 className="h-10 w-10 animate-spin" style={{ color: 'var(--room-ink-soft)' }} aria-hidden />
+      <span className="sr-only">Loading book…</span>
+    </div>
+  ),
+}) as ComponentType<Book3DProps>;
 
 // ─── Sync message format ──────────────────────────────────────────────────────
 
@@ -193,25 +225,88 @@ function ConnectionBanner() {
 
 // ─── Participant tile ─────────────────────────────────────────────────────────
 
+/** Initials from a display name, for the placeholder when video is off. */
+function participantInitials(label: string): string {
+  const parts = label.trim().split(/[\s._-]+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+}
+
+/**
+ * A 1:1 rounded square, sized by its container.
+ *
+ * This was a fixed-size round bubble with the name revealed only on hover. In a
+ * grid that wasted space (a circle inscribed in its cell loses ~21% of it) and
+ * cropped faces tightly, and a name you must hover to read is no use on a touch
+ * screen. A square fills its cell, and the name sits on a gradient strip over
+ * the video so it is always legible without a separate row.
+ *
+ * With the camera off it shows initials on the room accent rather than a
+ * generic person glyph, so several people with cameras off are still tellable
+ * apart. A muted badge sits in the corner, because whether someone can hear you
+ * is the thing people check most often in a call.
+ */
 function ParticipantTile({ identity, label, isHost }: { identity: string; label: string; isHost: boolean }) {
-  const tracks = useTracks([Track.Source.Camera]);
-  const track = tracks.find((t) => t.participant.identity === identity);
+  const cameraTracks = useTracks([Track.Source.Camera]);
+  const micTracks = useTracks([Track.Source.Microphone]);
+
+  const track = cameraTracks.find((t) => t.participant.identity === identity);
+  const cameraOn = Boolean(track && !track.publication?.isMuted);
+
+  const micPub = micTracks.find((t) => t.participant.identity === identity);
+  // No publication at all also means no audio reaching anyone, so it reads as
+  // muted rather than as unknown.
+  const micOn = Boolean(micPub && !micPub.publication?.isMuted);
 
   return (
-    <div className="relative group aspect-video bg-stone-950 rounded-xl overflow-hidden ring-1 ring-white/10">
-      {track ? (
-        <VideoTrack trackRef={track} className="w-full h-full object-cover opacity-80" />
+    <div
+      className="relative aspect-square w-full min-w-0 overflow-hidden rounded-2xl"
+      style={{
+        background: 'var(--room-chrome-strong)',
+        border: '1px solid var(--room-chrome-line)',
+        boxShadow: 'var(--elev-1)',
+      }}
+    >
+      {cameraOn && track ? (
+        <VideoTrack trackRef={track} className="h-full w-full object-cover" />
       ) : (
-        <div className="w-full h-full flex items-center justify-center">
-          <User className="w-10 h-10 text-stone-600" />
+        <div
+          className="flex h-full w-full items-center justify-center"
+          style={{ background: 'var(--room-accent)' }}
+        >
+          <span
+            className="text-2xl font-bold tracking-wide"
+            style={{ color: 'var(--room-accent-contrast)' }}
+            aria-hidden
+          >
+            {participantInitials(label)}
+          </span>
         </div>
       )}
-      <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
-        <span className="px-2 py-0.5 bg-stone-900/80 backdrop-blur-md rounded-md text-[10px] font-bold text-white">
+
+      <div
+        className="absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full"
+        style={{
+          background: micOn ? 'rgba(0,0,0,0.45)' : '#c0392b',
+          color: '#ffffff',
+        }}
+        title={micOn ? `${label} is unmuted` : `${label} is muted`}
+      >
+        {micOn ? (
+          <Mic className="h-3.5 w-3.5" aria-hidden />
+        ) : (
+          <MicOff className="h-3.5 w-3.5" aria-hidden />
+        )}
+        <span className="sr-only">{micOn ? 'Microphone on' : 'Microphone muted'}</span>
+      </div>
+
+      <div className="absolute inset-x-0 bottom-0 flex items-center gap-1 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-4">
+        <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-white">
           {label}
         </span>
         {isHost && (
-          <span className="px-1.5 py-0.5 bg-[#3c4b30] text-[#a9bb99] rounded-md text-[9px] font-bold uppercase">
+          <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-white/85">
             Host
           </span>
         )}
@@ -220,10 +315,18 @@ function ParticipantTile({ identity, label, isHost }: { identity: string; label:
   );
 }
 
+/**
+ * Two per row, which is what fits legibly at the panel's width. `min-w-0` on the
+ * children is load-bearing: without it a long participant name forces the grid
+ * wider than its container and the panel grows a horizontal scrollbar.
+ */
 function ParticipantList({ hostIdentity }: { hostIdentity?: string }) {
   const participants = useParticipants();
+  // A lone participant gets the full width rather than half of a two-column
+  // grid with an empty cell beside them.
+  const columns = participants.length <= 1 ? 'grid-cols-1' : 'grid-cols-2';
   return (
-    <div className="space-y-3">
+    <div className={`grid w-full gap-2 ${columns}`}>
       {participants.map((p) => (
         <ParticipantTile
           key={p.identity}
@@ -236,52 +339,9 @@ function ParticipantList({ hostIdentity }: { hostIdentity?: string }) {
   );
 }
 
-function ParticipantRoster({ hostIdentity }: { hostIdentity?: string }) {
-  const participants = useParticipants();
-  return (
-    <div className="space-y-2">
-      {participants.map((p) => (
-        <div key={p.identity} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-stone-800/40">
-          <div className="w-8 h-8 rounded-full bg-[#764f84]/40 flex items-center justify-center">
-            <User className="w-4 h-4 text-white/80" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-stone-100 truncate">{p.name || p.identity}</p>
-            {p.identity === hostIdentity && (
-              <p className="text-[10px] text-[#f0c75e] uppercase tracking-wider">Host</p>
-            )}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 // ─── Local controls ───────────────────────────────────────────────────────────
 
-function LocalControls() {
-  const { localParticipant, isMicrophoneEnabled, isCameraEnabled } = useLocalParticipant();
-  return (
-    <div className="flex items-center gap-2">
-      <button
-        onClick={() => localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)}
-        aria-label={isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}
-        aria-pressed={!isMicrophoneEnabled}
-        className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${isMicrophoneEnabled ? 'bg-stone-800/50 text-stone-300 hover:bg-stone-700/50' : 'bg-red-900/50 text-red-300 hover:bg-red-800/50'}`}
-      >
-        {isMicrophoneEnabled ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
-      </button>
-      <button
-        onClick={() => localParticipant.setCameraEnabled(!isCameraEnabled)}
-        aria-label={isCameraEnabled ? 'Turn off camera' : 'Turn on camera'}
-        aria-pressed={!isCameraEnabled}
-        className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${isCameraEnabled ? 'bg-stone-800/50 text-stone-300 hover:bg-stone-700/50' : 'bg-red-900/50 text-red-300 hover:bg-red-800/50'}`}
-      >
-        {isCameraEnabled ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
-      </button>
-    </div>
-  );
-}
 
 /** Large circular mic / camera controls for bottom dock */
 function SessionMediaDock() {
@@ -313,19 +373,6 @@ function SessionMediaDock() {
 }
 
 /** Wraps AnnotationToolbar and injects LiveKit mic/camera state */
-function UnifiedBar(props: Omit<Parameters<typeof AnnotationToolbar>[0], 'isMicEnabled' | 'isCameraEnabled' | 'onToggleMic' | 'onToggleCamera'>) {
-  const { localParticipant, isMicrophoneEnabled, isCameraEnabled } = useLocalParticipant();
-  return (
-    <AnnotationToolbar
-      {...props}
-      isMicEnabled={isMicrophoneEnabled}
-      isCameraEnabled={isCameraEnabled}
-      onToggleMic={() => localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)}
-      onToggleCamera={() => localParticipant.setCameraEnabled(!isCameraEnabled)}
-    />
-  );
-}
-
 function SessionTimerRing({
   remaining,
   totalSecs,
@@ -360,7 +407,14 @@ function SessionTimerRing({
         title={role === 'host' && !timerActive ? 'Start session timer' : undefined}
       >
         <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 88 88" aria-hidden>
-          <circle cx="44" cy="44" r={radius} fill="none" className="text-stone-700/80" stroke="currentColor" strokeWidth="5" />
+          <circle
+            cx="44"
+            cy="44"
+            r={radius}
+            fill="none"
+            stroke="var(--room-chrome-line)"
+            strokeWidth="5"
+          />
           <circle
             cx="44"
             cy="44"
@@ -375,13 +429,24 @@ function SessionTimerRing({
           />
         </svg>
         <div className="relative z-10 flex flex-col items-center text-center">
-          <span className="font-baloo text-xl font-bold tabular-nums text-white">{fmtTime(remaining)}</span>
-          <span className="text-[9px] font-semibold uppercase tracking-wider text-stone-400">
+          <span
+            className="font-baloo text-xl font-bold tabular-nums"
+            style={{ color: 'var(--room-ink)' }}
+          >
+            {fmtTime(remaining)}
+          </span>
+          <span
+            className="text-[9px] font-semibold uppercase tracking-wider"
+            style={{ color: 'var(--room-ink-soft)' }}
+          >
             {timerActive ? 'remaining' : role === 'host' ? 'starts live' : 'waiting'}
           </span>
         </div>
       </div>
-      <p className="text-center text-[10px] font-bold uppercase tracking-widest text-stone-500">
+      <p
+        className="text-center text-[10px] font-bold uppercase tracking-widest"
+        style={{ color: 'var(--room-ink-soft)' }}
+      >
         {timerActive ? 'Reading' : 'Session'}
       </p>
     </div>
@@ -402,121 +467,6 @@ function bookSpreadItems(pages: BookPageData[]) {
   return items;
 }
 
-// ─── Session-complete overlay ─────────────────────────────────────────────────
-
-function CompletionOverlay({
-  bookTitle,
-  pagesRead,
-  pageCount,
-  durationSecs,
-  badges,
-  onDashboard,
-}: {
-  bookTitle: string;
-  pagesRead: number;
-  pageCount: number;
-  durationSecs: number;
-  badges: UserBadgeData[];
-  onDashboard: () => void;
-}) {
-  const mins = Math.round(durationSecs / 60);
-  const badge = badges[0] ?? null;
-
-  return (
-    <div className="fixed inset-0 z-[200] bg-gradient-to-br from-[#3d3b62] to-[#764f84] flex items-center justify-center p-6 overflow-y-auto">
-      <div className="fixed inset-0 pointer-events-none" style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.12) 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
-      <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] bg-white/5 blur-[120px] rounded-full pointer-events-none" />
-      <div className="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-white/5 blur-[120px] rounded-full pointer-events-none" />
-
-      <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-6 py-6 pointer-events-none">
-        <div className="font-baloo text-2xl font-bold text-white pointer-events-auto">
-          Bailey &amp; Beau
-        </div>
-        <button onClick={onDashboard} className="w-10 h-10 flex items-center justify-center text-white/80 hover:text-white pointer-events-auto transition-colors">
-          <X className="w-7 h-7" />
-        </button>
-      </header>
-
-      <main className="relative z-10 w-full max-w-[560px] flex flex-col items-center text-center mt-20">
-        <div className="mb-8 flex flex-col items-center">
-          <span className="text-[72px] leading-none mb-4" role="img" aria-label="Party Popper">🎉</span>
-          <h1 className="font-baloo text-5xl text-white font-bold tracking-tight mb-3">Amazing Session!</h1>
-          <p className="text-white/90 text-lg font-light max-w-[400px]">
-            You read together for {mins} {mins === 1 ? 'minute' : 'minutes'}.
-          </p>
-        </div>
-
-        <div className="w-full bg-white rounded-[2rem] p-10 shadow-[0_32px_64px_-12px_rgba(23,57,1,0.3)] mb-8">
-          <div className="flex flex-col items-center">
-            <span className="font-karla text-xs font-extrabold uppercase tracking-[0.2em] text-[#764f84] mb-10">
-              {badge ? 'NEW BADGE EARNED' : 'SESSION COMPLETE'}
-            </span>
-
-            {badge ? (
-              <>
-                <div className="relative flex items-center justify-center mb-8">
-                  <div className="absolute w-[200px] h-[200px] border border-[#eccdca]/30 rounded-full" />
-                  <div className="absolute w-[160px] h-[160px] border border-[#eccdca]/60 rounded-full" />
-                  <div className="relative w-[120px] h-[120px] bg-[#f0c75e] rounded-full flex items-center justify-center shadow-lg">
-                    <Star className="w-12 h-12 text-white fill-white" />
-                  </div>
-                </div>
-                <h2 className="font-baloo text-[32px] text-[#3d3b62] font-bold mb-2">{badge.badge_name}</h2>
-                <p className="font-karla text-stone-500 text-base mb-8">{badge.badge_description}</p>
-              </>
-            ) : (
-              <div className="flex items-center justify-center w-[120px] h-[120px] rounded-full bg-[#eccdca]/30 mb-8">
-                <BookMarked className="w-14 h-14 text-[#764f84]" />
-              </div>
-            )}
-
-            <div className="w-full h-px bg-[#c3c9b9]/20 mb-8" />
-
-            <div className="grid grid-cols-2 gap-y-6 gap-x-4 w-full text-left">
-              <div className="flex items-start gap-3">
-                <BookOpen className="w-5 h-5 text-[#3d3b62] mt-0.5 shrink-0" />
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Book</span>
-                  <span className="text-sm font-semibold text-[#3d3b62]">{bookTitle}</span>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <Clock className="w-5 h-5 text-[#3d3b62] mt-0.5 shrink-0" />
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Duration</span>
-                  <span className="text-sm font-semibold text-[#3d3b62]">{mins} minutes</span>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <FileText className="w-5 h-5 text-[#3d3b62] mt-0.5 shrink-0" />
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Pages Read</span>
-                  <span className="text-sm font-semibold text-[#3d3b62]">{pagesRead} of {pageCount}</span>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <Trophy className="w-5 h-5 text-[#3d3b62] mt-0.5 shrink-0" />
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Badges</span>
-                  <span className="text-sm font-semibold text-[#3d3b62]">{badges.length} earned</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row items-center gap-4 w-full mb-10">
-          <button
-            onClick={onDashboard}
-            className="font-baloo w-full sm:flex-1 bg-gradient-to-br from-[#f0c75e] to-[#c84a71] text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:brightness-105 active:scale-95 transition-all text-sm uppercase tracking-widest"
-          >
-            Go to Dashboard
-          </button>
-        </div>
-      </main>
-    </div>
-  );
-}
 
 // ─── Timer warning banner ─────────────────────────────────────────────────────
 
@@ -540,13 +490,6 @@ function TimerWarning({ remaining }: { remaining: number }) {
 
 // ─── Tab config ───────────────────────────────────────────────────────────────
 
-const TAB_ICONS: Record<string, React.ElementType> = {
-  video:        Video,
-  tools:        Pencil,
-  participants: Users,
-  chat:         MessageCircle,
-  settings:     SlidersHorizontal,
-};
 
 // ─── Room content ─────────────────────────────────────────────────────────────
 
@@ -555,6 +498,7 @@ function RoomContent({
   sessionId,
   participantId,
   bookId,
+  activityGroupId,
   bookTitle,
   inviteToken,
   onEnd,
@@ -563,14 +507,18 @@ function RoomContent({
   role: 'host' | 'guest';
   sessionId: string;
   participantId: string;
-  bookId: string;
+  /** Null when the session targets a themed adventure instead of a book. */
+  bookId: string | null;
+  activityGroupId: string | null;
   bookTitle: string;
   inviteToken: string | null;
   onEnd: () => void;
   mode?: 'reading' | 'activity';
 }) {
   const room = useRoomContext();
-  const { localParticipant } = useLocalParticipant();
+  // Mic and camera state feed the rail directly now that it is the room's only
+  // control surface.
+  const { localParticipant, isMicrophoneEnabled, isCameraEnabled } = useLocalParticipant();
   const router = useRouter();
 
   const isActivityMode = mode === 'activity';
@@ -601,6 +549,8 @@ function RoomContent({
   // ── Pages ─────────────────────────────────────────────────────────────────
   const [backendPages, setBackendPages] = useState<BookPageData[]>([]);
   const [bookPdfUrl, setBookPdfUrl] = useState('');
+  const [bookTheme, setBookTheme] = useState<BookThemeData | null>(null);
+  const roomTheme = useRoomTheme(bookTheme);
   const [loadingPages, setLoadingPages] = useState(true);
   // When the book has no pre-rendered image pages, render its own PDF client-side.
   // Fall back to the bundled sample only if the book has no PDF either.
@@ -615,8 +565,39 @@ function RoomContent({
     [currentPage, spreadItems.length],
   );
   const activeSpread = spreadItems[clampedSpreadIndex];
-  const [activeTab, setActiveTab] = useState<'video' | 'tools' | 'participants' | 'chat' | 'settings'>('video');
-  const [roomPanelOpen, setRoomPanelOpen] = useState(false);
+
+  // Leaf index for the 3D book. Leaf 0 is the front cover, so the spread at
+  // index N sits on leaf N+1 — mixing these two spaces up desynchronises host
+  // and guest by exactly one page, which is why they are converted in one place
+  // only.
+  const leafIndex = clampedSpreadIndex + 1;
+
+  /** True while paper is in motion, so the ink overlay can stand aside. */
+  const [turning, setTurning] = useState(false);
+  /** Camera dolly for the rail zoom controls. */
+  const [bookZoom, setBookZoom] = useState(1);
+
+  const sounds = useRoomSounds();
+  // Let the chrome recede while reading so the book is the only thing asking
+  // for attention. Activities need their controls, so idle only applies to
+  // reading mode.
+  const readerIdle = useRoomIdle();
+
+  // Cue the page turn from the spread index rather than the host's click, so
+  // guests following along hear it too.
+  const soundedSpreadRef = useRef(clampedSpreadIndex);
+  useEffect(() => {
+    if (soundedSpreadRef.current === clampedSpreadIndex) return;
+    soundedSpreadRef.current = clampedSpreadIndex;
+    sounds.play('page-turn');
+  }, [clampedSpreadIndex, sounds]);
+  // Each rail control owns its own surface. The single tabbed "Session" panel
+  // that used to hold all of these meant opening chat also covered the
+  // participants and the settings, and the drawing options sat three clicks
+  // away from the pen button that turns drawing on.
+  const [drawOpen, setDrawOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // ── Timer ─────────────────────────────────────────────────────────────────
   const [timerActive, setTimerActive] = useState(false);
@@ -638,14 +619,15 @@ function RoomContent({
   const [annColor, setAnnColor] = useState('#ef4444');
   const [annBrush, setAnnBrush] = useState(8);
   const canvasRef = useRef<AnnotationCanvasHandle>(null);
-  const transformRef = useRef<ReactZoomPanPinchContentRef | null>(null);
   const transformRecalcTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentPageRef = useRef(0);
   currentPageRef.current = currentPage;
   const spreadInkRef = useRef<Record<string, string>>({});
   const annotationPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [bookRect, setBookRect] = useState({ w: 720, h: 540 });
+  // The book element is measured only so the ink overlay can re-register after
+  // a resize. The 3D scene fits itself to its container, so there is no longer
+  // any pixel geometry to compute here.
   const bookMeasureRef = useRef<HTMLDivElement>(null);
   const scheduleCanvasRecalcAfterTransform = useCallback(() => {
     if (transformRecalcTimerRef.current) clearTimeout(transformRecalcTimerRef.current);
@@ -662,42 +644,7 @@ function RoomContent({
     [],
   );
 
-  useEffect(() => {
-    const el = bookMeasureRef.current;
-    if (!el) return;
-    const update = () => {
-      const r = el.getBoundingClientRect();
-      const rw = Math.max(280, Math.floor(Math.min(r.width, 1200)));
-      const vh = typeof window !== 'undefined' ? window.innerHeight : 900;
-      const chromeReserve = 200;
-      const rhCapByVh = Math.floor(Math.min(vh * 0.8, Math.max(0, vh - chromeReserve)));
-      const rhByAspect = Math.floor((rw * 3) / 4);
-      const rh = Math.max(240, Math.min(rhCapByVh, rhByAspect));
-      setBookRect((prev) => (prev.w !== rw || prev.h !== rh ? { w: rw, h: rh } : prev));
-    };
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [loadingPages, spreadItems.length]);
-
-  /** Page/zoom pill: anchored bottom-right; x increases `right` (moves bar left). */
-  const bookHudStorageKey = `bb_reading_pagebar_${sessionId}`;
-  const [bookHudOffset, setBookHudOffset] = useState({ x: 0, y: 0 });
-  const bookHudOffsetRef = useRef(bookHudOffset);
-  bookHudOffsetRef.current = bookHudOffset;
-  const hudDragSessionRef = useRef<{ startX: number; startY: number; ox: number; oy: number } | null>(
-    null,
-  );
-  const bookHudRestoredRef = useRef(false);
-
   /** Bottom AnnotationToolbar: anchored bottom-left; persisted via sessionStorage. */
-  const dockHudStorageKey = `bb_reading_dock_${sessionId}`;
-  const [dockHudOffset, setDockHudOffset] = useState({ x: 0, y: 0 });
-  const dockHudOffsetRef = useRef(dockHudOffset);
-  dockHudOffsetRef.current = dockHudOffset;
-  const dockHudDragSessionRef = useRef<{ startX: number; startY: number; ox: number; oy: number } | null>(null);
-  const dockHudRestoredRef = useRef(false);
   const readingHudBoundsRef = useRef<HTMLDivElement>(null);
   const [readingHudSize, setReadingHudSize] = useState({ w: 0, h: 0 });
 
@@ -733,157 +680,6 @@ function RoomContent({
     [readingHudSize.w, readingHudSize.h],
   );
 
-  const clampDockHud = useCallback((x: number, y: number) => {
-    if (typeof window === 'undefined') return { x, y };
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const pad = 10;
-    return {
-      x: Math.min(vw - pad - 64, Math.max(-vw * 0.4, x)),
-      y: Math.min(vh - pad - 56, Math.max(-vh * 0.35, y)),
-    };
-  }, []);
-
-  useEffect(() => {
-    if (bookHudRestoredRef.current || readingHudSize.w < 80 || readingHudSize.h < 80) return;
-    bookHudRestoredRef.current = true;
-    try {
-      const raw = sessionStorage.getItem(bookHudStorageKey);
-      if (!raw) return;
-      const p = JSON.parse(raw) as { x?: unknown; y?: unknown };
-      if (typeof p.x === 'number' && typeof p.y === 'number') {
-        const next = clampBookHud(p.x, p.y);
-        bookHudOffsetRef.current = next;
-        setBookHudOffset(next);
-      }
-    } catch {
-      /* ok */
-    }
-  }, [bookHudStorageKey, readingHudSize.w, readingHudSize.h, clampBookHud]);
-
-  useEffect(() => {
-    if (dockHudRestoredRef.current) return;
-    dockHudRestoredRef.current = true;
-    try {
-      const raw = sessionStorage.getItem(dockHudStorageKey);
-      if (!raw) return;
-      const p = JSON.parse(raw) as { x?: unknown; y?: unknown };
-      if (typeof p.x === 'number' && typeof p.y === 'number') {
-        const next = clampDockHud(p.x, p.y);
-        dockHudOffsetRef.current = next;
-        setDockHudOffset(next);
-      }
-    } catch {
-      /* ok */
-    }
-  }, [dockHudStorageKey, clampDockHud]);
-
-  useEffect(() => {
-    setBookHudOffset((o) => {
-      const c = clampBookHud(o.x, o.y);
-      bookHudOffsetRef.current = c;
-      return c;
-    });
-  }, [clampBookHud]);
-
-  useEffect(() => {
-    setDockHudOffset((o) => {
-      const c = clampDockHud(o.x, o.y);
-      dockHudOffsetRef.current = c;
-      return c;
-    });
-  }, [clampDockHud]);
-
-  const onBookHudGripDown = useCallback(
-    (e: React.PointerEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.pointerType === 'mouse' && e.button !== 0) return;
-      const o = bookHudOffsetRef.current;
-      hudDragSessionRef.current = { startX: e.clientX, startY: e.clientY, ox: o.x, oy: o.y };
-      const move = (ev: PointerEvent) => {
-        const s = hudDragSessionRef.current;
-        if (!s) return;
-        const dx = ev.clientX - s.startX;
-        const dy = s.startY - ev.clientY;
-        const next = clampBookHud(s.ox - dx, s.oy + dy);
-        bookHudOffsetRef.current = next;
-        setBookHudOffset(next);
-      };
-      const up = () => {
-        window.removeEventListener('pointermove', move);
-        window.removeEventListener('pointerup', up);
-        window.removeEventListener('pointercancel', up);
-        hudDragSessionRef.current = null;
-        try {
-          sessionStorage.setItem(bookHudStorageKey, JSON.stringify(bookHudOffsetRef.current));
-        } catch {
-          /* ok */
-        }
-      };
-      window.addEventListener('pointermove', move);
-      window.addEventListener('pointerup', up);
-      window.addEventListener('pointercancel', up);
-    },
-    [bookHudStorageKey, clampBookHud],
-  );
-
-  const resetBookHudPosition = useCallback(() => {
-    const z = { x: 0, y: 0 };
-    bookHudOffsetRef.current = z;
-    setBookHudOffset(z);
-    try {
-      sessionStorage.removeItem(bookHudStorageKey);
-    } catch {
-      /* ok */
-    }
-  }, [bookHudStorageKey]);
-
-  const onDockHudGripDown = useCallback(
-    (e: React.PointerEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.pointerType === 'mouse' && e.button !== 0) return;
-      const o = dockHudOffsetRef.current;
-      dockHudDragSessionRef.current = { startX: e.clientX, startY: e.clientY, ox: o.x, oy: o.y };
-      const move = (ev: PointerEvent) => {
-        const s = dockHudDragSessionRef.current;
-        if (!s) return;
-        const dx = ev.clientX - s.startX;
-        const dy = s.startY - ev.clientY;
-        const next = clampDockHud(s.ox + dx, s.oy + dy);
-        dockHudOffsetRef.current = next;
-        setDockHudOffset(next);
-      };
-      const up = () => {
-        window.removeEventListener('pointermove', move);
-        window.removeEventListener('pointerup', up);
-        window.removeEventListener('pointercancel', up);
-        dockHudDragSessionRef.current = null;
-        try {
-          sessionStorage.setItem(dockHudStorageKey, JSON.stringify(dockHudOffsetRef.current));
-        } catch {
-          /* ok */
-        }
-      };
-      window.addEventListener('pointermove', move);
-      window.addEventListener('pointerup', up);
-      window.addEventListener('pointercancel', up);
-    },
-    [dockHudStorageKey, clampDockHud],
-  );
-
-  const resetDockHudPosition = useCallback(() => {
-    const z = { x: 0, y: 0 };
-    dockHudOffsetRef.current = z;
-    setDockHudOffset(z);
-    try {
-      sessionStorage.removeItem(dockHudStorageKey);
-    } catch {
-      /* ok */
-    }
-  }, [dockHudStorageKey]);
-
   // ── Reactions overlay ─────────────────────────────────────────────────────
   const [reactions, setReactions] = useState<{ id: number; emoji: string; x: number }[]>([]);
   const reactionCounterRef = useRef(0);
@@ -904,11 +700,6 @@ function RoomContent({
   const [chatInput, setChatInput] = useState('');
   const chatCounterRef = useRef(0);
   const chatEndRef = useRef<HTMLDivElement>(null);
-
-  // ── Completion ────────────────────────────────────────────────────────────
-  const [showComplete, setShowComplete] = useState(false);
-  const [badges, setBadges] = useState<UserBadgeData[]>([]);
-  const [sessionDurationSecs, setSessionDurationSecs] = useState(0);
 
   const [activities, setActivities] = useState<ActivityConfigData[]>([]);
   const spreadCoverPrefsKey = `bb_spread_cover_${sessionId}`;
@@ -937,6 +728,9 @@ function RoomContent({
 
   const [activityOpen, setActivityOpen] = useState(false);
   const [activityIndex, setActivityIndex] = useState(0);
+  // Activity mode: false = show the "Choose an Activity" picker; true = an
+  // activity is entered. Host-controlled, synced to guests via ACTIVITY_PICK.
+  const [activityEntered, setActivityEntered] = useState(false);
   const [activityStateByActivity, setActivityStateByActivity] = useState<Record<string, Record<string, unknown>>>(
     {},
   );
@@ -982,10 +776,13 @@ function RoomContent({
   // ── Fetch pages ───────────────────────────────────────────────────────────
   useEffect(() => {
     const guestPid = role === 'guest' ? participantId : undefined;
+    // An adventure has no pages; skip the fetch rather than 404 on a null id.
+    if (!bookId) { setLoadingPages(false); return; }
     getBookPagesWithMeta(bookId, guestPid)
-      .then(({ pages, pdfViewUrl }) => {
+      .then(({ pages, pdfViewUrl, theme }) => {
         setBackendPages(pages);
         setBookPdfUrl(pdfViewUrl);
+        setBookTheme(theme);
       })
       .catch(() => {})
       .finally(() => setLoadingPages(false));
@@ -993,10 +790,13 @@ function RoomContent({
 
   useEffect(() => {
     const guestPid = role === 'guest' ? participantId : undefined;
-    getBookActivities(bookId, guestPid)
-      .then(setActivities)
-      .catch(() => setActivities([]));
-  }, [bookId, participantId, role]);
+    const load = activityGroupId
+      ? getGroupActivities(activityGroupId, guestPid)
+      : bookId
+        ? getBookActivities(bookId, guestPid)
+        : Promise.resolve([]);
+    load.then(setActivities).catch(() => setActivities([]));
+  }, [bookId, activityGroupId, participantId, role]);
 
   // ── Restore snapshot ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -1137,9 +937,15 @@ function RoomContent({
 
         case 'SESSION_COMPLETE':
           if (role === 'guest') {
-            fetchBadgesAndShow(
-              typeof msg.payload.duration === 'number' ? msg.payload.duration : 0,
-            );
+            goToCompletion();
+          }
+          break;
+
+        case 'ACTIVITY_PICK':
+          if (role === 'guest') {
+            const picked = typeof msg.payload.index === 'number' ? msg.payload.index : 0;
+            setActivityIndex(picked);
+            setActivityEntered(msg.payload.entered !== false);
           }
           break;
 
@@ -1390,14 +1196,15 @@ function RoomContent({
   }, [role, timerActive, publishHostTimerKick]);
 
   // ── End / complete session ────────────────────────────────────────────────
-  async function fetchBadgesAndShow(durationSecs: number) {
-    setSessionDurationSecs(durationSecs);
-    try {
-      const earned = await getUserBadges();
-      setBadges(earned);
-    } catch { /* ok */ }
-    // Navigate to the dedicated completion screen
-    router.push(`/session/${sessionId}/complete`);
+  // Navigate to the mission-focused completion screen. `mode` is authoritative;
+  // in activity mode we also pass the current activity's title (client-only).
+  function goToCompletion() {
+    const q = new URLSearchParams({ mode });
+    if (isActivityMode && activityEntered) {
+      const activityTitle = activities[activityIndex]?.title ?? '';
+      if (activityTitle) q.set('activity', activityTitle);
+    }
+    router.push(`/session/${sessionId}/complete?${q.toString()}`);
   }
 
   async function handleEndSession(fromTimer = false) {
@@ -1409,21 +1216,35 @@ function RoomContent({
         buildMsg('SESSION_COMPLETE', { duration: elapsed }),
         { reliable: true },
       );
-      try { await completeSession(sessionId, participantId); } catch { /* ok */ }
-      await fetchBadgesAndShow(elapsed);
+      const completedActivityId = isActivityMode && activityEntered ? (activities[activityIndex]?.id ?? null) : null;
+      try { await completeSession(sessionId, participantId, completedActivityId); } catch { /* ok */ }
+      goToCompletion();
     } else {
       room.disconnect();
       onEnd();
     }
   }
 
-  const handleDashboard = () => {
-    room.disconnect();
-    onEnd();
-  };
-
   // ── Host transfer ─────────────────────────────────────────────────────────
   const participants = useParticipants();
+
+  // Someone arriving or leaving is worth hearing when your eyes are on the book.
+  const participantCountRef = useRef(participants.length);
+  useEffect(() => {
+    const previous = participantCountRef.current;
+    participantCountRef.current = participants.length;
+    if (participants.length > previous) sounds.play('participant-join');
+    else if (participants.length < previous) sounds.play('participant-leave');
+  }, [participants.length, sounds]);
+
+  // One gentle nudge as the session nears its end — not a countdown.
+  const warnedRef = useRef(false);
+  useEffect(() => {
+    if (!timerActive || remaining > 2 * 60 || remaining <= 0) return;
+    if (warnedRef.current) return;
+    warnedRef.current = true;
+    sounds.play('time-warning');
+  }, [timerActive, remaining, sounds]);
 
   async function handleTransferHost(newParticipantId: string) {
     setTransferring(true);
@@ -1443,14 +1264,6 @@ function RoomContent({
   const pageCount = pages.length || 1;
   const coverUrl = pages[0]?.image_url;
   const progressPct = (Math.min(currentPage + 2, pageCount) / pageCount) * 100;
-
-  const tabs = [
-    { id: 'video' as const, label: 'Video', hint: 'Cameras' },
-    ...(isActivityMode ? [] : [{ id: 'tools' as const, label: 'Tools', hint: 'Draw' }]),
-    { id: 'participants' as const, label: 'People', hint: 'Who is here' },
-    { id: 'chat' as const, label: 'Chat', hint: 'Messages' },
-    { id: 'settings' as const, label: 'Settings', hint: 'Timer & host' },
-  ];
 
   const [hostIdentity, setHostIdentity] = useState<string | undefined>(() =>
     resolveHostParticipantIdentity(room, role),
@@ -1473,11 +1286,22 @@ function RoomContent({
     };
   }, [room, role]);
 
-  /** Block left-drag pan + pinch on the book transform while annotating (avoids fighting the pen). Wheel zoom stays enabled. */
-  const blockTransformPanPinchWhileDrawing = drawingEnabled;
+  /**
+   * The reading room's entire persistent control surface.
+   *
+   * Everything not here lives behind "More". The room previously showed 26
+   * controls to a host across four separate regions, which is what made it read
+   * as a meeting tool rather than a book.
+   */
 
   /** Open the in-room activity modal (reuses the live LiveKit connection — no navigation, no timer reset).
    *  Host broadcasts ACTIVITY_OPEN so guests follow, and persists the open state to the session snapshot. */
+  // Stable handles for the rail. Both handlers close over state that changes
+  // constantly, so they are redefined every render; the refs let the memoised
+  // rail call the current version without listing them as dependencies.
+  const endSessionRef = useRef(handleEndSession);
+  endSessionRef.current = handleEndSession;
+
   const handleOpenActivities = () => {
     if (activities.length === 0) return;
     setActivityOpen(true);
@@ -1501,8 +1325,146 @@ function RoomContent({
     }
   };
 
+  const openActivitiesRef = useRef(handleOpenActivities);
+  openActivitiesRef.current = handleOpenActivities;
+
+  const railItems: RailItem[] = useMemo(
+    () => [
+      {
+        icon: BookOpen,
+        label: 'Back to library',
+        onClick: () => router.push('/dashboard/library'),
+      },
+
+      // Reading tools. Hidden during an activity, which has its own canvas.
+      {
+        icon: Pencil,
+        label: drawingEnabled ? 'Stop drawing' : 'Draw on the page',
+        active: drawingEnabled,
+        hidden: isActivityMode,
+        separatorBefore: true,
+        // One button, one mental model: the pen turns drawing on and reveals its
+        // options together, rather than the options living somewhere else.
+        onClick: () => {
+          const next = !drawingEnabled;
+          setInteractionMode(next ? 'pen' : 'book');
+          setDrawOpen(next);
+        },
+      },
+      {
+        icon: ZoomIn,
+        label: 'Zoom in',
+        hidden: isActivityMode,
+        onClick: () => setBookZoom((z) => Math.min(2.5, z + 0.2)),
+      },
+      {
+        icon: ZoomOut,
+        label: 'Zoom out',
+        hidden: isActivityMode,
+        onClick: () => setBookZoom((z) => Math.max(0.6, z - 0.2)),
+      },
+      {
+        icon: LayoutGrid,
+        label: 'Fit book to view',
+        hidden: isActivityMode,
+        onClick: () => setBookZoom(1),
+      },
+
+      // Presence: your own mic and camera, then who else is here.
+      {
+        icon: isMicrophoneEnabled ? Mic : MicOff,
+        label: isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone',
+        active: !isMicrophoneEnabled,
+        separatorBefore: true,
+        onClick: () => localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled),
+      },
+      {
+        icon: isCameraEnabled ? Video : VideoOff,
+        label: isCameraEnabled ? 'Turn camera off' : 'Turn camera on',
+        active: !isCameraEnabled,
+        onClick: () => localParticipant.setCameraEnabled(!isCameraEnabled),
+      },
+      {
+        icon: MessageCircle,
+        label: chatOpen ? 'Close chat' : 'Open chat',
+        active: chatOpen,
+        onClick: () => setChatOpen((v) => !v),
+      },
+
+      // Room-level actions.
+      {
+        icon: Gamepad2,
+        label: 'Activities',
+        hidden: isActivityMode || role !== 'host' || activities.length === 0,
+        separatorBefore: true,
+        onClick: () => openActivitiesRef.current(),
+      },
+      {
+        icon: sounds.muted ? VolumeX : Volume2,
+        label: sounds.muted ? 'Turn sound on' : 'Turn sound off',
+        separatorBefore: isActivityMode || role !== 'host' || activities.length === 0,
+        onClick: sounds.toggleMuted,
+      },
+      {
+        icon: SlidersHorizontal,
+        label: 'Settings',
+        active: settingsOpen,
+        onClick: () => setSettingsOpen(true),
+      },
+      {
+        icon: Phone,
+        label: role === 'host' ? 'End session' : 'Leave session',
+        danger: true,
+        separatorBefore: true,
+        onClick: () => endSessionRef.current(false),
+      },
+    ],
+    // The two handlers are reached through refs: both are redefined on every
+    // render, so depending on them directly would rebuild the whole rail each
+    // time and defeat this useMemo.
+    [
+      drawingEnabled,
+      router,
+      sounds.muted,
+      sounds.toggleMuted,
+      isActivityMode,
+      isMicrophoneEnabled,
+      isCameraEnabled,
+      localParticipant,
+      role,
+      activities.length,
+      chatOpen,
+      settingsOpen,
+    ],
+  );
+
+  // Activity-mode picker: host chooses an activity; broadcast to guests.
+  const handlePickActivity = (pickIndex: number) => {
+    if (role !== 'host') return;
+    setActivityIndex(pickIndex);
+    setActivityEntered(true);
+    room.localParticipant.publishData(
+      buildMsg('ACTIVITY_PICK', { index: pickIndex, entered: true }),
+      { reliable: true },
+    );
+  };
+
+  const handleBackToPicker = () => {
+    if (role !== 'host') return;
+    setActivityEntered(false);
+    room.localParticipant.publishData(
+      buildMsg('ACTIVITY_PICK', { index: activityIndex, entered: false }),
+      { reliable: true },
+    );
+  };
+
+  // Drives the header breadcrumb. Prefers the authored `ui.title` (what the
+  // child is shown) over the admin-facing record title.
+  const currentActivityTitle =
+    activities[activityIndex]?.config?.ui?.title || activities[activityIndex]?.title || '';
+
   // One activity element, rendered either as the reading-mode popup (modal) or,
-  // in activity mode, as the in-flow card that sits in the center stage.
+  // in activity mode, in-flow on the stage canvas.
   const activityElement = (activities.length > 0) ? (
       <ActivityRoom
         role={role}
@@ -1557,17 +1519,6 @@ function RoomContent({
           activity in the center stage (below), not here. */}
       {!isActivityMode && activityElement}
 
-      {showComplete && (
-        <CompletionOverlay
-          bookTitle={bookTitle}
-          pagesRead={currentPage + 1}
-          pageCount={pageCount}
-          durationSecs={sessionDurationSecs}
-          badges={badges}
-          onDashboard={handleDashboard}
-        />
-      )}
-
       {/* Reaction overlay — floats above everything */}
       {reactions.length > 0 && (
         <div className="fixed inset-0 z-[200] pointer-events-none overflow-hidden">
@@ -1583,332 +1534,238 @@ function RoomContent({
         </div>
       )}
 
-      <div className="relative isolate flex h-[100dvh] min-h-0 w-screen flex-col overflow-hidden bg-gradient-to-br from-[#3a3028] via-[#382f42] to-[#2c2636] pb-[env(safe-area-inset-bottom,0px)] text-[#e5e2e1]">
-        {/* Warm ambient layers */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_0%,rgba(255,219,164,0.12),transparent_55%)]"
-        />
-        <div aria-hidden className="pointer-events-none absolute inset-0 shadow-[inset_0_0_120px_rgba(10,8,14,0.55)]" />
+      <div
+        className="room-root room-sky relative isolate flex h-[100dvh] min-h-0 w-screen flex-col overflow-hidden pb-[env(safe-area-inset-bottom,0px)]"
+        data-backdrop={roomTheme.backdrop}
+        data-chrome={roomTheme.chrome}
+        data-idle={!isActivityMode && readerIdle ? 'true' : 'false'}
+        style={roomTheme.style}
+      >
 
-        {/* ── Top nav — read-along style header ─────────────────────────────── */}
-        <header className="fixed left-0 right-0 top-0 z-50 flex w-full items-center justify-between border-b border-white/5 bg-[#2a2838]/95 px-4 pb-2 pt-[max(8px,env(safe-area-inset-top))] shadow-lg backdrop-blur-xl sm:px-6">
-          <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-5">
-            <BrandLogo variant="light" className="h-7 shrink-0 max-sm:max-w-[140px] sm:h-9" />
-            <div className="mx-1 hidden h-9 w-px shrink-0 bg-white/10 sm:block" aria-hidden />
-            <div className="flex min-w-0 max-w-[min(40vw,280px)] items-center gap-3 sm:max-w-[320px]">
-              {!loadingPages && coverUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={coverUrl}
-                  alt=""
-                  className="h-11 w-9 shrink-0 rounded-lg object-cover shadow-md ring-1 ring-white/15"
-                />
-              ) : (
-                <div className="flex h-11 w-9 shrink-0 items-center justify-center rounded-lg bg-stone-800 ring-1 ring-white/10">
-                  <BookMarked className="h-5 w-5 text-stone-500" aria-hidden />
-                </div>
-              )}
-              <div className="min-w-0">
-                <h1 className="font-baloo truncate text-sm font-semibold tracking-tight text-[#e5e2e1] sm:text-base">{bookTitle}</h1>
-                <p className="font-karla truncate text-[11px] text-[#ffb955]/90">
-                  {pages[currentPage + 1]
-                    ? `Pages ${currentPage + 1}–${currentPage + 2} of ${pageCount}`
-                    : `Page ${currentPage + 1} of ${pageCount}`}
-                </p>
-              </div>
-            </div>
+        {/* ── Header ────────────────────────────────────────────────────────
+            No bar, no panel, no backdrop blur: the title floats top-left and
+            the way out floats top-right, so the sky runs unbroken behind the
+            book. The old header was a full-width frosted strip carrying a
+            duplicate sound toggle and a third copy of the page counter. */}
+        <header className="room-recede pointer-events-none fixed left-0 right-0 top-0 z-50 flex w-full items-start justify-between px-4 pt-[max(10px,env(safe-area-inset-top))] sm:px-6">
+          <div className="pointer-events-auto flex min-w-0 items-center gap-2 sm:gap-3">
+            <BrandLogo variant="dark" className="h-7 shrink-0 sm:h-8" />
+            {/* Breadcrumb: book / activity. Replaces a "← Choose another
+                activity" link that sat `self-start` on the full-width stage,
+                stranding it in the far top-left with no relationship to the
+                activity — and which only the host could see, so a guest had no
+                indication of where they were at all. */}
+            <h1
+              className="font-baloo min-w-0 truncate text-sm font-semibold tracking-tight sm:text-base"
+              style={{ color: 'var(--room-ink)' }}
+            >
+              {bookTitle}
+            </h1>
+            {isActivityMode && activityEntered && currentActivityTitle ? (
+              <>
+                <span
+                  className="shrink-0 text-sm opacity-40"
+                  style={{ color: 'var(--room-ink)' }}
+                  aria-hidden
+                >
+                  /
+                </span>
+                {role === 'host' ? (
+                  <button
+                    type="button"
+                    onClick={handleBackToPicker}
+                    title="Back to all activities"
+                    className="room-tap font-baloo flex min-w-0 cursor-pointer items-center gap-1 rounded-full pl-1.5 pr-3 text-sm font-semibold transition-colors"
+                    style={{ background: 'var(--room-chrome-strong)', color: 'var(--room-ink)' }}
+                  >
+                    <ChevronLeft className="h-4 w-4 shrink-0" aria-hidden />
+                    <span className="truncate">{currentActivityTitle}</span>
+                  </button>
+                ) : (
+                  // Navigation is synced, so a guest pressing back would move
+                  // the host. They get the location without the control.
+                  <span
+                    className="font-baloo min-w-0 truncate text-sm font-semibold"
+                    style={{ color: 'var(--room-ink)' }}
+                  >
+                    {currentActivityTitle}
+                  </span>
+                )}
+              </>
+            ) : null}
           </div>
 
-          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-            <div className="hidden items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 lg:flex">
-              <Users className="h-3.5 w-3.5 text-[#7ec8e8]" aria-hidden />
-              <span className="text-[11px] font-bold tabular-nums text-stone-200">{participants.length}</span>
-            </div>
-            <div className="flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-950/30 px-2 py-1">
-              <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" aria-hidden />
-              <span className="hidden text-[10px] font-bold uppercase tracking-wide text-emerald-200/90 sm:inline">Secure</span>
-            </div>
-
-            {/* Timer chip — mobile / when right panel hidden */}
+          <div className="pointer-events-auto flex shrink-0 items-center gap-2">
             <div
-              className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition-all lg:hidden ${remaining <= 2 * 60 ? 'border-red-500/30 bg-red-950/40' : 'border-[#ffb955]/25 bg-[#644000]/35'}`}
+              className={`room-tap flex items-center gap-1.5 rounded-full px-3 text-xs font-bold tabular-nums transition-colors ${
+                remaining <= 2 * 60 ? 'text-red-700' : ''
+              }`}
               title={
                 role === 'host' && !timerActive
                   ? 'Session timer — starts automatically when connected; tap if you paused it.'
                   : undefined
               }
               onClick={role === 'host' && !timerActive ? handleStartTimer : undefined}
-              style={role === 'host' && !timerActive ? { cursor: 'pointer' } : undefined}
+              style={{
+                background: 'var(--room-chrome-strong)',
+                color: remaining <= 2 * 60 ? undefined : 'var(--room-ink)',
+                cursor: role === 'host' && !timerActive ? 'pointer' : undefined,
+              }}
             >
-              <Timer className="h-3.5 w-3.5 text-[#ffb955]" />
-              <span className="font-bold tabular-nums text-xs text-[#ffb955]">{fmtTime(remaining)}</span>
+              <Timer className="h-3.5 w-3.5" aria-hidden />
+              {fmtTime(remaining)}
             </div>
 
-            <span className={`hidden px-2 py-0.5 text-[10px] font-bold uppercase tracking-tight rounded-full sm:inline-block ${role === 'host' ? 'bg-[#764f84] text-white' : 'bg-stone-800 text-stone-300'}`}>
-              {role}
-            </span>
-
-            {role === 'host' && inviteToken && (
-              <button
-                type="button"
-                onClick={handleCopyInviteLink}
-                title="Copy invite link"
-                className="hidden items-center gap-1 rounded-full border border-white/15 bg-white/5 px-2.5 py-1.5 text-[11px] font-semibold text-[#e5e2e1] transition-colors hover:border-[#ffb955]/40 hover:bg-white/10 sm:flex"
-              >
-                {linkCopied ? <Check className="h-3.5 w-3.5 text-[#7fd89a]" /> : <Link2 className="h-3.5 w-3.5 text-[#ffb955]" />}
-                <span className="hidden md:inline">{linkCopied ? 'Copied' : 'Invite'}</span>
-              </button>
-            )}
-
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setRoomPanelOpen(true)}
-                aria-label="Room panel — video, chat, settings"
-                className="flex h-9 w-9 items-center justify-center text-stone-400 transition-colors hover:text-white sm:hidden"
-              >
-                <SlidersHorizontal className="h-5 w-5" />
-              </button>
-              {role === 'host' && (
-                <button
-                  type="button"
-                  onClick={() => setShowTransferModal(true)}
-                  aria-label="Session menu"
-                  className="hidden h-9 w-9 items-center justify-center text-stone-400 transition-colors hover:text-white sm:flex"
-                >
-                  <MoreHorizontal className="h-5 w-5" />
-                </button>
-              )}
-              {role === 'host' ? (
-                <button
-                  type="button"
-                  onClick={() => handleEndSession(false)}
-                  className="rounded-full bg-[#93000a] px-3 py-1.5 text-[11px] font-bold text-[#ffdad6] transition-all hover:bg-[#93000a]/80 active:scale-95"
-                >
-                  End
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => handleEndSession(false)}
-                  className="rounded-full bg-stone-800 px-3 py-1.5 text-[11px] font-bold text-stone-200 transition-all hover:bg-stone-700 active:scale-95"
-                >
-                  Leave
-                </button>
-              )}
-            </div>
+            <button
+              type="button"
+              onClick={() => handleEndSession(false)}
+              className="room-tap cursor-pointer gap-1.5 rounded-full px-4 text-[11px] font-bold transition-all active:scale-95"
+              style={{
+                background: 'var(--room-chrome-strong)',
+                color: 'var(--room-ink)',
+              }}
+            >
+              <X className="h-3.5 w-3.5" aria-hidden />
+              {role === 'host' ? 'End session' : 'Leave'}
+            </button>
           </div>
         </header>
 
         <main className="relative flex h-full flex-1 overflow-hidden pt-[max(5rem,calc(4rem+env(safe-area-inset-top,0px)))]">
 
-          {roomPanelOpen && (
-            <button
-              type="button"
-              aria-label="Close room panel"
-              className="fixed inset-0 z-[65] bg-black/50 backdrop-blur-[2px]"
-              onClick={() => setRoomPanelOpen(false)}
+          {/* Drawing options, docked beside the rail's pen button. */}
+          {drawOpen && !isActivityMode && (
+            <ToolStrip
+              color={annColor}
+              brushSize={annBrush}
+              onColorChange={setAnnColor}
+              onBrushSizeChange={setAnnBrush}
+              onUndo={() => canvasRef.current?.undo()}
+              onClear={handleClearCanvas}
             />
           )}
 
-          {roomPanelOpen && (
-            <div
-              className="fixed bottom-0 left-0 right-0 z-[70] flex max-h-[min(88dvh,640px)] flex-col rounded-t-3xl border border-white/10 bg-stone-900/98 shadow-[0_-20px_60px_rgba(0,0,0,0.45)] backdrop-blur-2xl sm:left-auto sm:right-4 sm:top-24 sm:bottom-auto sm:max-h-[calc(100vh-7rem)] sm:w-[min(100vw-2rem,380px)] sm:rounded-3xl"
-              role="dialog"
-              aria-label="Reading session room"
-            >
-              <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-3">
-                <div>
-                  <h3 className="text-base font-bold text-stone-100">Session</h3>
-                  <p className="text-[11px] text-stone-400">Video, chat &amp; settings</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setRoomPanelOpen(false)}
-                  aria-label="Close"
-                  className="flex h-10 w-10 items-center justify-center rounded-xl text-stone-400 transition-colors hover:bg-stone-800 hover:text-white"
+          {chatOpen && (
+            <ChatPopup
+              messages={chatMessages}
+              input={chatInput}
+              onInputChange={setChatInput}
+              onSend={sendChat}
+              onClose={() => setChatOpen(false)}
+            />
+          )}
+
+          {settingsOpen && (
+            <>
+              <button
+                type="button"
+                aria-label="Close settings"
+                className="fixed inset-0 z-[65] bg-black/40"
+                onClick={() => setSettingsOpen(false)}
+              />
+              <div
+                role="dialog"
+                aria-label="Session settings"
+                className="room-panel-strong fixed bottom-0 left-0 right-0 z-[70] flex max-h-[min(80dvh,560px)] flex-col overflow-hidden rounded-t-3xl sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:w-[min(100vw-2rem,400px)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl"
+              >
+                <div
+                  className="flex shrink-0 items-center justify-between px-4 py-3"
+                  style={{ borderBottom: '1px solid var(--room-chrome-line)' }}
                 >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-white/5 px-3 py-2">
-                {tabs.map((tab) => {
-                  const TabIcon = TAB_ICONS[tab.id];
-                  return (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`flex min-w-0 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold transition-all ${activeTab === tab.id ? 'bg-[#764f84]/45 text-white ring-1 ring-[#ffb955]/35' : 'text-stone-400 hover:bg-stone-800/50 hover:text-stone-200'}`}
-                    >
-                      <TabIcon className="h-4 w-4 shrink-0" aria-hidden />
-                      <span className="truncate">{tab.label}</span>
-                    </button>
-                  );
-                })}
-              </nav>
-
-              <div className="min-h-0 flex-1 overflow-y-auto p-4">
-                {activeTab === 'video' && <ParticipantList hostIdentity={hostIdentity} />}
-
-                {activeTab === 'participants' && <ParticipantRoster hostIdentity={hostIdentity} />}
-
-                {activeTab === 'tools' && !isActivityMode && (
-                  <div className="space-y-4 px-1">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-stone-400">Drawing</p>
-                    <p className="text-xs leading-relaxed text-stone-500">
-                      Use the toolbar under the book. <span className="font-semibold text-stone-300">Book</span> is the default for page turns; choose{' '}
-                      <span className="font-semibold text-stone-300">Pen</span> to draw.
-                    </p>
-                    <div className="space-y-3">
-                      <div>
-                        <p className="mb-2 text-[10px] uppercase tracking-widest text-stone-500">Brush size</p>
-                        <div
-                          className="h-2 cursor-pointer overflow-hidden rounded-full bg-stone-800"
-                          onClick={(e) => {
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            const pct = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-                            setAnnBrush(Math.round(2 + pct * 30));
-                          }}
-                        >
-                          <div
-                            className="h-full rounded-full bg-[#f0c75e]"
-                            style={{ width: `${((annBrush - 2) / 30) * 100}%` }}
-                          />
-                        </div>
-                        <p className="mt-1 text-[10px] text-stone-500">{annBrush}px</p>
-                      </div>
-                      <div>
-                        <p className="mb-2 text-[10px] uppercase tracking-widest text-stone-500">Color</p>
-                        <div className="flex flex-wrap gap-2">
-                          {['#ef4444', '#f0c75e', '#22c55e', '#3b82f6', '#a855f7'].map((c) => (
-                            <button
-                              key={c}
-                              type="button"
-                              onClick={() => setAnnColor(c)}
-                              className={`h-7 w-7 rounded-full transition-all ${annColor === c ? 'scale-110 ring-2 ring-white/60' : ''}`}
-                              style={{ backgroundColor: c }}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {activeTab === 'chat' && (
-                  <div className="flex h-full flex-col" style={{ minHeight: '200px' }}>
-                    <div className="mb-3 flex-1 space-y-2 overflow-y-auto pr-1">
-                      {chatMessages.length === 0 && (
-                        <p className="pt-4 text-center text-xs text-stone-500">No messages yet. Say hi!</p>
-                      )}
-                      {chatMessages.map((m) => (
-                        <div key={m.id} className={`flex flex-col ${m.self ? 'items-end' : 'items-start'}`}>
-                          <span className="mb-0.5 px-1 text-[10px] text-stone-500">{m.from}</span>
-                          <div
-                            className={`max-w-[90%] break-words rounded-2xl px-3 py-2 text-sm ${m.self ? 'rounded-br-sm bg-[#764f84] text-white' : 'rounded-bl-sm bg-stone-800 text-stone-100'}`}
-                          >
-                            {m.text}
-                          </div>
-                        </div>
-                      ))}
-                      <div ref={chatEndRef} />
-                    </div>
-                    <div className="flex gap-2">
-                      <input
-                        value={chatInput}
-                        onChange={(e) => setChatInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') sendChat();
-                        }}
-                        placeholder="Type a message…"
-                        className="flex-1 rounded-xl bg-stone-800 px-3 py-2 text-sm text-stone-100 outline-none placeholder-stone-600 focus:ring-1 focus:ring-[#764f84]"
-                      />
-                      <button
-                        type="button"
-                        onClick={sendChat}
-                        className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#764f84] text-white transition-colors hover:bg-[#9b6cb0]"
-                      >
-                        <Rocket className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {activeTab === 'settings' && (
-                  <div className="space-y-3 px-1">
-                    <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-stone-400">Session settings</p>
-                    <label className="flex cursor-pointer items-start gap-3 rounded-xl bg-stone-800/35 px-3 py-3 text-sm text-stone-200 hover:bg-stone-800/50">
-                      <input
-                        type="checkbox"
-                        className="mt-0.5 h-4 w-4 shrink-0 rounded border-stone-500 bg-stone-900 text-[#3b85a6] focus:ring-[#3b85a6]"
-                        checked={spreadPageCover}
-                        onChange={(e) => setSpreadPageCoverPersisted(e.target.checked)}
-                      />
-                      <span>
-                        <span className="font-semibold text-stone-100">Fill spread to frame</span>
-                        <span className="mt-1 block text-xs leading-relaxed text-stone-500">
-                          Zooms pages to fill the spread area; margins may be cropped instead of showing letterboxing. Saved on this device only.
-                        </span>
-                      </span>
-                    </label>
-                    <p className="text-xs leading-relaxed text-stone-500">
-                      Up to {MAX_LIVEKIT_ROOM_PARTICIPANTS} people can be in this live room at once (including the host).
-                    </p>
-                    {role === 'host' && !timerActive && (
-                      <button
-                        type="button"
-                        onClick={handleStartTimer}
-                        className="flex w-full items-center gap-3 rounded-xl bg-stone-800/50 px-4 py-3 text-sm font-semibold text-stone-200 transition-colors hover:bg-stone-700/50"
-                      >
-                        <Timer className="h-4 w-4 text-[#f0c75e]" />
-                        Start session timer
-                      </button>
-                    )}
-                    {role === 'host' && (
-                      <button
-                        type="button"
-                        onClick={() => setShowTransferModal(true)}
-                        className="flex w-full items-center gap-3 rounded-xl bg-stone-800/50 px-4 py-3 text-sm font-semibold text-stone-200 transition-colors hover:bg-stone-700/50"
-                      >
-                        <Users className="h-4 w-4 text-[#3b85a6]" />
-                        Transfer host
-                      </button>
-                    )}
-                    {role === 'host' && (
-                      <button
-                        type="button"
-                        onClick={() => router.push(`/session/${sessionId}/activity?bookId=${bookId}`)}
-                        className="flex w-full items-center gap-3 rounded-xl bg-stone-800/50 px-4 py-3 text-sm font-semibold text-stone-200 transition-colors hover:bg-stone-700/50"
-                      >
-                        <Star className="h-4 w-4 text-[#c84a71]" />
-                        Open activity
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="shrink-0 space-y-3 border-t border-stone-700/50 p-4">
-                <div className="flex items-center justify-between">
-                  <LocalControls />
-                </div>
-                {role === 'host' && (
+                  <h3 className="text-base font-bold" style={{ color: 'var(--room-ink)' }}>
+                    Settings
+                  </h3>
                   <button
                     type="button"
-                    onClick={() => handleEndSession(false)}
-                    className="font-baloo w-full rounded-full bg-gradient-to-br from-[#3d3b62] to-[#764f84] py-3 text-sm font-bold text-white shadow-xl transition-all active:scale-95"
+                    onClick={() => setSettingsOpen(false)}
+                    aria-label="Close"
+                    className="room-tap cursor-pointer rounded-xl"
+                    style={{ color: 'var(--room-ink-soft)' }}
                   >
-                    End session
+                    <X className="h-5 w-5" aria-hidden />
                   </button>
-                )}
+                </div>
+
+                <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden p-4">
+                  <label
+                    className="flex cursor-pointer items-start gap-3 rounded-xl px-3 py-3 text-sm"
+                    style={{ background: 'var(--room-chrome)', color: 'var(--room-ink)' }}
+                  >
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-4 w-4 shrink-0 rounded"
+                      checked={spreadPageCover}
+                      onChange={(e) => setSpreadPageCoverPersisted(e.target.checked)}
+                    />
+                    <span>
+                      <span className="font-semibold">Fill spread to frame</span>
+                      <span
+                        className="mt-1 block text-xs leading-relaxed"
+                        style={{ color: 'var(--room-ink-soft)' }}
+                      >
+                        Zooms pages to fill the spread area; margins may be cropped instead of
+                        showing letterboxing. Saved on this device only.
+                      </span>
+                    </span>
+                  </label>
+
+                  <p className="text-xs leading-relaxed" style={{ color: 'var(--room-ink-soft)' }}>
+                    Up to {MAX_LIVEKIT_ROOM_PARTICIPANTS} people can be in this live room at once
+                    (including the host).
+                  </p>
+
+                  {role === 'host' && !timerActive && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleStartTimer();
+                        setSettingsOpen(false);
+                      }}
+                      className="flex w-full cursor-pointer items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold"
+                      style={{ background: 'var(--room-chrome)', color: 'var(--room-ink)' }}
+                    >
+                      <Timer className="h-4 w-4" aria-hidden />
+                      Start session timer
+                    </button>
+                  )}
+                  {role === 'host' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSettingsOpen(false);
+                        setShowTransferModal(true);
+                      }}
+                      className="flex w-full cursor-pointer items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold"
+                      style={{ background: 'var(--room-chrome)', color: 'var(--room-ink)' }}
+                    >
+                      <Users className="h-4 w-4" aria-hidden />
+                      Transfer host
+                    </button>
+                  )}
+                  {role === 'host' && !isActivityMode && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        router.push(`/session/${sessionId}/activity?bookId=${bookId}`)
+                      }
+                      className="flex w-full cursor-pointer items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold"
+                      style={{ background: 'var(--room-chrome)', color: 'var(--room-ink)' }}
+                    >
+                      <Star className="h-4 w-4" aria-hidden />
+                      Open activity
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
+            </>
           )}
+
           {/* ── Main area ────────────────────────────────────────────────────── */}
-          <section className="relative ml-0 flex min-h-0 flex-1 flex-col overflow-hidden bg-[#171210]/95 pb-[calc(11rem+env(safe-area-inset-bottom,0px))] shadow-[inset_0_0_80px_rgba(0,0,0,0.35)] backdrop-blur-[1px] md:pb-[calc(12rem+env(safe-area-inset-bottom,0px))] md:pr-72">
+          {/* The book now gets the whole stage. The old layout reserved 288px
+              on the right for the participant aside and up to 192px at the
+              bottom for the control dock, which together took roughly a third
+              of the room away from the thing people came to look at. */}
+          <section className="relative ml-0 flex min-h-0 flex-1 flex-col overflow-hidden pb-[calc(3rem+env(safe-area-inset-bottom,0px))] pl-14 sm:pl-16">
             <ConnectionBanner />
             <TimerWarning remaining={remaining} />
 
@@ -1953,287 +1810,135 @@ function RoomContent({
             <div className="flex min-h-0 flex-1 flex-col">
               <div
                 ref={readingHudBoundsRef}
-                className="relative flex min-h-0 flex-1 items-center justify-center px-3 py-4 sm:px-5 sm:py-5"
+                /* An entered activity is top-aligned so it reads as page
+                   content on the canvas; the book and the picker stay centred. */
+                className={`relative flex min-h-0 flex-1 justify-center px-3 py-4 sm:px-5 sm:py-5 ${
+                  isActivityMode && activityEntered ? 'items-stretch' : 'items-center'
+                }`}
               >
                 {isActivityMode ? (
-                  activityElement
-                ) : (
-                <TransformWrapper
-                  ref={transformRef}
-                  initialScale={1}
-                  minScale={0.85}
-                  maxScale={2.5}
-                  centerOnInit
-                  wheel={{
-                    step: 0.12,
-                    smoothStep: 0.02,
-                    disabled: false,
-                  }}
-                  pinch={{ disabled: blockTransformPanPinchWhileDrawing }}
-                  panning={{ disabled: blockTransformPanPinchWhileDrawing }}
-                  doubleClick={{ disabled: true }}
-                  onTransformed={scheduleCanvasRecalcAfterTransform}
-                  onInit={scheduleCanvasRecalcAfterTransform}
-                >
-                  <TransformComponent
-                    wrapperClass="w-full max-w-5xl !overflow-visible"
-                    contentClass="w-full"
-                  >
-                    <div
-                      className={`group relative flex w-full max-w-5xl flex-col overflow-hidden rounded-[1.65rem] border border-black/50 bg-gradient-to-b from-[#e8dfd4] via-[#faf6ee] to-[#e6ded4] shadow-[0_52px_100px_-22px_rgba(5,5,12,0.88)] ${
-                        loadingPages || pages.length === 0
-                          ? 'min-h-[min(80vh,calc(100dvh-14rem))]'
-                          : ''
-                      }`}
-                    >
-
-                      {loadingPages ? (
-                        <div className="flex flex-1 items-center justify-center bg-stone-100">
-                          <div className="flex flex-col items-center gap-3 text-stone-400">
-                            <Loader2 className="h-12 w-12 animate-spin" />
-                            <span className="text-sm font-medium">Loading book…</span>
-                          </div>
-                        </div>
-                      ) : pages.length === 0 ? (
-                        <div className="flex flex-1 items-center justify-center bg-stone-50">
-                          <div className="flex flex-col items-center gap-3 p-12 text-center text-stone-400">
-                            <Loader2 className="h-12 w-12 animate-spin" />
-                            <p className="font-medium text-stone-500">Loading placeholder book…</p>
-                          </div>
-                        </div>
-                      ) : (
-                        <div
-                          ref={bookMeasureRef}
-                          className="relative box-border flex w-full shrink-0 justify-center overflow-hidden"
-                          style={
-                            bookRect.w < 64 || bookRect.h < 48
-                              ? { minHeight: 240 }
-                              : { height: bookRect.h, maxHeight: bookRect.h }
-                          }
-                        >
-                          {bookRect.w < 64 || bookRect.h < 48 ? (
-                            <div className="flex min-h-[240px] w-full flex-col items-center justify-center bg-white">
-                              <Loader2 className="h-10 w-10 animate-spin text-stone-300" aria-hidden />
-                              <span className="sr-only">Preparing book viewer…</span>
-                            </div>
-                          ) : activeSpread && !isActivityMode ? (
-                            <>
-                              <SpreadBookViewer
-                                spread={activeSpread}
-                                width={bookRect.w}
-                                height={bookRect.h}
-                                transitionKey={clampedSpreadIndex}
-                                coverPages={spreadPageCover}
-                                swipeEnabled={role === 'host' && interactionMode === 'book'}
-                                onSwipePrev={hostFlipPrev}
-                                onSwipeNext={hostFlipNext}
-                              />
-                              <div className="absolute inset-0 z-[15] opacity-100">
-                                <AnnotationCanvas
-                                  ref={canvasRef}
-                                  tool={annTool}
-                                  color={annColor}
-                                  brushSize={annBrush}
-                                  drawingEnabled={drawingEnabled}
-                                  onSync={handleCanvasSync}
-                                />
-                              </div>
-                              {role === 'host' && (
-                                <>
-                                  <button
-                                    type="button"
-                                    aria-label="Previous spread"
-                                    onClick={hostFlipPrev}
-                                    disabled={currentPage <= 0}
-                                    className="pointer-events-auto absolute left-1.5 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-stone-400/50 bg-white/95 text-stone-800 shadow-md transition-all hover:bg-white disabled:cursor-not-allowed disabled:opacity-35 sm:left-2 sm:h-10 sm:w-10"
-                                  >
-                                    <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    aria-label="Next spread"
-                                    onClick={hostFlipNext}
-                                    disabled={currentPage >= pageCount - 2}
-                                    className="pointer-events-auto absolute right-1.5 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-stone-400/50 bg-white/95 text-stone-800 shadow-md transition-all hover:bg-white disabled:cursor-not-allowed disabled:opacity-35 sm:right-2 sm:h-10 sm:w-10"
-                                  >
-                                    <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden />
-                                  </button>
-                                </>
-                              )}
-                            </>
-                          ) : null}
-                        </div>
-                      )}
-
-                      <div className="pointer-events-none absolute inset-y-0 left-1/2 z-[5] w-7 -translate-x-1/2 bg-gradient-to-r from-transparent via-black/45 to-transparent opacity-85" />
-
+                  activityEntered ? (
+                    // Top-aligned and scrollable: the activity is content on the
+                    // canvas now, not a centred card, so a tall one (drawing,
+                    // drag & drop) must be able to run past the fold rather
+                    // than being squeezed into the viewport's middle.
+                    // Back-to-picker lives in the header breadcrumb.
+                    <div className="h-full w-full overflow-y-auto py-2">
+                      {activityElement}
                     </div>
-                  </TransformComponent>
-                </TransformWrapper>
-                )}
-
-                {!isActivityMode && !loadingPages && pages.length > 0 && activeSpread && bookRect.w >= 64 && bookRect.h >= 48 ? (
-                  <div
-                    className="pointer-events-none absolute z-[30]"
-                    style={{
-                      right: `${12 + bookHudOffset.x}px`,
-                      bottom: `${12 + bookHudOffset.y}px`,
-                    }}
-                  >
-                    <div
-                      className="pointer-events-auto flex max-w-[calc(100vw-2rem)] items-center gap-0.5 rounded-full border border-stone-400/55 bg-white/95 py-1 pl-1 pr-1.5 text-stone-800 shadow-[0_8px_30px_rgba(0,0,0,0.35)] backdrop-blur-sm sm:gap-1 sm:py-1.5 sm:pl-1.5 sm:pr-2.5"
-                      role="toolbar"
-                      aria-label="Book page and zoom controls"
-                    >
-                      <button
-                        type="button"
-                        aria-label="Drag to reposition toolbar. Double-click to reset position."
-                        title="Drag to move · Double-click to reset position"
-                        className="touch-none cursor-grab active:cursor-grabbing rounded-full p-1.5 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-700"
-                        onPointerDown={onBookHudGripDown}
-                        onDoubleClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          resetBookHudPosition();
+                  ) : (
+                    // The picker is a single carousel row now, so it no longer
+                    // needs its own vertical scroller — one would also fight the
+                    // horizontal rail inside it.
+                    <div className="flex w-full items-center justify-center">
+                      <ActivityPicker
+                        activities={activities}
+                        role={role}
+                        onPick={handlePickActivity}
+                      />
+                    </div>
+                  )
+                ) : (
+                <div ref={bookMeasureRef} className="relative flex h-full w-full items-center justify-center">
+                  {loadingPages || pages.length === 0 ? (
+                    <div className="flex flex-col items-center gap-3" style={{ color: 'var(--room-ink-soft)' }}>
+                      <Loader2 className="h-12 w-12 animate-spin" />
+                      <span className="text-sm font-medium">Loading book…</span>
+                    </div>
+                  ) : (
+                    <>
+                      <Book3D
+                        pages={pages}
+                        page={leafIndex}
+                        instant={role !== 'host'}
+                        title={bookTitle}
+                        accent={roomTheme.accent}
+                        ink={roomTheme.bookInk}
+                        zoom={bookZoom}
+                        onTurnStateChange={setTurning}
+                        className="h-full w-full"
+                      />
+                      {/* The ink layer stays a flat 2D overlay above the canvas
+                          rather than a texture on the page mesh: annotations are
+                          stored in pixel space and synced verbatim to other
+                          clients, so projecting them onto bending geometry would
+                          change the wire format for everyone. It hides while
+                          paper is moving. */}
+                      <div
+                        className="absolute inset-0 z-[15] transition-opacity duration-200"
+                        style={{
+                          opacity: turning ? 0 : 1,
+                          pointerEvents: turning ? 'none' : 'auto',
                         }}
                       >
-                        <GripVertical className="h-4 w-4 sm:h-[18px] sm:w-[18px]" aria-hidden />
-                      </button>
-                      <span className="max-w-[min(46vw,200px)] truncate px-1 text-center font-karla text-[10px] font-semibold tabular-nums text-stone-600 sm:max-w-[240px] sm:px-1.5 sm:text-xs">
-                        {pages[currentPage + 1]
-                          ? `Pages ${currentPage + 1}–${currentPage + 2} of ${pageCount}`
-                          : `Page ${currentPage + 1} of ${pageCount}`}
-                      </span>
-                      <div className="mx-0.5 h-5 w-px shrink-0 bg-stone-300/80 sm:mx-1" aria-hidden />
-                      <button
-                        type="button"
-                        aria-label="Zoom out"
-                        className="rounded-full p-1.5 text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 disabled:opacity-40"
-                        onClick={() => transformRef.current?.zoomOut()}
-                      >
-                        <ZoomOut className="h-4 w-4 sm:h-[18px] sm:w-[18px]" aria-hidden />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="Fit book to view"
-                        title="Fit to view"
-                        className="rounded-full p-1.5 text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 disabled:opacity-40"
-                        onClick={() => transformRef.current?.resetTransform(220)}
-                      >
-                        <LayoutGrid className="h-4 w-4 sm:h-[18px] sm:w-[18px]" aria-hidden />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="Zoom in"
-                        className="rounded-full p-1.5 text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 disabled:opacity-40"
-                        onClick={() => transformRef.current?.zoomIn()}
-                      >
-                        <ZoomIn className="h-4 w-4 sm:h-[18px] sm:w-[18px]" aria-hidden />
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
+                        <AnnotationCanvas
+                          ref={canvasRef}
+                          tool={annTool}
+                          color={annColor}
+                          brushSize={annBrush}
+                          drawingEnabled={drawingEnabled && !turning}
+                          onSync={handleCanvasSync}
+                        />
+                      </div>
+                      {role === 'host' && (
+                        <>
+                          <button
+                            type="button"
+                            aria-label="Previous page"
+                            onClick={hostFlipPrev}
+                            disabled={currentPage <= 0}
+                            className="room-recede group absolute left-2 top-1/2 z-20 flex -translate-y-1/2 cursor-pointer items-center justify-center transition-opacity disabled:cursor-not-allowed disabled:opacity-0 sm:left-4"
+                          >
+                            <span
+                              className="room-tap grid place-items-center rounded-full transition-transform group-hover:scale-105"
+                              style={{
+                                background: 'var(--room-chrome-strong)',
+                                color: 'var(--room-ink)',
+                                boxShadow: 'var(--elev-1)',
+                              }}
+                            >
+                              <ChevronLeft className="h-6 w-6" aria-hidden />
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Next page"
+                            onClick={hostFlipNext}
+                            disabled={currentPage >= pageCount - 2}
+                            className="room-recede group absolute right-2 top-1/2 z-20 flex -translate-y-1/2 cursor-pointer items-center justify-center transition-opacity disabled:cursor-not-allowed disabled:opacity-0 sm:right-4"
+                          >
+                            <span
+                              className="room-tap grid place-items-center rounded-full transition-transform group-hover:scale-105"
+                              style={{
+                                background: 'var(--room-chrome-strong)',
+                                color: 'var(--room-ink)',
+                                boxShadow: 'var(--elev-1)',
+                              }}
+                            >
+                              <ChevronRight className="h-6 w-6" aria-hidden />
+                            </span>
+                          </button>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
+                )}
+
               </div>
             </div>
           </section>
 
-          {/* Right panel — timer + participants + status (desktop) */}
-          <aside
-            className="fixed right-0 top-16 z-30 hidden w-72 flex-col gap-4 border-l border-white/5 bg-[#121018]/92 p-4 pb-24 backdrop-blur-xl md:flex"
-            style={{ height: 'calc(100vh - 4rem)' }}
-          >
-            <SessionTimerRing
-              remaining={remaining}
-              totalSecs={SESSION_DURATION_S}
-              timerActive={timerActive}
-              role={role}
-              onStart={handleStartTimer}
-            />
-            {remaining <= 5 * 60 && timerActive && (
-              <p className="text-center text-[11px] font-semibold text-[#ffb955]">
-                {remaining <= 2 * 60 ? 'Wrapping up soon' : 'Five minutes left'}
-              </p>
-            )}
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <p className="mb-2 shrink-0 text-[10px] font-bold uppercase tracking-widest text-stone-500">Participants</p>
-              <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-                <ParticipantList hostIdentity={hostIdentity} />
-              </div>
-            </div>
-            <div className="shrink-0 rounded-2xl border border-[#3b85a6]/35 bg-gradient-to-br from-[#3b85a6]/25 to-[#764f84]/20 p-4 shadow-lg">
-              <p className="text-xs font-bold text-[#9dd4f0]">
-                You are the {role === 'host' ? 'host' : 'guest'}
-              </p>
-              <p className="mt-2 text-[11px] leading-relaxed text-stone-300">
-                {isActivityMode
-                  ? role === 'host'
-                    ? 'You lead the activities — Reset, Previous and Next control what everyone sees.'
-                    : 'Follow along with the host as they move through the activities.'
-                  : role === 'host'
-                    ? 'You control page turns and the session timer. Guests follow along; they can use Pen mode to draw on the spread.'
-                    : 'Follow the host’s page turns. Use Book mode to focus on the page; tap Pen when you want to doodle.'}
-              </p>
-              {!isActivityMode && activities.length > 0 && role === 'host' && (
-                <button
-                  type="button"
-                  onClick={handleOpenActivities}
-                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-white/10 py-2.5 text-[11px] font-bold text-white transition-colors hover:bg-white/15 cursor-pointer"
-                >
-                  <Gamepad2 className="h-4 w-4" />
-                  Activities
-                </button>
-              )}
-            </div>
-          </aside>
-        </main>
+          {/* Activities keep their tool dock — the tools are the point of that
+              screen — so their rail carries only the room-level controls. */}
+          <RoomRail items={railItems} />
 
-        {/* Fixed bottom: unified controls — default bottom-left; drag handle persists position */}
-        <div
-          className="pointer-events-none fixed z-[95] max-w-[calc(100vw-0.75rem)]"
-          style={{
-            left: `calc(0.75rem + ${dockHudOffset.x}px)`,
-            bottom: `calc(1.25rem + ${dockHudOffset.y}px)`,
-          }}
-        >
-          <div className="pointer-events-auto flex items-end gap-2">
-            <button
-              type="button"
-              aria-label="Drag toolbar. Double-click to reset position."
-              title="Drag to move · Double-click to reset position"
-              className="mb-1 shrink-0 touch-none cursor-grab rounded-full border border-white/15 bg-stone-950/92 p-2 text-stone-400 shadow-lg backdrop-blur-xl hover:bg-stone-900 hover:text-stone-200 active:cursor-grabbing sm:mb-1.5"
-              onPointerDown={onDockHudGripDown}
-              onDoubleClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                resetDockHudPosition();
-              }}
-            >
-              <GripVertical className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden />
-            </button>
-            <div className="min-w-0 flex-1">
-              <UnifiedBar
-                className="items-start"
-                hideAnnotationTools={isActivityMode}
-                interactionMode={interactionMode}
-                onInteractionModeChange={setInteractionMode}
-                color={annColor}
-                brushSize={annBrush}
-                onColorChange={setAnnColor}
-                onBrushSizeChange={setAnnBrush}
-                onClear={handleClearCanvas}
-                onUndo={() => canvasRef.current?.undo()}
-                onReaction={handleReaction}
-                role={role}
-                participantCount={participants.length}
-                onOpenParticipants={() => { setRoomPanelOpen(true); setActiveTab('video'); }}
-                onOpenActivities={role === 'host' ? handleOpenActivities : undefined}
-                onCopyInvite={role === 'host' && inviteToken ? handleCopyInviteLink : undefined}
-                linkCopied={linkCopied}
-                onEndSession={() => handleEndSession(false)}
-              />
-            </div>
-          </div>
-        </div>
+          {/* Participants float over the backdrop instead of taking a fixed
+              288px column away from the book on every desktop session. */}
+          <ParticipantStrip count={participants.length} compact={isActivityMode}>
+            <ParticipantList hostIdentity={hostIdentity} />
+          </ParticipantStrip>
+        </main>
 
         {/* Reading progress bar */}
         <div className="fixed bottom-0 left-0 w-full h-1 bg-[#353535] z-[60]">
@@ -2291,8 +1996,18 @@ export function SessionRoomPage({ mode = 'reading' }: { mode?: 'reading' | 'acti
   const { token, role, roomName, livekitUrl, participantId, sessionId, setSession } = useSession();
 
   const [bookId, setBookId] = useState<string | null>(null);
+  // A session targets a book OR a themed adventure; exactly one is set.
+  const [activityGroupId, setActivityGroupId] = useState<string | null>(null);
   const [bookTitle, setBookTitle] = useState('Reading Room');
   const [inviteToken, setInviteToken] = useState<string | null>(null);
+
+  // LiveKit negotiates asynchronously; handing <LiveKitRoom> a new token value
+  // mid-negotiation tears the engine down and the retry lands on a closed engine
+  // ("NegotiationError: cannot negotiate on closed engine"). Pin the first token
+  // we receive so later refreshes don't remount the room.
+  const pinnedTokenRef = useRef<string | null>(null);
+  if (token && !pinnedTokenRef.current) pinnedTokenRef.current = token;
+  const connectToken = pinnedTokenRef.current;
 
   useEffect(() => {
     document.body.classList.add('reading-room');
@@ -2305,6 +2020,7 @@ export function SessionRoomPage({ mode = 'reading' }: { mode?: 'reading' | 'acti
     getSession(sid)
       .then((s) => {
         setBookId(s.book);
+        setActivityGroupId(s.activity_group ?? null);
         setBookTitle(s.book_title ?? 'Reading Room');
         setInviteToken(s.invite_token ?? null);
       })
@@ -2317,7 +2033,8 @@ export function SessionRoomPage({ mode = 'reading' }: { mode?: 'reading' | 'acti
     const sid = sessionId ?? id;
     if (!sid) return;
     const storedId = typeof localStorage !== 'undefined' ? localStorage.getItem(`bb_participant_${sid}`) : null;
-    if (!storedId) { router.replace('/'); return; }
+    // Send them somewhere they can act, not to the root redirect.
+    if (!storedId) { router.replace('/dashboard'); return; }
     getGuestToken(sid, storedId).then((data) => {
       setSession({
         sessionId: data.session_id,
@@ -2327,10 +2044,12 @@ export function SessionRoomPage({ mode = 'reading' }: { mode?: 'reading' | 'acti
         livekitUrl: data.livekit_url,
         participantId: storedId,
       });
-    }).catch(() => router.replace('/'));
+    }).catch(() => router.replace('/dashboard'));
   }, [token, sessionId, id, router, setSession]);
 
-  if (!token || !roomName || !livekitUrl || !bookId) {
+  // An adventure session has no book, so gating on bookId alone left it stuck
+  // on "Loading session…" forever.
+  if (!connectToken || !roomName || !livekitUrl || (!bookId && !activityGroupId)) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-[#131313] text-[#e5e2e1]">
         <div className="flex flex-col items-center gap-4">
@@ -2343,12 +2062,21 @@ export function SessionRoomPage({ mode = 'reading' }: { mode?: 'reading' | 'acti
 
   return (
     <>
-      <LiveKitRoom serverUrl={livekitUrl} token={token} connect video audio style={{ height: '100vh' }}>
+      <LiveKitRoom
+        key={roomName}
+        serverUrl={livekitUrl}
+        token={connectToken}
+        connect
+        video
+        audio
+        style={{ height: '100dvh' }}
+      >
         <RoomContent
           role={role!}
           sessionId={sessionId ?? id}
           participantId={participantId!}
           bookId={bookId}
+          activityGroupId={activityGroupId}
           bookTitle={bookTitle}
           inviteToken={inviteToken}
           mode={mode}

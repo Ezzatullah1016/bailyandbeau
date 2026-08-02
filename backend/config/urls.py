@@ -23,31 +23,38 @@ from core import views
 
 urlpatterns = [
     path('', views.home, name='home'),
-    # Canonical staff-portal login. Lives under /super-admin/ so nginx proxies it
+    # Canonical staff-portal login. Lives under /staff/ so nginx proxies it
     # to Django (gunicorn); the bare /login route is owned by the Next.js customer app.
-    path('super-admin/login/', views.auth_portal, name='super_admin_login'),
+    path('staff/login/', views.auth_portal, name='super_admin_login'),
     path('login/', views.auth_portal, name='login'),  # legacy alias, still Django-served
-    path('super-admin/logout/', views.logout_view, name='super_admin_logout'),
+    path('staff/logout/', views.logout_view, name='super_admin_logout'),
     path('logout/', views.logout_view, name='logout'),
-    path('super-admin/dashboard/', views.super_admin_dashboard, name='super_admin_dashboard'),
-    path('super-admin/sessions/', views.admin_session_monitor, name='admin_session_monitor'),
-    path('super-admin/sessions/<uuid:session_id>/', views.admin_session_detail, name='admin_session_detail'),
-    path('super-admin/books/', views.admin_book_library, name='admin_book_library'),
-    path('super-admin/books/new/', views.admin_book_create, name='admin_book_create'),
-    path('super-admin/books/<uuid:book_id>/', views.admin_book_detail, name='admin_book_detail'),
-    path('super-admin/activities/', views.admin_activity_config, name='admin_activity_config'),
-    path('super-admin/users/', views.admin_users, name='admin_users'),
-    path('super-admin/users/new/', views.admin_user_create, name='admin_user_create'),
-    path('super-admin/users/<int:user_id>/', views.admin_user_detail, name='admin_user_detail'),
-    path('super-admin/subscriptions/', views.admin_subscriptions, name='admin_subscriptions'),
-    path('super-admin/badges/', views.admin_badges, name='admin_badges'),
-    path('super-admin/live-sessions/', views.admin_live_sessions, name='admin_live_sessions'),
-    path('super-admin/logs/', views.admin_logs, name='admin_logs'),
-    path('super-admin/settings/', views.admin_settings, name='admin_settings'),
-    # /admin/ → super admin UI; Django's stock admin lives at /django-admin/
-    path('admin/<path:path>', views.redirect_admin_to_django_admin),
-    path('admin/', views.redirect_admin_root),
-    path('django-admin/', admin.site.urls),
+    path('staff/dashboard/', views.super_admin_dashboard, name='super_admin_dashboard'),
+    path('staff/sessions/', views.admin_session_monitor, name='admin_session_monitor'),
+    path('staff/sessions/<uuid:session_id>/', views.admin_session_detail, name='admin_session_detail'),
+    path('staff/books/', views.admin_book_library, name='admin_book_library'),
+    path('staff/books/new/', views.admin_book_create, name='admin_book_create'),
+    path('staff/books/<uuid:book_id>/', views.admin_book_detail, name='admin_book_detail'),
+    path('staff/activities/', views.admin_activity_config, name='admin_activity_config'),
+    path('staff/adventures/', views.admin_activity_groups, name='admin_activity_groups'),
+    path('staff/users/', views.admin_users, name='admin_users'),
+    path('staff/users/new/', views.admin_user_create, name='admin_user_create'),
+    path('staff/users/<int:user_id>/', views.admin_user_detail, name='admin_user_detail'),
+    path('staff/subscriptions/', views.admin_subscriptions, name='admin_subscriptions'),
+    path('staff/badges/', views.admin_badges, name='admin_badges'),
+    path('staff/live-sessions/', views.admin_live_sessions, name='admin_live_sessions'),
+    path('staff/logs/', views.admin_logs, name='admin_logs'),
+    path('staff/settings/', views.admin_settings, name='admin_settings'),
+    # Django's stock admin sits where a Django developer expects it. The staff
+    # portal is /staff/. /django-admin/ stays as a redirect so bookmarks made
+    # while the two were swapped keep working.
+    # The staff portal moved from /super-admin/ to /staff/. Forward the old
+    # prefix rather than 404 on links already handed to the client.
+    path('super-admin/<path:path>', views.redirect_super_admin_to_staff),
+    path('super-admin/', views.redirect_super_admin_to_staff, {'path': 'dashboard/'}),
+    path('admin/', admin.site.urls),
+    path('django-admin/<path:path>', views.redirect_django_admin_to_admin),
+    path('django-admin/', views.redirect_django_admin_root),
     path('api/v1/', include('core.api_urls')),
 ]
 

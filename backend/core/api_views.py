@@ -10,6 +10,7 @@ import stripe
 from asgiref.sync import async_to_sync
 from django.conf import settings as django_settings
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -31,8 +32,10 @@ except ImportError:  # poppler/pdf2image not available on all environments
     pdf2image = None
 
 from . import portal_settings as portal_conf
-from .models import ActivityConfig, Badge, Book, BookPage, ChildProfile, Entitlement, FavoriteBook, NotificationPreference, ReadingReminder, ReadingSession, SessionEvent, SessionInvite, SessionParticipant, SessionSnapshot, UserBadge
+from .models import ActivityConfig, ActivityGroup, Badge, Book, BookPage, BookTheme, ChildProfile, Entitlement, FavoriteBook, NotificationPreference, ReadingReminder, ReadingSession, SessionEvent, SessionInvite, SessionParticipant, SessionSnapshot, Theme, UserBadge
 from .serializers import (
+    BookThemeSerializer,
+    BookThemeWriteSerializer,
     ActivityConfigSerializer,
     AdminBadgeAwardSerializer,
     AdminChildProfileSerializer,
@@ -43,6 +46,10 @@ from .serializers import (
     BadgeSerializer,
     BookPageSerializer,
     BookSerializer,
+    BookCatalogSerializer,
+    ThemeSerializer,
+    ActivityGroupSerializer,
+    ActivityGroupCatalogSerializer,
     ChildProfileSerializer,
     EntitlementSerializer,
     FavoriteBookSerializer,
@@ -352,7 +359,7 @@ def build_recent_sessions_payload(sessions):
     return [
         {
             "id": str(session.id),
-            "book_title": session.book.title,
+            "book_title": session.target_title,
             "child_name": session.child_profile.display_name,
             "status": session.status,
             "room_type": session.room_type,
@@ -695,7 +702,7 @@ class AdminSessionReportView(APIView):
         data = [
             {
                 "id": str(session.id),
-                "book_title": session.book.title,
+                "book_title": session.target_title,
                 "child_name": session.child_profile.display_name,
                 "created_by": session.created_by.username,
                 "status": session.status,
@@ -719,7 +726,7 @@ class AdminSessionExportView(APIView):
         for session in sessions:
             writer.writerow([
                 str(session.id),
-                session.book.title,
+                session.target_title,
                 session.child_profile.display_name,
                 session.created_by.username,
                 session.status,
@@ -903,18 +910,105 @@ class CheckoutSessionView(APIView):
         )
 
 
+class ThemeListView(APIView):
+    """Shared taxonomy (Ocean, Jungle, Museum). Read-only for everyone."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        themes = Theme.objects.filter(is_active=True)
+        serializer = ThemeSerializer(themes, many=True)
+        return Response({"data": serializer.data, "meta": {"count": themes.count()}, "error": None})
+
+
+class ActivityGroupListView(APIView):
+    """
+    Themed adventures. Staff see drafts; customers see published only, matching
+    how BookListView gates on `published`.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        groups = ActivityGroup.objects.select_related("theme")
+        if not (request.user and request.user.is_staff):
+            groups = groups.filter(published=True)
+
+        theme = request.query_params.get("theme")
+        if theme:
+            # Accept either a slug or an id, so callers do not need a lookup.
+            groups = groups.filter(Q(theme__slug=theme) | Q(theme__id__iexact=theme))
+
+        serializer = (
+            ActivityGroupSerializer if request.user.is_staff else ActivityGroupCatalogSerializer
+        )(groups, many=True)
+        return Response({"data": serializer.data, "meta": {"count": groups.count()}, "error": None})
+
+
+class ActivityGroupActivityListView(APIView):
+    """
+    GET /api/v1/activity-groups/{group_id}/activities/
+
+    Mirror of BookActivityListView for group-owned activities, including its
+    guest `?participant_id=` path so a guest in an adventure session can load
+    the activities without an account.
+    """
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, group_id):
+        is_staff = bool(request.user and request.user.is_staff)
+        group = ActivityGroup.objects.filter(pk=group_id).first()
+        if not group or (not group.published and not is_staff):
+            return Response(
+                {"data": None, "meta": {}, "error": {"code": "not_found", "message": "Adventure not found."}},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        is_authenticated = bool(request.user and request.user.is_authenticated)
+        participant_id = request.query_params.get("participant_id")
+
+        if not is_authenticated and not participant_id:
+            return Response(
+                {"data": None, "meta": {}, "error": {"code": "unauthenticated", "message": "Authentication required."}},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        if participant_id and not is_authenticated:
+            participant = (
+                SessionParticipant.objects.filter(
+                    id=participant_id,
+                    participant_type=SessionParticipant.ParticipantType.GUEST,
+                )
+                .select_related("session")
+                .first()
+            )
+            if not participant or str(participant.session.activity_group_id) != str(group_id):
+                return Response(
+                    {"data": None, "meta": {}, "error": {"code": "permission_denied", "message": "Invalid participant."}},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        activities = group.activity_configs.filter(is_active=True).order_by("sort_order", "title")
+        serializer = ActivityConfigSerializer(activities, many=True)
+        return Response({"data": serializer.data, "meta": {"count": activities.count()}, "error": None})
+
+
 class BookListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         # Staff/admin can preview unpublished (draft) books; customers see published only.
-        if request.user and request.user.is_staff:
+        is_staff = bool(request.user and request.user.is_staff)
+        if is_staff:
             books = Book.objects.all()
         else:
             books = Book.objects.filter(published=True)
+        books = books.select_related("theme_category")
 
         room_type = request.query_params.get("room_type")
         age_band = request.query_params.get("age_band")
+        theme = request.query_params.get("theme")
         search = request.query_params.get("search")
         ordering = request.query_params.get("ordering", "title")
 
@@ -922,12 +1016,15 @@ class BookListView(APIView):
             books = books.filter(room_type=room_type)
         if age_band:
             books = books.filter(age_band=age_band)
+        if theme:
+            books = books.filter(Q(theme_category__slug=theme) | Q(theme_category__id__iexact=theme))
         if search:
             books = books.filter(title__icontains=search)
         if ordering.lstrip("-") in {"title", "created_at", "age_band"}:
             books = books.order_by(ordering)
 
-        serializer = BookSerializer(books, many=True)
+        # Customers must not receive s3_key or the publish gate.
+        serializer = (BookSerializer if is_staff else BookCatalogSerializer)(books, many=True)
         return Response({"data": serializer.data, "meta": {"count": books.count()}, "error": None})
 
 
@@ -1167,6 +1264,9 @@ class BookPagesView(APIView):
         serializer = BookPageSerializer(pages, many=True)
         from .serializers import resolve_media_url
         pdf_view_url = resolve_media_url(book.s3_key) if book.asset_type == Book.AssetType.PDF else ""
+        # The room needs the book's theme at the same moment it needs the pages,
+        # so it rides along in meta rather than costing a second round trip.
+        theme = BookTheme.objects.filter(book=book).first()
         return Response({
             "data": serializer.data,
             "meta": {
@@ -1174,6 +1274,7 @@ class BookPagesView(APIView):
                 "page_count": book.page_count,
                 "asset_type": book.asset_type,
                 "pdf_view_url": pdf_view_url,
+                "theme": BookThemeSerializer(theme).data if theme else None,
             },
             "error": None,
         })
@@ -1292,10 +1393,21 @@ class AdminActivityListCreateView(APIView):
     permission_classes = [permissions.IsAdminUser]
 
     def get(self, request):
-        activities = ActivityConfig.objects.select_related("book").all()
+        activities = ActivityConfig.objects.select_related("book", "activity_group").all()
         book_id = request.query_params.get("book_id")
+        group_id = request.query_params.get("group_id")
+        activity_type = request.query_params.get("activity_type")
         if book_id:
             activities = activities.filter(book_id=book_id)
+        if group_id:
+            # `ungrouped` surfaces the legacy book-owned activities, which would
+            # otherwise be unreachable once the admin list filters by adventure.
+            if group_id == "ungrouped":
+                activities = activities.filter(activity_group__isnull=True)
+            else:
+                activities = activities.filter(activity_group_id=group_id)
+        if activity_type:
+            activities = activities.filter(activity_type=activity_type)
         serializer = ActivityConfigSerializer(activities, many=True)
         return Response({"data": serializer.data, "meta": {"count": activities.count()}, "error": None})
 
@@ -1749,7 +1861,30 @@ class SessionCompleteView(APIView):
         session.status = ReadingSession.Status.COMPLETED
         session.ended_at = timezone.now()
         session.timer_remaining_seconds = 0
-        session.save(update_fields=["status", "ended_at", "timer_remaining_seconds", "updated_at"])
+        update_fields = ["status", "ended_at", "timer_remaining_seconds", "updated_at"]
+
+        # Record which activity the session finished on (Activity Room), so the
+        # completion screen can name it. Accept an id (preferred) or raw title.
+        activity_id = request.data.get("activity_id")
+        activity_title = request.data.get("activity_title")
+        if activity_id:
+            # A session owns either a book or an adventure; scope the lookup
+            # to whichever it is, so an activity cannot be pulled in from
+            # another container by id.
+            owner = (
+                {"book": session.book} if session.book_id
+                else {"activity_group": session.activity_group}
+            )
+            activity = ActivityConfig.objects.filter(pk=activity_id, **owner).first()
+            if activity:
+                session.completed_activity = activity
+                session.completed_activity_title = activity.title
+                update_fields += ["completed_activity", "completed_activity_title"]
+        elif activity_title:
+            session.completed_activity_title = str(activity_title)[:255]
+            update_fields += ["completed_activity_title"]
+
+        session.save(update_fields=update_fields)
         SessionEvent.objects.create(
             session=session,
             participant=participant,
@@ -2187,16 +2322,33 @@ class AdminSessionEventExportView(APIView):
 
 # ─── Media Upload (staging / no-S3 fallback) ──────────────────────────────────
 
+#: Images only. Admins upload activity illustrations and book pages here; there
+#: is no use case for anything else, and an open endpoint that writes
+#: attacker-named files under MEDIA_ROOT is worth closing even behind staff auth.
+UPLOAD_ALLOWED_TYPES = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+}
+UPLOAD_ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+UPLOAD_MAX_BYTES = 5 * 1024 * 1024
+
+
 class MediaUploadView(APIView):
     """
-    Staff-only endpoint to upload book assets when S3 is not configured.
-    Returns the hosted URL so admins can paste it into BookPage.image_url fields.
+    Staff-only endpoint to upload book assets and activity illustrations when S3
+    is not configured. Returns the hosted URL for BookPage.image_url fields and
+    for the activity builder's image pickers.
     """
     permission_classes = [permissions.IsAdminUser]
     parser_classes = [MultiPartParser]
 
     def post(self, request):
+        import uuid as _uuid
         from pathlib import Path
+
+        from django.utils.text import get_valid_filename
 
         file_obj = request.FILES.get("file")
         if not file_obj:
@@ -2205,11 +2357,42 @@ class MediaUploadView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        if file_obj.size > UPLOAD_MAX_BYTES:
+            return Response(
+                {
+                    "data": None,
+                    "error": {
+                        "code": "file_too_large",
+                        "message": "Images must be 5 MB or smaller.",
+                    },
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Check both: the content type is client-supplied and trivially spoofed,
+        # while the extension is what actually decides how the file is served.
+        content_type = (file_obj.content_type or "").split(";")[0].strip().lower()
+        extension = Path(file_obj.name or "").suffix.lower()
+        if content_type not in UPLOAD_ALLOWED_TYPES or extension not in UPLOAD_ALLOWED_EXTENSIONS:
+            return Response(
+                {
+                    "data": None,
+                    "error": {
+                        "code": "unsupported_file_type",
+                        "message": "Only PNG, JPEG, WebP and GIF images can be uploaded.",
+                    },
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         upload_dir = Path(django_settings.MEDIA_ROOT) / "uploads"
         upload_dir.mkdir(parents=True, exist_ok=True)
 
-        import uuid as _uuid
-        safe_name = f"{_uuid.uuid4().hex}_{file_obj.name}"
+        # The uuid prefix already prevents collisions; get_valid_filename strips
+        # separators and traversal out of the part the uploader controls. Keep
+        # the original stem so admins can still recognise their own files.
+        stem = get_valid_filename(Path(file_obj.name or "image").stem)[:60] or "image"
+        safe_name = f"{_uuid.uuid4().hex}_{stem}{extension}"
         dest = upload_dir / safe_name
         with open(dest, "wb+") as fh:
             for chunk in file_obj.chunks():
@@ -2315,3 +2498,58 @@ class TransferHostView(APIView):
                 "error": None,
             }
         )
+
+
+class AdminBookThemeView(APIView):
+    """Read or upsert the reading-room theme for a book.
+
+    A book without a theme returns `data: null` rather than 404 — the room falls
+    back to the platform default, so "no theme" is a valid state, not an error.
+    """
+
+    permission_classes = [permissions.IsAdminUser]
+
+    def _book(self, book_id):
+        return Book.objects.filter(pk=book_id).first()
+
+    def _not_found(self):
+        return Response(
+            {"data": None, "meta": {}, "error": {"code": "not_found", "message": "Book not found."}},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    def get(self, request, book_id):
+        book = self._book(book_id)
+        if not book:
+            return self._not_found()
+        theme = BookTheme.objects.filter(book=book).first()
+        data = BookThemeSerializer(theme).data if theme else None
+        return Response({"data": data, "meta": {}, "error": None})
+
+    def put(self, request, book_id):
+        book = self._book(book_id)
+        if not book:
+            return self._not_found()
+
+        theme = BookTheme.objects.filter(book=book).first()
+        serializer = BookThemeWriteSerializer(theme, data=request.data, partial=theme is not None)
+        serializer.is_valid(raise_exception=True)
+        try:
+            saved = serializer.save(book=book)
+        except DjangoValidationError as exc:
+            return Response(
+                {
+                    "data": None,
+                    "meta": {},
+                    "error": {"code": "invalid_theme", "message": exc.message_dict},
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response({"data": BookThemeSerializer(saved).data, "meta": {}, "error": None})
+
+    def delete(self, request, book_id):
+        book = self._book(book_id)
+        if not book:
+            return self._not_found()
+        BookTheme.objects.filter(book=book).delete()
+        return Response({"data": None, "meta": {}, "error": None}, status=status.HTTP_204_NO_CONTENT)

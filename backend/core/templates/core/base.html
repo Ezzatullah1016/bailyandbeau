@@ -8,12 +8,44 @@
     <link rel="stylesheet" href="{% static 'core/css/tailwind.css' %}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,600;6..72,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    {# Brand fonts: Baloo 2 for headings, Karla for body, Montserrat for labels. #}
+    <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Karla:wght@400;500;600;700&family=Montserrat:wght@500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
-        body { font-family: 'Plus Jakarta Sans', sans-serif; }
-        .font-editorial { font-family: 'Newsreader', serif; }
+        /* Brand palette. `tailwind.css` is a committed, minified artifact with
+           no source config in this repo, so it cannot be regenerated here — and
+           the `brand-dark` utility it ships compiles to #865047, a brown that is
+           not one of the six brand colours and is what made the portal look
+           muddy. Overriding the utilities is the honest fix given that. */
+        .bg-brand-dark { background-color: #3d3b62 !important; }
+        .text-brand-dark { color: #3d3b62 !important; }
+        .border-brand-dark { border-color: #3d3b62 !important; }
+
+        .bg-brand-navy { background-color: #3d3b62; }
+        .bg-brand-blush { background-color: #eccdca; }
+        .bg-brand-purple { background-color: #764f84; }
+        .bg-brand-pink { background-color: #c84a71; }
+        .bg-brand-teal { background-color: #3b85a6; }
+        .bg-brand-gold { background-color: #f0c75e; }
+        .text-brand-navy { color: #3d3b62; }
+        .text-brand-purple { color: #764f84; }
+        .text-brand-pink { color: #c84a71; }
+        .text-brand-teal { color: #3b85a6; }
+        .border-brand-blush { border-color: #eccdca; }
+        .border-brand-purple { border-color: #764f84; }
+        /* Tailwind's slash-opacity syntax is not available for these
+           hand-written utilities, so the few variants in use are spelled out. */
+        .bg-brand-blush\/30 { background-color: rgba(236, 205, 202, 0.30); }
+        .bg-brand-blush\/40 { background-color: rgba(236, 205, 202, 0.40); }
+        .bg-brand-teal\/10 { background-color: rgba(59, 133, 166, 0.10); }
+        .bg-brand-gold\/25 { background-color: rgba(240, 199, 94, 0.25); }
+        .border-brand-gold { border-color: #f0c75e; }
+
+        body { font-family: 'Karla', sans-serif; }
+        h1, h2, h3, h4, .font-baloo { font-family: 'Baloo 2', cursive; }
+        .font-montserrat { font-family: 'Montserrat', sans-serif; }
+        .font-editorial { font-family: 'Baloo 2', cursive; }
         .material-symbols-outlined {
             font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
             font-size: 20px;

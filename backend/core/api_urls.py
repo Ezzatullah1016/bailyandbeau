@@ -30,7 +30,11 @@ from .api_views import (
     BillingEntitlementView,
     BillingPlansView,
     AdminBookRenderPdfView,
+    AdminBookThemeView,
     BookActivityListView,
+    ThemeListView,
+    ActivityGroupListView,
+    ActivityGroupActivityListView,
     BookDetailView,
     BookListView,
     BookPagesView,
@@ -101,6 +105,7 @@ urlpatterns = [
     path("admin/books/<uuid:pk>/", AdminBookDetailView.as_view(), name="admin-book-detail"),
     path("admin/books/<uuid:book_id>/pages/", AdminBookPageListCreateView.as_view(), name="admin-book-page-list"),
     path("admin/books/<uuid:book_id>/pages/<uuid:pk>/", AdminBookPageDetailView.as_view(), name="admin-book-page-detail"),
+    path("admin/books/<uuid:book_id>/theme/", AdminBookThemeView.as_view(), name="admin-book-theme"),
     path("admin/books/<uuid:pk>/render-pdf/", AdminBookRenderPdfView.as_view(), name="admin-book-render-pdf"),
 
     # Admin — Activities
@@ -135,6 +140,16 @@ urlpatterns = [
     path("books/<uuid:pk>/", BookDetailView.as_view(), name="book-detail"),
     path("books/<uuid:pk>/pages/", BookPagesView.as_view(), name="book-pages"),
     path("books/<uuid:book_id>/activities/", BookActivityListView.as_view(), name="book-activity-list"),
+
+    # Themed adventures: a shared taxonomy (themes) plus the groups that hold
+    # activities without needing a storybook to own them.
+    path("themes/", ThemeListView.as_view(), name="theme-list"),
+    path("activity-groups/", ActivityGroupListView.as_view(), name="activity-group-list"),
+    path(
+        "activity-groups/<uuid:group_id>/activities/",
+        ActivityGroupActivityListView.as_view(),
+        name="activity-group-activity-list",
+    ),
 
     # Children
     path("children/", ChildProfileListCreateView.as_view(), name="child-list"),

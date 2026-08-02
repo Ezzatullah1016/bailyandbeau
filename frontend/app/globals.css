@@ -1,10 +1,13 @@
 /* Fonts: self-hosted via @fontsource* imports in app/layout.tsx (no Google fetch at build time). */
 @import "tailwindcss";
+@import "./room-tokens.css";
 
 /* ─── Reading room body reset (applied via JS class on mount) ────────────── */
+/* The backdrop now comes from `.room-root` (see room-tokens.css) so that a
+   per-book theme can drive it; the body only handles scroll lock. */
 body.reading-room {
   overflow: hidden;
-  background: linear-gradient(135deg, #3d3b62 0%, #764f84 100%);
+  background: var(--room-bg-2, #a9d3f5);
 }
 
 /* ─── Reaction float animation ──────────────────────────────────────────── */
@@ -63,10 +66,24 @@ body.reading-room {
   --font-jost:     "Jost", sans-serif;
   --font-baloo:    "Baloo 2", sans-serif;
   --font-karla:    "Karla", sans-serif;
+  --font-montserrat: "Montserrat", system-ui, sans-serif;
+
+  /* Bailey & Beau brand sheet. Tailwind v4 turns @theme colours into utilities,
+     so these are `bg-brand-navy`, `text-brand-purple`, `border-brand-blush`.
+     Contrast note: navy, purple, pink and teal all clear 4.5:1 against white and
+     are safe behind white text. Gold and blush do NOT — use them as surfaces
+     with dark ink (brand-navy) on top, never as a background for white text. */
+  --color-brand-navy:   #3d3b62;
+  --color-brand-blush:  #eccdca;
+  --color-brand-purple: #764f84;
+  --color-brand-pink:   #c84a71;
+  --color-brand-teal:   #3b85a6;
+  --color-brand-gold:   #f0c75e;
 }
 
 .font-baloo { font-family: var(--font-baloo); }
 .font-karla { font-family: var(--font-karla); }
+.font-montserrat { font-family: var(--font-montserrat); }
 
 :root {
   color-scheme: light;

@@ -35,7 +35,6 @@ export function Sidebar({ me, currentPath }: SidebarProps) {
     { href: '/dashboard',           icon: 'dashboard',    label: 'Dashboard' },
     { href: '/dashboard/library',   icon: 'auto_stories', label: 'Library' },
     { href: '/dashboard/sessions',  icon: 'history_edu',  label: 'Sessions' },
-    { href: '/dashboard/badges',    icon: 'military_tech',label: 'Badges' },
     { href: '/dashboard/billing',   icon: 'payments',     label: 'Billing' },
     { href: '/dashboard/settings',  icon: 'settings',     label: 'Settings' },
   ];

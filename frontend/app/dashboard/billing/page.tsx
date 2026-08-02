@@ -15,7 +15,7 @@ interface Entitlement {
   pack_sessions_remaining: number | null;
   renewal_date: string | null;
 }
-interface MeData { id: number; username: string; first_name: string; last_name: string; }
+interface MeData { id: number; username: string; first_name: string; last_name: string; is_staff?: boolean; }
 
 const STATUS_COLORS: Record<string, string> = {
   active: 'bg-emerald-100 text-emerald-800',

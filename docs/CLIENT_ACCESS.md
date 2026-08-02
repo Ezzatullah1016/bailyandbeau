@@ -16,7 +16,7 @@ Use **username** (not email) in the **frontend** login form; Django **Admin / Su
 | **Production** | **Frontend** (parents) | App UI: dashboard, sessions, library | https://reading-room.baileyandbeauco.com/login | `demo-parent` | `Demo123!` |
 | **Production** | **Frontend** (parents, QA account) | Heavier quotas for review / UAT *(only if `seed_client_review_user` ran on server)* | https://reading-room.baileyandbeauco.com/login | `client-review` | `BaileyBeauReview2026!` |
 | **Production** | **Backend staff** — Django Admin | Model-level admin (`/admin/`) | https://reading-room.baileyandbeauco.com/admin/login/ | `admin` | `Admin123!` |
-| **Production** | **Backend staff** — Super Admin UI | Operational dashboards (`/super-admin/…`) | https://reading-room.baileyandbeauco.com/admin/login/ *(then open Super Admin links)* | `admin` | `Admin123!` |
+| **Production** | **Backend staff** — Super Admin UI | Operational dashboards (`/staff/…`) | https://reading-room.baileyandbeauco.com/admin/login/ *(then open Super Admin links)* | `admin` | `Admin123!` |
 | **Production** | **Backend API** | JSON API — Postman, scripts, or the frontend bundle | *No interactive login page* — `POST https://api.reading-room.baileyandbeauco.com/api/v1/auth/login/` with JSON body | Same as parent row above | Same as parent row above |
 
 **API base URL (production):** `https://api.reading-room.baileyandbeauco.com/api/v1`  
@@ -77,22 +77,22 @@ Interactive parent login screens are hosted on the **frontend** (`/login` above)
 
 ## 3. Staff / operations (Django Admin & Super Admin)
 
-Staff users must have the **staff** flag in Django. **`reading-room.baileyandbeauco.com`** serves the Next.js app and proxies `/admin/` and `/super-admin/` to Django (same pattern as a bare EC2 IP host previously used for UAT).
+Staff users must have the **staff** flag in Django. **`reading-room.baileyandbeauco.com`** serves the Next.js app and proxies `/admin/` and `/staff/` to Django (same pattern as a bare EC2 IP host previously used for UAT).
 
 | Item | URL |
 |------|-----|
 | **Django Admin (classic)** | https://reading-room.baileyandbeauco.com/admin/ |
 | **Staff sign-in** | https://reading-room.baileyandbeauco.com/admin/login/ |
-| **Super Admin home** | https://reading-room.baileyandbeauco.com/super-admin/dashboard/ |
+| **Super Admin home** | https://reading-room.baileyandbeauco.com/staff/dashboard/ |
 
 **Common Super Admin shortcuts** (staff only; unauthenticated visits redirect to sign-in):
 
 | Area | URL |
 |------|-----|
-| Dashboard | https://reading-room.baileyandbeauco.com/super-admin/dashboard/ |
-| Sessions | https://reading-room.baileyandbeauco.com/super-admin/sessions/ |
-| Live sessions | https://reading-room.baileyandbeauco.com/super-admin/live-sessions/ |
-| Book library | https://reading-room.baileyandbeauco.com/super-admin/books/ |
+| Dashboard | https://reading-room.baileyandbeauco.com/staff/dashboard/ |
+| Sessions | https://reading-room.baileyandbeauco.com/staff/sessions/ |
+| Live sessions | https://reading-room.baileyandbeauco.com/staff/live-sessions/ |
+| Book library | https://reading-room.baileyandbeauco.com/staff/books/ |
 
 ---
 

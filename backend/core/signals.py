@@ -1,6 +1,6 @@
 """Signals that keep every user account fully provisioned.
 
-A user created through ANY path (super-admin portal, Django admin, createsuperuser,
+A user created through ANY path (staff portal, Django admin, createsuperuser,
 shell, registration API) gets a UserProfile, Entitlement and NotificationPreference
 automatically. Previously these were created by hand in each view, so users created
 outside the portal had no profile and could appear "invisible" in admin screens.

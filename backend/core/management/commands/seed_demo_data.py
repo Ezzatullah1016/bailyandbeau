@@ -119,7 +119,9 @@ class Command(BaseCommand):
 
             def quiz_envelope(book):
                 return {
-                    "schema_version": ActivityConfig.SCHEMA_VERSION,
+                    # 1.0-shaped payload (single question) — pin the version so it
+                    # validates against the 1.0 rules, not the newer default.
+                    "schema_version": "1.0",
                     "activity_type": "quiz",
                     "book_id": str(book.id),
                     "ui": {

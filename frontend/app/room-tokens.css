@@ -1,0 +1,214 @@
+/* ───────────────────────────────────────────────────────────────────────────
+   Reading / Activity room design tokens.
+
+   Every room surface reads from these variables instead of hardcoding hex
+   values, so a per-book theme (see BookTheme on the backend) can override the
+   whole room by setting a handful of custom properties on `.room-root`.
+
+   The defaults below are the "Daylight" theme: a bright, illustrated sky —
+   deliberately the opposite of the previous near-black room, which read as a
+   video-conference tool rather than a place to read a picture book.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.room-root {
+  /* ── Backdrop ─────────────────────────────────────────────────────────── */
+  --room-bg-1: #cfe6fb;          /* sky, top */
+  --room-bg-2: #a9d3f5;          /* sky, bottom */
+  --room-bg-angle: 170deg;
+  --room-bg-image: none;         /* set by BookTheme for image/video backdrops */
+  --room-cloud: rgba(255, 255, 255, 0.55);
+
+  /* ── Ink & chrome ─────────────────────────────────────────────────────── */
+  --room-ink: #23324a;           /* primary text on the backdrop */
+  --room-ink-soft: rgba(35, 50, 74, 0.62);
+  --room-accent: #3d3b62;
+  --room-accent-contrast: #ffffff;
+  --room-chrome: rgba(255, 255, 255, 0.72);
+  --room-chrome-strong: rgba(255, 255, 255, 0.92);
+  --room-chrome-line: rgba(35, 50, 74, 0.12);
+
+  /* ── Book presentation ────────────────────────────────────────────────── */
+  --book-paper: #fdfbf7;
+  --book-edge: rgba(35, 50, 74, 0.10);
+  --book-tilt: -2deg;
+  --book-shadow:
+    0 2px 6px rgba(23, 34, 51, 0.14),
+    0 28px 60px -18px rgba(23, 34, 51, 0.42);
+  --book-gutter: rgba(35, 50, 74, 0.16);
+
+  /* ── Radius scale ─────────────────────────────────────────────────────── */
+  --r-sm: 8px;
+  --r-md: 16px;
+  --r-lg: 26px;
+
+  /* ── Elevation ────────────────────────────────────────────────────────── */
+  --elev-1: 0 2px 10px rgba(23, 34, 51, 0.08);
+  --elev-2: 0 12px 34px -8px rgba(23, 34, 51, 0.22);
+
+  /* ── Motion ───────────────────────────────────────────────────────────── */
+  --ease-calm: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --dur-quick: 180ms;
+  --dur-base: 260ms;
+  --dur-page: 460ms;
+
+  /* ── Touch targets (WCAG 2.5.8 minimum) ───────────────────────────────── */
+  --tap-min: 44px;
+
+  color: var(--room-ink);
+  background-color: var(--room-bg-2);
+  background-image:
+    var(--room-bg-image),
+    linear-gradient(var(--room-bg-angle), var(--room-bg-1) 0%, var(--room-bg-2) 100%);
+  background-size: cover;
+  background-position: center;
+}
+
+/* Dark-chrome themes (night sky, deep ocean) flip the readable ink so a book
+   theme only has to declare `--chrome-mode: dark`. */
+.room-root[data-chrome="dark"] {
+  --room-ink: #f2f6ff;
+  --room-ink-soft: rgba(242, 246, 255, 0.66);
+  --room-chrome: rgba(14, 22, 38, 0.62);
+  --room-chrome-strong: rgba(14, 22, 38, 0.86);
+  --room-chrome-line: rgba(255, 255, 255, 0.16);
+  --room-accent-contrast: #0e1626;
+  /* White clouds at daylight opacity read as grey smears against a night sky,
+     so a dark theme gets a much fainter cloud field. */
+  --room-cloud: rgba(255, 255, 255, 0.06);
+}
+
+/* ── Soft cloud field ──────────────────────────────────────────────────────
+   Drawn with gradients rather than an image so it costs nothing to load and
+   recolours automatically with the theme. Suppressed for image/video
+   backdrops, which supply their own art. */
+.room-sky::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(38% 26% at 12% 22%, var(--room-cloud) 0%, transparent 62%),
+    radial-gradient(30% 20% at 78% 14%, var(--room-cloud) 0%, transparent 60%),
+    radial-gradient(46% 30% at 62% 88%, var(--room-cloud) 0%, transparent 66%),
+    radial-gradient(26% 18% at 30% 72%, var(--room-cloud) 0%, transparent 58%);
+  opacity: 0.9;
+}
+
+.room-root[data-backdrop="image"] .room-sky::before,
+.room-root[data-backdrop="video"] .room-sky::before {
+  display: none;
+}
+
+/* ── Chrome surfaces ───────────────────────────────────────────────────────
+   Frosted panels that sit over the sky without boxing it in. */
+.room-panel {
+  background: var(--room-chrome);
+  border: 1px solid var(--room-chrome-line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--elev-1);
+  backdrop-filter: blur(14px) saturate(1.1);
+}
+
+.room-panel-strong {
+  background: var(--room-chrome-strong);
+  border: 1px solid var(--room-chrome-line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--elev-2);
+  backdrop-filter: blur(18px) saturate(1.15);
+}
+
+/* Every interactive control in the room clears the 44px minimum, including the
+   icon-only ones — the previous room had 10–12 sub-44px targets per viewport. */
+.room-tap {
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background-color var(--dur-quick) var(--ease-calm),
+    transform var(--dur-quick) var(--ease-calm),
+    opacity var(--dur-quick) var(--ease-calm);
+}
+
+/* ── The book itself ───────────────────────────────────────────────────────
+   The book is now rendered in WebGL (components/reading/Book3D), so its paper,
+   shadow, tilt and page-turn all live in the scene rather than in CSS. The
+   `--book-*` tokens above are still read: `--book-paper` tints the generated
+   cover, and BookTheme continues to drive them per book.
+
+   The old `.room-book` surface, its gutter gradient and the CSS keyframe turn
+   were removed with the 2D viewer — a transformed, opaque DOM element wrapping
+   the canvas fought the 3D perspective and clipped the page mesh. */
+
+/* ── Activity room ─────────────────────────────────────────────────────────
+   The two rooms are deliberately different places. Reading is quiet: a book
+   floating in open sky, translucent chrome that gets out of the way. Activity
+   is a workspace: a solid card with a defined edge and a colour-banded header,
+   so a child can tell at a glance whether it is time to listen or time to play.
+   Both still read from the same book theme, so a book keeps its world in both. */
+/* Root-level defaults so activity surfaces are still opaque outside a room.
+   These used to live only under `.room-root`, which meant the admin builder's
+   live preview rendered the panes with `background: var(--activity-paper)`
+   resolving to nothing — the hotspot popup and the drawing rail came out
+   transparent, with the illustration legible straight through the text. */
+:root {
+  --activity-paper: #fdfcff;
+  --activity-edge: rgba(35, 50, 74, 0.14);
+  --activity-shadow: 0 18px 48px -16px rgba(23, 34, 51, 0.34);
+  /* The panes also paint with these. Every --room-* token is scoped to
+     .room-root, so outside a session they resolved to nothing: an unstyled
+     check on no background rather than white-on-accent. Light-theme values,
+     matching the .room-root defaults above. */
+  --room-ink: #23324a;
+  --room-ink-soft: rgba(35, 50, 74, 0.62);
+  --room-accent: #3d3b62;
+  --room-accent-contrast: #ffffff;
+}
+
+.room-root {
+  --activity-paper: #fdfcff;
+  --activity-edge: rgba(35, 50, 74, 0.14);
+  --activity-shadow: 0 18px 48px -16px rgba(23, 34, 51, 0.34);
+}
+
+.room-root[data-chrome="dark"] {
+  --activity-paper: #171f33;
+  --activity-edge: rgba(255, 255, 255, 0.14);
+  --activity-shadow: 0 18px 48px -16px rgba(0, 0, 0, 0.6);
+}
+
+.room-activity-card {
+  background: var(--activity-paper);
+  border: 1px solid var(--activity-edge);
+  border-radius: var(--r-lg);
+  box-shadow: var(--activity-shadow);
+  color: var(--room-ink);
+}
+
+/* ── Idle fade ─────────────────────────────────────────────────────────────
+   Chrome recedes while reading and returns on interaction, so the book is the
+   only thing competing for attention. */
+/* Chrome dims rather than disappears: it must stay findable (and clickable —
+   opacity alone does not remove it from the hit-test) so ending a session is
+   never a hunt. Hovering or focusing anything inside brings it fully back. */
+.room-recede {
+  transition: opacity var(--dur-base) var(--ease-calm);
+}
+.room-root[data-idle="true"] .room-recede {
+  opacity: 0.45;
+}
+.room-root[data-idle="true"] .room-recede:hover,
+.room-root[data-idle="true"] .room-recede:focus-within {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room-recede,
+  .room-tap {
+    transition: none;
+  }
+  .room-root[data-idle="true"] .room-recede {
+    opacity: 1;
+  }
+}

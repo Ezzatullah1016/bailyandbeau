@@ -81,6 +81,10 @@ function LobbyPageContent() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const livekitRoomRef = useRef<any>(null);
+  const connectingRef = useRef(false);
+  // Set just before navigating into the session so the unmount cleanup knows
+  // not to tear down a LiveKit connection the room page is about to reuse.
+  const enteringRoomRef = useRef(false);
 
   const storedParticipantId =
     typeof localStorage !== 'undefined' ? localStorage.getItem(`bb_participant_${id}`) : null;
@@ -145,16 +149,38 @@ function LobbyPageContent() {
     };
   }, []);
 
-  // ── Disconnect livekit on unmount ─────────────────────────────────────────
+  // Warm the room route's JS while the user is still in the lobby. Without
+  // this the navigation starts downloading the room chunk and the page unloads
+  // mid-download, which surfaces as ChunkLoadError -> full browser navigation
+  // -> the LiveKit engine torn down mid-negotiation.
+  // Both room routes are warmed because the session's room type arrives
+  // asynchronously; prefetching only the current guess leaves the other route
+  // cold and the navigation aborts its chunk mid-download.
+  useEffect(() => {
+    if (!id) return;
+    router.prefetch(`/session/${id}/reading-room`);
+    router.prefetch(`/session/${id}/activity`);
+  }, [id, router]);
+
+  // ── Release the lobby's LiveKit room ──────────────────────────────────────
+  // Disconnect only when the user is leaving for good (back, close). When they
+  // are heading into the session, the room page is already opening its own
+  // connection to the same LiveKit room, and tearing this one down at that
+  // moment aborts the in-flight negotiation — the "cannot negotiate on closed
+  // engine" error. `enteringRoomRef` marks that case.
   useEffect(() => {
     return () => {
-      livekitRoomRef.current?.disconnect();
+      if (!enteringRoomRef.current) livekitRoomRef.current?.disconnect();
     };
   }, []);
 
   // ── Connect to LiveKit lobby room and exchange PARTICIPANT_READY ───────────
   const connectToLobby = useCallback(
     async (token: string, url: string, participantId: string, role: 'host' | 'guest', sessionIdForNav: string) => {
+      // Re-entry (double click, StrictMode) would orphan the first Room and
+      // leave negotiation running against a discarded engine.
+      if (connectingRef.current || livekitRoomRef.current) return;
+      connectingRef.current = true;
       const { Room, RoomEvent } = await import('livekit-client');
       const room = new Room();
       livekitRoomRef.current = room;
@@ -166,6 +192,7 @@ function LobbyPageContent() {
         if (navigatedAway) return;
         navigatedAway = true;
         setPhase('starting');
+        enteringRoomRef.current = true;
         setTimeout(() => router.push(`/session/${sessionIdForNav}/${roomSlug}`), 400);
       };
 
@@ -220,6 +247,7 @@ function LobbyPageContent() {
           if (navigatedAway) return;
           navigatedAway = true;
           setPhase('starting');
+          enteringRoomRef.current = true;
           setTimeout(() => router.push(`/session/${sid}/${roomSlug}`), 400);
         }
       });
@@ -232,13 +260,22 @@ function LobbyPageContent() {
         }
       });
 
-      await room.connect(url, token, { autoSubscribe: true });
+      try {
+        await room.connect(url, token, { autoSubscribe: true });
 
-      await room.localParticipant.publishData(
-        buildMsg('PARTICIPANT_READY', { participantId, role }),
-        { reliable: true },
-      );
+        await room.localParticipant.publishData(
+          buildMsg('PARTICIPANT_READY', { participantId, role }),
+          { reliable: true },
+        );
+      } catch (e) {
+        // Release the guard so the user can retry instead of being stuck with
+        // a dead ref and a Start button that does nothing.
+        livekitRoomRef.current = null;
+        connectingRef.current = false;
+        throw e;
+      }
 
+      connectingRef.current = false;
       if (role === 'host') void hostReconcileRemotes();
       else guestReconcileRemotes();
     },
@@ -266,6 +303,7 @@ function LobbyPageContent() {
       if (!canUseLiveKit) {
         // Local fallback: allow development flow to continue without realtime transport.
         setPhase('starting');
+        enteringRoomRef.current = true;
         router.push(`/session/${id}/${roomSlug}`);
         return;
       }
@@ -301,6 +339,7 @@ function LobbyPageContent() {
       if (!canUseLiveKit) {
         // Local fallback: allow development flow to continue without realtime transport.
         setPhase('starting');
+        enteringRoomRef.current = true;
         router.push(`/session/${data.session_id}/${roomSlug}`);
         return;
       }
@@ -321,14 +360,30 @@ function LobbyPageContent() {
 
   // ── Host: manual "Start Session" ─────────────────────────────────────────
   async function handleHostStart() {
-    if (!livekitRoomRef.current || !storedParticipantId) return;
+    if (!storedParticipantId) {
+      setError('Session participant not found. Please recreate the session.');
+      return;
+    }
+    // Announcing the start is best-effort — the host must never be stranded on
+    // the lobby with a button that silently does nothing.
+    //
+    // Only publish once the room is actually connected. Solo hosts routinely
+    // press Start before the lobby socket is up, and publishing then makes
+    // livekit-client log "NegotiationError: cannot negotiate on closed engine"
+    // before it rejects, so a try/catch cannot suppress it. Guests are told to
+    // enter by ParticipantConnected regardless, so skipping the publish here
+    // costs nothing.
     try {
-      await livekitRoomRef.current.localParticipant.publishData(
-        buildMsg('SESSION_START', { initiator: storedParticipantId, session_id: id }),
-        { reliable: true },
-      );
-    } catch { /* non-fatal */ }
+      const lobbyRoom = livekitRoomRef.current;
+      if (lobbyRoom?.state === 'connected') {
+        await lobbyRoom.localParticipant.publishData(
+          buildMsg('SESSION_START', { initiator: storedParticipantId, session_id: id }),
+          { reliable: true },
+        );
+      }
+    } catch { /* non-fatal — guests also reconcile on ParticipantConnected */ }
     setPhase('starting');
+    enteringRoomRef.current = true;
     router.push(`/session/${id}/${roomSlug}`);
   }
 
@@ -346,6 +401,10 @@ function LobbyPageContent() {
   }
 
   const bookTitle = sessionData?.book_title ?? 'Reading Session';
+  // An *activity-room book* is still a book. Only a session that targets an
+  // activity group is an adventure, so key the wording on the group rather
+  // than on room_type, which both kinds can share.
+  const isAdventure = Boolean(sessionData?.activity_group);
   const isLoading = phase === 'starting';
 
   return (
@@ -362,22 +421,24 @@ function LobbyPageContent() {
             </div>
 
             <div className="max-w-md mx-auto flex flex-col gap-8">
+              {/* A session can target a themed adventure rather than a book,
+                  and an adventure has nothing to read. */}
               <h2 className="order-10 font-baloo text-4xl font-bold text-[#3d3b62] tracking-tight">
-                Ready to Read Together?
+                {isAdventure ? 'Ready to Play Together?' : 'Ready to Read Together?'}
               </h2>
 
               {/* Session info / Today's Book card */}
               <div className="order-30 rounded-xl md:order-20 bg-white p-6 border border-[#eccdca] shadow-[0_6px_18px_rgba(0,0,0,0.08)]">
                 <div className="flex flex-col gap-1 mb-4">
                   <span className="font-karla uppercase tracking-widest text-[11px] font-bold text-[#764f84]">
-                    TODAY&apos;S BOOK
+                    {isAdventure ? "TODAY'S ADVENTURE" : "TODAY'S BOOK"}
                   </span>
                   <h3 className="font-baloo text-2xl font-bold text-[#3d3b62]">{bookTitle}</h3>
                 </div>
                 <div className="font-karla flex items-center gap-4 text-[#43493d] text-sm mb-4">
                   <div className="flex items-center gap-1.5">
                     <BookOpen className="w-4 h-4" />
-                    <span>Reading Room</span>
+                    <span>{isAdventure || effectiveRoomType === 'activity' ? 'Activity Room' : 'Reading Room'}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <Clock className="w-4 h-4" />
@@ -480,11 +541,14 @@ function LobbyPageContent() {
                 </div>
               </div>
 
-              {error && <p className="order-[70] font-karla text-sm text-[#ba1a1a] font-medium">{error}</p>}
+              {error && <p className="order-[34] font-karla text-sm text-[#ba1a1a] font-medium">{error}</p>}
 
-              {/* CTA */}
+              {/* CTA — ordered above the camera-check block (order-50). The
+                  preview is tall enough that on a 900px-high viewport the join
+                  button fell below the fold, so the lobby looked like it had no
+                  action at all. */}
               {phase === 'check' && (
-                <div className="order-[60] flex flex-col gap-2">
+                <div className="order-[35] flex flex-col gap-2">
                   <button
                     type="button"
                     onClick={isGuestMode ? handleGuestReady : handleHostReady}
@@ -500,7 +564,7 @@ function LobbyPageContent() {
               )}
 
               {phase === 'waiting' && (
-                <div className="order-[60] flex flex-col items-center gap-4 py-4">
+                <div className="order-[35] flex flex-col items-center gap-4 py-4">
                   <div className="w-8 h-8 border-4 border-[#764f84] border-t-transparent rounded-full animate-spin" />
                   <p className="font-karla text-sm text-[#43493d] font-medium">
                     {isGuestMode
@@ -529,7 +593,7 @@ function LobbyPageContent() {
               )}
 
               {phase === 'starting' && (
-                <div className="order-[60] flex flex-col items-center gap-3 py-4">
+                <div className="order-[35] flex flex-col items-center gap-3 py-4">
                   <Rocket className="w-10 h-10 text-[#764f84] animate-pulse" />
                   <p className="font-karla text-sm text-[#3d3b62] font-bold">Session starting…</p>
                 </div>

@@ -7,6 +7,7 @@ import {
   useRef,
   useCallback,
 } from 'react';
+import type { Ref } from 'react';
 import type { AnnotationTool } from './AnnotationToolbar';
 
 // Fabric.js is imported dynamically to avoid SSR issues — no static type available.
@@ -24,14 +25,21 @@ export interface AnnotationCanvasHandle {
   recalcLayout(): void;
 }
 
-interface Props {
+export interface AnnotationCanvasProps {
   tool: AnnotationTool;
   color: string;
   brushSize: number;
   onSync: (json: string) => void;
   /** When false, pointer events pass through so the flip book receives swipes/clicks */
   drawingEnabled: boolean;
+  /**
+   * `next/dynamic` cannot forward a real `ref`, so callers that lazy-load this
+   * component pass the handle through as a normal prop instead.
+   */
+  forwardedRef?: Ref<AnnotationCanvasHandle>;
 }
+
+type Props = AnnotationCanvasProps;
 
 /** Convert a hex color to rgba() string with the given alpha (0–1). */
 function hexToRgba(hex: string, alpha: number): string {
@@ -134,7 +142,13 @@ function applyToolToCanvas(
 }
 
 const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
-  function AnnotationCanvas({ tool, color, brushSize, onSync, drawingEnabled }, ref) {
+  function AnnotationCanvas(
+    { tool, color, brushSize, onSync, drawingEnabled, forwardedRef },
+    ref,
+  ) {
+    // Lazy-loaded callers supply the handle via `forwardedRef` (see the shim in
+    // SessionRoomPage); direct callers use the real `ref`.
+    const handleRef = forwardedRef ?? ref;
     const canvasElRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const fabricRef = useRef<FabricCanvas | null>(null);
@@ -192,8 +206,6 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
           /**
            * Must be true for stylus / pen: Fabric listens on pointer*; with false it only
            * uses mouse* and many pens never drive free-drawing reliably.
-           * Window-level pan capture from react-zoom-pan-pinch is stopped on the
-           * annotation container while drawing (see effect below).
            */
           enablePointerEvents: true,
           perPixelTargetFind: true,
@@ -201,7 +213,7 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
         });
         fabricRef.current = canvas;
 
-        /** Parent uses CSS transforms (zoom/pan). Refresh offset before Fabric handles the pointer. */
+        /** The stage can be resized or re-laid-out under us. Refresh offset before Fabric handles the pointer. */
         const syncOffset = () => {
           if (typeof canvas.calcOffset === 'function') canvas.calcOffset();
         };
@@ -269,9 +281,10 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
     }, [tool, color, brushSize, drawingEnabled, emitSync]);
 
     /**
-     * react-zoom-pan-pinch attaches `mousedown` on `window` for pan start. Even when
-     * `panning.disabled` is true, `onPanningStart` still runs and can fight Fabric.
-     * After Fabric handles the event on the upper canvas, stop bubbling at this wrapper.
+     * The 3D book sits directly beneath this overlay and registers its own
+     * pointer handlers on its canvas. Once Fabric has handled an event on the
+     * upper canvas, stop it bubbling so a stroke never doubles as an
+     * interaction with the scene behind it.
      */
     useEffect(() => {
       const el = containerRef.current;
@@ -291,7 +304,7 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
 
     // ── Expose imperative handles ─────────────────────────────────────────
     useImperativeHandle(
-      ref,
+      handleRef,
       () => ({
         loadRemoteJSON(json: string) {
           const canvas = fabricRef.current;

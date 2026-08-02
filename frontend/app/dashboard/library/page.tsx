@@ -3,28 +3,38 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { BookOpen, Heart, Info, RefreshCw } from 'lucide-react';
-import { apiRequest } from '@/lib/api';
+import { BookOpen, Heart, RefreshCw, Sparkles } from 'lucide-react';
+import { apiRequest, listActivityGroups, listThemes } from '@/lib/api';
+import type { ActivityGroupData, ThemeData } from '@/lib/api';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { usePathname } from 'next/navigation';
 
 interface Book {
   id: string; title: string; slug: string; description: string;
   room_type: string; age_band: string; cover_image: string;
-  page_count: number; published: boolean;
+  page_count: number;
+  // Shared taxonomy with adventures. These arrive from BookSerializer and were
+  // previously dropped on the floor because the interface omitted them.
+  theme_category: string | null;
+  theme_name: string;
+  theme_accent: string;
 }
-interface MeData { id: number; username: string; first_name: string; last_name: string; }
+interface MeData { id: number; username: string; first_name: string; last_name: string; is_staff?: boolean; }
 
 const ROOM_LABELS: Record<string, string> = { reading: 'Reading Room', activity: 'Activity Room', hybrid: 'Both Rooms' };
 const ROOM_COLORS: Record<string, string> = { reading: 'bg-purple-100 text-[#764f84]', activity: 'bg-amber-100 text-amber-800', hybrid: 'bg-blue-100 text-blue-700' };
 
+type Tab = 'books' | 'adventures';
 
 export default function LibraryPage() {
   const router = useRouter();
   const pathname = usePathname();
   const [me, setMe] = useState<MeData | null>(null);
   const [books, setBooks] = useState<Book[]>([]);
+  const [adventures, setAdventures] = useState<ActivityGroupData[]>([]);
+  const [themes, setThemes] = useState<ThemeData[]>([]);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [tab, setTab] = useState<Tab>('books');
   const [filter, setFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
 
@@ -34,6 +44,8 @@ export default function LibraryPage() {
     Promise.all([
       apiRequest<{ data: MeData }>('/me/').then((r) => setMe(r.data)),
       apiRequest<{ data: Book[] }>('/books/').then((r) => setBooks(r.data)),
+      listThemes().then(setThemes).catch(() => {}),
+      listActivityGroups().then(setAdventures).catch(() => {}),
       apiRequest<{ data: { book: string }[] }>('/library/favorites/').then((r) => setFavorites(new Set(r.data.map((f) => f.book)))).catch(() => {}),
     ]).catch(() => router.replace('/login')).finally(() => setLoading(false));
   }, [router]);
@@ -48,7 +60,38 @@ export default function LibraryPage() {
     }
   }
 
-  const filtered = filter === 'all' ? books : filter === 'favorites' ? books.filter((b) => favorites.has(b.id)) : books.filter((b) => b.room_type === filter);
+  const themeSlugs = new Set(themes.map((t) => t.slug));
+  const themeById = new Map(themes.map((t) => [t.id, t]));
+
+  const visibleBooks = books.filter((b) => {
+    if (filter === 'all') return true;
+    if (filter === 'favorites') return favorites.has(b.id);
+    if (themeSlugs.has(filter)) return themeById.get(b.theme_category ?? '')?.slug === filter;
+    return b.room_type === filter;
+  });
+
+  // Favourites are a book-only idea, so that chip hides adventures entirely
+  // rather than silently showing an unfiltered list.
+  const visibleAdventures = adventures.filter((g) => {
+    if (filter === 'all') return true;
+    if (filter === 'favorites') return false;
+    if (themeSlugs.has(filter)) return themeById.get(g.theme ?? '')?.slug === filter;
+    return true;
+  });
+
+  const chips = [
+    { val: 'all', label: 'Everything' },
+    ...(tab === 'books'
+      ? [
+          { val: 'reading', label: 'Reading Room' },
+          { val: 'activity', label: 'Activity Room' },
+          // 'hybrid' books had no chip, so they only ever showed under "all".
+          { val: 'hybrid', label: 'Both Rooms' },
+          { val: 'favorites', label: '♥ Favourites' },
+        ]
+      : []),
+    ...themes.map((t) => ({ val: t.slug, label: t.name, accent: t.accent })),
+  ];
 
   if (loading) return (
     <div className="h-screen w-screen flex items-center justify-center bg-[#faf7f6]">
@@ -64,57 +107,146 @@ export default function LibraryPage() {
         <div className="font-baloo text-xl font-bold text-[#3d3b62]">Library</div>
       </header>
       <main className="p-8 min-h-screen bg-[#faf7f6] font-karla text-[#1d1b16]">
-        <div className="mb-8">
-          <h2 className="font-baloo text-4xl text-[#3d3b62] font-bold mb-2">Book Library</h2>
-          <p className="text-stone-500">{books.length} book{books.length !== 1 ? 's' : ''} available</p>
+        <div className="mb-6">
+          <h2 className="font-baloo text-4xl text-[#3d3b62] font-bold mb-2">Library</h2>
+          <p className="text-stone-500">
+            {books.length} book{books.length !== 1 ? 's' : ''} · {adventures.length} adventure{adventures.length !== 1 ? 's' : ''}
+          </p>
         </div>
 
-        <div className="flex gap-3 mb-8 flex-wrap">
-          {[{ val: 'all', label: 'All Books' }, { val: 'reading', label: 'Reading Room' }, { val: 'activity', label: 'Activity Room' }, { val: 'favorites', label: '♥ Favourites' }].map((f) => (
-            <button key={f.val} onClick={() => setFilter(f.val)}
-              className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${filter === f.val ? 'bg-[#3d3b62] text-white' : 'bg-white text-stone-500 hover:bg-[#eccdca]/30 border border-[#eccdca]'}`}>
-              {f.label}
+        {/* Books / Adventures. Adventures have no storybook behind them, so they
+            cannot live in the book grid — they need their own shelf. */}
+        <div className="mb-5 inline-flex rounded-xl border border-[#eccdca] bg-white p-1">
+          {(['books', 'adventures'] as Tab[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => { setTab(t); setFilter('all'); }}
+              className={`font-baloo cursor-pointer rounded-lg px-5 py-2 text-sm font-bold capitalize transition-colors ${
+                tab === t ? 'bg-[#3d3b62] text-white' : 'text-stone-500 hover:text-[#3d3b62]'
+              }`}
+            >
+              {t}
             </button>
           ))}
         </div>
 
-        {filtered.length === 0 ? (
+        <div className="flex gap-3 mb-8 flex-wrap">
+          {chips.map((f) => {
+            const on = filter === f.val;
+            const accent = (f as { accent?: string }).accent;
+            return (
+              <button
+                key={f.val}
+                onClick={() => setFilter(f.val)}
+                className="cursor-pointer rounded-full border px-4 py-2 text-sm font-bold transition-all"
+                style={
+                  on
+                    ? { background: accent ?? '#3d3b62', color: '#fff', borderColor: accent ?? '#3d3b62' }
+                    : { background: '#fff', color: '#78716c', borderColor: '#eccdca' }
+                }
+              >
+                {accent && !on ? (
+                  <span className="mr-1.5 inline-block h-2 w-2 rounded-full align-middle" style={{ background: accent }} />
+                ) : null}
+                {f.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {tab === 'books' ? (
+          visibleBooks.length === 0 ? (
+            <div className="flex flex-col items-center gap-4 py-24 text-stone-400">
+              <BookOpen className="w-12 h-12" />
+              <p className="font-medium">No books found</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {visibleBooks.map((book) => (
+                <div key={book.id} className="bg-white rounded-2xl shadow-sm border border-[#eccdca] overflow-hidden hover:shadow-md transition-shadow group">
+                  <div className="h-48 bg-[#3d3b62]/5 flex items-center justify-center relative overflow-hidden">
+                    {book.cover_image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={book.cover_image} alt={book.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    ) : (
+                      <BookOpen className="w-14 h-14 text-[#764f84]/30" />
+                    )}
+                    <button onClick={() => toggleFavorite(book.id)}
+                      className="absolute top-3 right-3 h-8 w-8 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center shadow-sm hover:bg-white transition-all">
+                      <Heart
+                        className="w-4 h-4 transition-colors"
+                        fill={favorites.has(book.id) ? '#c84a71' : 'none'}
+                        color={favorites.has(book.id) ? '#c84a71' : '#9ca3af'}
+                      />
+                    </button>
+                  </div>
+                  <div className="p-5">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`font-montserrat text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${ROOM_COLORS[book.room_type] ?? 'bg-stone-100 text-stone-500'}`}>
+                        {ROOM_LABELS[book.room_type] ?? book.room_type}
+                      </span>
+                      <span className="text-[10px] text-stone-400 font-medium">Ages {book.age_band}</span>
+                    </div>
+                    {book.theme_name ? (
+                      <span
+                        className="mb-2 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-montserrat text-[10px] font-bold uppercase tracking-wider"
+                        style={{ background: `${book.theme_accent}1a`, color: book.theme_accent }}
+                      >
+                        <span className="h-1.5 w-1.5 rounded-full" style={{ background: book.theme_accent }} />
+                        {book.theme_name}
+                      </span>
+                    ) : null}
+                    <h3 className="font-baloo text-lg font-bold text-[#3d3b62] mb-1 leading-tight">{book.title}</h3>
+                    {book.description && <p className="text-stone-400 text-xs line-clamp-2 mb-4">{book.description}</p>}
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-stone-400">{book.page_count} pages</span>
+                      <Link href={`/dashboard?startBook=${book.id}`}
+                        className="font-baloo px-4 py-2 bg-[#3d3b62] text-xs font-bold text-white rounded-lg hover:bg-[#764f84] transition-all">
+                        Start Session
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        ) : visibleAdventures.length === 0 ? (
           <div className="flex flex-col items-center gap-4 py-24 text-stone-400">
-            <BookOpen className="w-12 h-12" />
-            <p className="font-medium">No books found</p>
+            <Sparkles className="w-12 h-12" />
+            <p className="font-medium">No adventures found</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filtered.map((book) => (
-              <div key={book.id} className="bg-white rounded-2xl shadow-sm border border-[#eccdca] overflow-hidden hover:shadow-md transition-shadow group">
-                <div className="h-48 bg-[#3d3b62]/5 flex items-center justify-center relative overflow-hidden">
-                  {book.cover_image ? (
+            {visibleAdventures.map((g) => (
+              <div key={g.id} className="bg-white rounded-2xl shadow-sm border border-[#eccdca] overflow-hidden hover:shadow-md transition-shadow group">
+                <div className="h-48 flex items-center justify-center relative overflow-hidden" style={{ background: `${g.theme_accent || '#3d3b62'}14` }}>
+                  {g.cover_image ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={book.cover_image} alt={book.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    <img src={g.cover_image} alt={g.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                   ) : (
-                    <BookOpen className="w-14 h-14 text-[#764f84]/30" />
+                    <Sparkles className="w-14 h-14" style={{ color: `${g.theme_accent || '#764f84'}55` }} />
                   )}
-                  <button onClick={() => toggleFavorite(book.id)}
-                    className="absolute top-3 right-3 h-8 w-8 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center shadow-sm hover:bg-white transition-all">
-                    <Heart
-                      className="w-4 h-4 transition-colors"
-                      fill={favorites.has(book.id) ? '#c84a71' : 'none'}
-                      color={favorites.has(book.id) ? '#c84a71' : '#9ca3af'}
-                    />
-                  </button>
                 </div>
                 <div className="p-5">
                   <div className="flex items-center justify-between mb-2">
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${ROOM_COLORS[book.room_type] ?? 'bg-stone-100 text-stone-500'}`}>
-                      {ROOM_LABELS[book.room_type] ?? book.room_type}
-                    </span>
-                    <span className="text-[10px] text-stone-400 font-medium">Ages {book.age_band}</span>
+                    {g.theme_name ? (
+                      <span
+                        className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-montserrat text-[10px] font-bold uppercase tracking-wider"
+                        style={{ background: `${g.theme_accent}1a`, color: g.theme_accent }}
+                      >
+                        <span className="h-1.5 w-1.5 rounded-full" style={{ background: g.theme_accent }} />
+                        {g.theme_name}
+                      </span>
+                    ) : <span />}
+                    {g.age_band ? <span className="text-[10px] text-stone-400 font-medium">Ages {g.age_band}</span> : null}
                   </div>
-                  <h3 className="font-baloo text-lg font-bold text-[#3d3b62] mb-1 leading-tight">{book.title}</h3>
-                  {book.description && <p className="text-stone-400 text-xs line-clamp-2 mb-4">{book.description}</p>}
+                  <h3 className="font-baloo text-lg font-bold text-[#3d3b62] mb-1 leading-tight">{g.title}</h3>
+                  {g.description && <p className="text-stone-400 text-xs line-clamp-2 mb-4">{g.description}</p>}
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-stone-400">{book.page_count} pages</span>
-                    <Link href={`/dashboard?startBook=${book.id}`}
+                    <span className="text-xs text-stone-400">
+                      {g.activity_count} activit{g.activity_count === 1 ? 'y' : 'ies'}
+                    </span>
+                    <Link href={`/dashboard?startGroup=${g.id}`}
                       className="font-baloo px-4 py-2 bg-[#3d3b62] text-xs font-bold text-white rounded-lg hover:bg-[#764f84] transition-all">
                       Start Session
                     </Link>
