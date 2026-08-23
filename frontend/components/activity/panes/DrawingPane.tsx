@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Eraser, PaintBucket, Pencil, Redo2, Trash2, Undo2 } from 'lucide-react';
+import { Check, Eraser, PaintBucket, Pencil, Pipette, Redo2, RotateCcw, Undo2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 import { usePaneMotion } from './motion';
-import type { Line } from './shared';
+import type { Line, PaneProps } from './shared';
 
 const CANVAS_W = 800;
 const CANVAS_H = 480;
@@ -35,14 +35,14 @@ function RailTool({
       disabled={disabled}
       whileTap={disabled ? undefined : m.press}
       aria-pressed={active}
-      className={`relative flex w-full min-h-11 cursor-pointer flex-col items-center gap-0.5 rounded-xl px-2 py-2 text-[10px] font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${
-        active ? 'text-white' : 'text-brand-navy hover:bg-brand-purple/10'
-      }`}
+      className="relative flex min-h-11 cursor-pointer flex-col items-center gap-0.5 rounded-xl px-3 py-2 font-montserrat text-[10px] font-semibold uppercase tracking-wide transition-colors disabled:cursor-not-allowed disabled:opacity-35"
+      style={{ color: active ? 'var(--room-accent-contrast)' : 'var(--room-ink)' }}
     >
       {active ? (
         <motion.span
           layoutId="draw-tool-pill"
-          className="absolute inset-0 rounded-xl bg-brand-purple"
+          className="absolute inset-0 rounded-xl"
+          style={{ background: 'var(--room-accent)' }}
           transition={m.springSnappy}
         />
       ) : null}
@@ -56,10 +56,12 @@ export function DrawingPane({
   payload,
   lines,
   setLines,
+  onCtaChange,
 }: {
   payload: Record<string, unknown>;
   lines: Line[];
   setLines: (lines: Line[]) => void;
+  onCtaChange?: PaneProps['onCtaChange'];
 }) {
   const m = usePaneMotion();
   const palette = (payload.palette as string[]) ?? ['#222'];
@@ -70,6 +72,12 @@ export function DrawingPane({
   const allowSubmit = Boolean(payload.allow_submit);
 
   const [color, setColor] = useState(palette[0] ?? '#222');
+  /**
+   * A colour picked from the OS picker, kept beside the authored palette rather
+   * than replacing a swatch — the author's palette is a deliberate set, and
+   * losing one of its colours to a custom pick would be a surprise.
+   */
+  const [customColor, setCustomColor] = useState<string | null>(null);
   const [width, setWidth] = useState(brushSizes[0] ?? 4);
   const [tool, setTool] = useState<Tool>('pen');
   const [submitted, setSubmitted] = useState(false);
@@ -87,6 +95,25 @@ export function DrawingPane({
   const currentLine = useRef<number[]>([]);
 
   const eraser = tool === 'eraser' && allowEraser;
+
+  /*
+   * "Complete Activity" lives in the room's dock, per the screens. When the
+   * author enabled submission it also saves the artwork, so one button both
+   * finishes and keeps the drawing rather than asking the child to find a
+   * separate Submit first.
+   */
+  const submitRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    if (!onCtaChange) return;
+    onCtaChange({
+      label: 'Complete Activity',
+      tone: 'gold',
+      icon: Check,
+      iconTrailing: true,
+      run: () => submitRef.current(),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onCtaChange]);
 
   useEffect(() => {
     if (!backgroundUrl) return;
@@ -188,6 +215,13 @@ export function DrawingPane({
     setSubmitted(true);
   }
 
+  // The dock CTA runs whatever the author allowed: save the artwork when
+  // submission is enabled, otherwise just mark the activity done.
+  submitRef.current = () => {
+    if (allowSubmit) submitArtwork();
+    else setSubmitted(true);
+  };
+
   function pos(e: React.MouseEvent | React.TouchEvent) {
     const c = canvasRef.current;
     if (!c) return { x: 0, y: 0 };
@@ -248,13 +282,14 @@ export function DrawingPane({
 
   return (
     <div className="space-y-3">
-      <div className="flex gap-3">
-        {/* Left rail, per the mockup. The old toolbar was one wrapping row above
-            the canvas, which pushed the drawing area down and put colours,
-            sizes and destructive actions on the same visual level. */}
+      {/* Card header: title-side controls per the screens — a teal Clear Page
+          on the right. The tool row sits under it rather than in a left rail;
+          the room's dock now carries the same vocabulary for the reading
+          canvas, and two vertical rails on one screen read as two apps. */}
+      <div className="flex items-center justify-between gap-3">
         <div
-          className="flex w-17 shrink-0 flex-col gap-1 self-start rounded-2xl border border-brand-purple/15 p-1.5"
-          style={{ background: 'var(--activity-paper)' }}
+          className="flex items-center gap-1 rounded-2xl p-1"
+          style={{ background: 'rgba(255,255,255,0.05)' }}
           role="toolbar"
           aria-label="Drawing tools"
         >
@@ -270,24 +305,34 @@ export function DrawingPane({
           {allowFill ? (
             <RailTool icon={PaintBucket} label="Fill" active={tool === 'fill'} onClick={() => setTool('fill')} />
           ) : null}
-          <span className="my-0.5 h-px bg-brand-purple/15" />
+          <span className="mx-0.5 h-8 w-px" style={{ background: 'var(--room-chrome-line)' }} />
           <RailTool icon={Undo2} label="Undo" disabled={lines.length === 0} onClick={undo} />
           <RailTool icon={Redo2} label="Redo" disabled={redoStack.length === 0} onClick={redo} />
-          <RailTool
-            icon={Trash2}
-            label="Clear"
-            disabled={lines.length === 0}
-            onClick={() => commit([])}
-          />
         </div>
 
+        <button
+          type="button"
+          onClick={() => commit([])}
+          disabled={lines.length === 0}
+          className="flex shrink-0 cursor-pointer items-center gap-2 rounded-[10px] px-4 py-2 font-karla text-[14px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          style={{ background: '#2596b4' }}
+        >
+          <RotateCcw className="h-4 w-4" aria-hidden />
+          Clear Page
+        </button>
+      </div>
+
+      <div className="flex gap-3">
         <div className="min-w-0 flex-1 space-y-2">
           <canvas
             ref={canvasRef}
             width={CANVAS_W}
             height={CANVAS_H}
-            className="w-full max-h-[50vh] touch-none rounded-2xl border border-brand-purple/20 bg-white"
-            style={{ cursor: tool === 'fill' ? 'copy' : 'crosshair' }}
+            className="w-full max-h-[50vh] touch-none rounded-2xl bg-white"
+            style={{
+              border: '1px solid var(--room-chrome-line)',
+              cursor: tool === 'fill' ? 'copy' : 'crosshair',
+            }}
             onMouseDown={startDraw}
             onMouseMove={moveDraw}
             onMouseUp={endDraw}
@@ -301,8 +346,8 @@ export function DrawingPane({
               Swatches and brush sizes are separated into their own rows: as one
               wrapping row of same-sized circles they were indistinguishable,
               and the sizes read as "more colours". */}
-          <div className="flex flex-wrap items-center gap-2">
-            {palette.map((p) => {
+          <div className="flex flex-wrap items-center gap-3">
+            {[...palette, ...(customColor ? [customColor] : [])].map((p) => {
               const on = color === p && tool !== 'eraser';
               return (
                 <motion.button
@@ -319,7 +364,7 @@ export function DrawingPane({
                     backgroundColor: p,
                     boxShadow: on
                       ? '0 0 0 2px var(--activity-paper), 0 0 0 4px var(--room-accent)'
-                      : '0 0 0 1px rgba(0,0,0,0.12)',
+                      : '0 0 0 1px rgba(255,255,255,0.28)',
                   }}
                   aria-label={`Colour ${p}`}
                   aria-pressed={on}
@@ -329,6 +374,27 @@ export function DrawingPane({
               );
             })}
 
+            {/* "More Colors" opens the OS colour picker. A native input rather
+                than a hand-rolled wheel: it is keyboard-accessible, it remembers
+                recent choices, and on a tablet it is the picker the child's
+                other drawing apps use. */}
+            <label
+              className="ml-auto flex cursor-pointer items-center gap-1.5 font-karla text-[13px] font-semibold"
+              style={{ color: 'var(--c-teal)' }}
+            >
+              <Pipette className="h-4 w-4" aria-hidden />
+              More Colors
+              <input
+                type="color"
+                value={color}
+                onChange={(e) => {
+                  setCustomColor(e.target.value);
+                  setColor(e.target.value);
+                  if (tool === 'eraser') setTool('pen');
+                }}
+                className="sr-only"
+              />
+            </label>
           </div>
 
           {/* Brush sizes: a squared-off pill row, so the control cannot be
@@ -362,28 +428,16 @@ export function DrawingPane({
         </div>
       </div>
 
-      {allowSubmit ? (
-        <div className="flex items-center justify-end gap-3">
-          {submitted ? (
-            <motion.span
-              variants={m.riseIn}
-              initial="hidden"
-              animate="show"
-              className="font-karla text-sm font-bold text-brand-teal"
-            >
-              Artwork saved!
-            </motion.span>
-          ) : null}
-          <motion.button
-            type="button"
-            whileTap={m.press}
-            onClick={submitArtwork}
-            className="font-baloo flex min-h-11 cursor-pointer items-center gap-2 rounded-xl bg-brand-pink px-5 text-sm font-bold text-white shadow transition-opacity hover:opacity-90"
-          >
-            Submit Artwork
-            <Check className="h-4 w-4" strokeWidth={3} />
-          </motion.button>
-        </div>
+      {submitted ? (
+        <motion.p
+          variants={m.riseIn}
+          initial="hidden"
+          animate="show"
+          className="text-right font-karla text-sm font-bold"
+          style={{ color: 'var(--c-green)' }}
+        >
+          Artwork saved!
+        </motion.p>
       ) : null}
     </div>
   );

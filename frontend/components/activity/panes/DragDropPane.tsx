@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -14,12 +14,17 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Check, RotateCcw, X } from 'lucide-react';
+import { Check, RotateCcw, Star, X } from 'lucide-react';
 
 import { usePaneMotion } from './motion';
 import type { DropZoneSpec, LabelSpec, PaneProps } from './shared';
 
-export function DragDropPane({ payload, assignments, patchCurrent }: Omit<PaneProps, 'state' | 'role'> & {
+export function DragDropPane({
+  payload,
+  assignments,
+  patchCurrent,
+  onCtaChange,
+}: Omit<PaneProps, 'state' | 'role'> & {
   assignments: Record<string, string>;
 }) {
   const imageUrl = typeof payload.image_url === 'string' ? payload.image_url : '';
@@ -35,6 +40,7 @@ export function DragDropPane({ payload, assignments, patchCurrent }: Omit<PanePr
         zones={zones11}
         assignments={assignments}
         onAssign={(next) => patchCurrent({ assignments: next })}
+        onCtaChange={onCtaChange}
       />
     );
   }
@@ -113,18 +119,35 @@ function LegacyDragDrop({
 
 // ── 1.1 image-anchored drag & drop ───────────────────────────────────────────
 
+/**
+ * The chip palette, cycled by position.
+ *
+ * The screens give each label its own colour rather than making them all pink.
+ * That is not decoration: colour is a second handle on which chip is which
+ * while it is mid-drag and its text is under the child's finger.
+ */
+const CHIP_COLORS = [
+  { fill: '#b4476b', edge: 'rgba(255,175,200,0.75)', ink: '#ffe4ec' },
+  { fill: '#2f7c99', edge: 'rgba(160,225,245,0.75)', ink: '#dcf4ff' },
+  { fill: '#6d4b96', edge: 'rgba(200,175,240,0.75)', ink: '#ece0ff' },
+  { fill: '#8a7350', edge: 'rgba(240,215,150,0.75)', ink: '#fff2d4' },
+];
+
 function DraggableLabel({
   id,
   text,
   picked,
+  colorIndex,
   onPick,
 }: {
   id: string;
   text: string;
   picked: boolean;
+  colorIndex: number;
   onPick: () => void;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id });
+  const c = CHIP_COLORS[colorIndex % CHIP_COLORS.length];
   return (
     <button
       ref={setNodeRef}
@@ -135,13 +158,15 @@ function DraggableLabel({
       // The DragOverlay renders the travelling copy, so the source only needs
       // to recede. Previously this element *was* the preview, which meant it
       // was clipped by the label row's bounds while dragging.
-      className={`min-h-11 cursor-grab touch-none rounded-full border-2 px-4 text-sm font-bold shadow-sm transition-all active:cursor-grabbing ${
-        isDragging
-          ? 'border-brand-pink/30 bg-white/40 text-brand-pink/40'
-          : picked
-            ? 'border-brand-pink bg-brand-pink text-white'
-            : 'border-brand-pink/60 bg-white text-brand-pink hover:border-brand-pink'
-      }`}
+      style={{
+        minHeight: 56,
+        borderRadius: 12,
+        background: c.fill,
+        borderColor: picked ? '#ffffff' : c.edge,
+        color: c.ink,
+        opacity: isDragging ? 0.4 : 1,
+      }}
+      className="cursor-grab touch-none border-2 border-dashed px-5 font-karla text-[15px] font-bold shadow-sm transition-all active:cursor-grabbing"
     >
       {text}
     </button>
@@ -167,16 +192,19 @@ function DropZone({
   const m = usePaneMotion();
   const { setNodeRef, isOver } = useDroppable({ id: zone.id });
 
-  const skin =
+  // Dashed white while empty — it has to read as "something goes here" over an
+  // arbitrary illustration, and white is the only outline that survives both a
+  // bright sky and a dark forest underneath. Graded states go solid brand.
+  const skinStyle: React.CSSProperties =
     verdict === 'right'
-      ? 'border-brand-teal bg-brand-teal/25 border-solid'
+      ? { borderStyle: 'solid', borderColor: 'var(--c-green)', background: 'rgba(95,211,150,0.30)' }
       : verdict === 'wrong'
-        ? 'border-brand-pink bg-brand-pink/20 border-solid'
+        ? { borderStyle: 'solid', borderColor: 'var(--c-pink)', background: 'rgba(228,87,126,0.26)' }
         : isOver
-          ? 'border-brand-teal bg-brand-teal/40 border-solid'
+          ? { borderStyle: 'solid', borderColor: '#ffffff', background: 'rgba(255,255,255,0.34)' }
           : armed
-            ? 'border-brand-teal/80 bg-brand-teal/15'
-            : 'border-brand-teal/60 bg-brand-teal/5';
+            ? { borderColor: 'rgba(255,255,255,0.95)', background: 'rgba(255,255,255,0.20)' }
+            : { borderColor: 'rgba(255,255,255,0.75)', background: 'rgba(255,255,255,0.10)' };
 
   return (
     <motion.button
@@ -195,8 +223,15 @@ function DropZone({
               : { scale: 1 }
       }
       transition={m.springSnappy}
-      className={`absolute flex cursor-pointer items-center justify-center rounded-xl border-2 border-dashed text-center transition-colors ${skin}`}
-      style={{ left: `${zone.x}%`, top: `${zone.y}%`, width: `${zone.w}%`, height: `${zone.h}%` }}
+      className="absolute flex cursor-pointer items-center justify-center border-2 border-dashed text-center transition-colors"
+      style={{
+        left: `${zone.x}%`,
+        top: `${zone.y}%`,
+        width: `${zone.w}%`,
+        height: `${zone.h}%`,
+        borderRadius: 10,
+        ...skinStyle,
+      }}
       aria-label={zone.label ?? zone.id}
     >
       <AnimatePresence>
@@ -228,12 +263,14 @@ function ImageDragDrop({
   zones,
   assignments,
   onAssign,
+  onCtaChange,
 }: {
   imageUrl: string;
   labels: LabelSpec[];
   zones: DropZoneSpec[];
   assignments: Record<string, string>;
   onAssign: (next: Record<string, string>) => void;
+  onCtaChange?: PaneProps['onCtaChange'];
 }) {
   const m = usePaneMotion();
   const [picked, setPicked] = useState<string | null>(null);
@@ -277,6 +314,38 @@ function ImageDragDrop({
   const emptyZones = gradedZones.filter((z) => !assignments[z.id]).length;
   const canCheck = gradedZones.length > 0 && emptyZones === 0;
 
+  /*
+   * "How Did We Do?" lives in the room's dock, per the screens.
+   *
+   * Once graded it becomes "Try Again" when something is wrong, so the same
+   * button carries the whole loop rather than a second one appearing beside it.
+   */
+  useEffect(() => {
+    if (!onCtaChange) return;
+    if (!gradable) {
+      onCtaChange(null);
+      return;
+    }
+    if (checked && !allRight) {
+      onCtaChange({
+        label: 'Try Again',
+        tone: 'pink',
+        icon: RotateCcw,
+        run: () => tryAgainRef.current(),
+      });
+      return;
+    }
+    onCtaChange({
+      label: 'How Did We Do?',
+      tone: 'pink',
+      icon: Star,
+      iconTrailing: true,
+      disabled: !canCheck || allRight,
+      run: () => setChecked(true),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onCtaChange, gradable, checked, allRight, canCheck]);
+
   function place(zoneId: string, labelId: string) {
     const next: Record<string, string> = {};
     for (const [z, l] of Object.entries(assignments)) {
@@ -295,6 +364,11 @@ function ImageDragDrop({
     if (zoneId) place(zoneId, labelId);
   }
 
+  // The CTA effect above runs before `tryAgain` is defined in source order, and
+  // the function closes over `assignments`, so it is reached through a ref that
+  // always holds the current version.
+  const tryAgainRef = useRef<() => void>(() => {});
+
   function tryAgain() {
     setChecked(false);
     // Clear only the wrong ones: re-doing correct work is a punishment.
@@ -304,6 +378,7 @@ function ImageDragDrop({
     }
     onAssign(kept);
   }
+  tryAgainRef.current = tryAgain;
 
   return (
     <DndContext
@@ -313,9 +388,23 @@ function ImageDragDrop({
       onDragCancel={() => setDragging(null)}
     >
       <div className="space-y-4">
-        <div className="relative w-full overflow-hidden rounded-2xl border border-brand-purple/20 bg-brand-blush/30">
+        {/* Hugs the image for the same reason as the hotspot frame: the drop
+            zones are percentages of this box. */}
+        <div
+          className="relative mx-auto w-fit overflow-hidden rounded-2xl"
+          style={{ border: '1px solid var(--room-chrome-line)', background: 'rgba(0,0,0,0.18)' }}
+        >
+          {/* Drop zones are positioned as a percentage of this frame, so the
+              frame has to *be* the image — letterboxing inside a wider box moved
+              every zone off target. Sizing by height keeps the chips below it on
+              screen. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={imageUrl} alt="" className="mx-auto block h-auto max-h-[380px] w-full object-contain" />
+          <img
+            src={imageUrl}
+            alt=""
+            className="mx-auto block h-auto w-auto max-w-full object-contain"
+            style={{ maxHeight: 'min(44vh, 360px)' }}
+          />
           <div className="absolute inset-0">
             {zones.map((z) => (
               <DropZone
@@ -350,6 +439,9 @@ function ImageDragDrop({
                   id={l.id}
                   text={l.text}
                   picked={picked === l.id}
+                  // Indexed against the authored order, not the filtered one,
+                  // so a chip keeps its colour as its neighbours are used up.
+                  colorIndex={labels.findIndex((x) => x.id === l.id)}
                   onPick={() => setPicked(picked === l.id ? null : l.id)}
                 />
               </motion.div>
@@ -357,7 +449,10 @@ function ImageDragDrop({
           </AnimatePresence>
         </motion.div>
 
-        <p className="text-center text-xs text-brand-purple">
+        <p
+          className="text-center font-karla text-[13px]"
+          style={{ color: 'var(--room-ink-soft)' }}
+        >
           {picked
             ? 'Now tap a box on the picture.'
             : gradable && canCheck
@@ -381,9 +476,12 @@ function ImageDragDrop({
                   initial="hidden"
                   animate="show"
                   exit="exit"
-                  className={`flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-bold ${
-                    allRight ? 'bg-brand-teal/15 text-brand-teal' : 'bg-brand-gold/25 text-brand-navy'
-                  }`}
+                  className="flex items-center gap-2 rounded-2xl px-4 py-3 font-karla text-[14px] font-bold"
+                  style={
+                    allRight
+                      ? { background: 'rgba(95,211,150,0.16)', color: 'var(--c-green)' }
+                      : { background: 'rgba(240,199,94,0.20)', color: 'var(--room-accent)' }
+                  }
                   role="status"
                 >
                   {allRight ? <Check className="h-4 w-4" strokeWidth={3} /> : null}
@@ -394,35 +492,6 @@ function ImageDragDrop({
               ) : null}
             </AnimatePresence>
 
-            <div className="flex items-center gap-2">
-              {checked && !allRight ? (
-                <motion.button
-                  type="button"
-                  whileTap={m.press}
-                  onClick={tryAgain}
-                  className="font-baloo flex min-h-11 cursor-pointer items-center gap-1.5 rounded-xl border-2 border-brand-purple/25 px-4 text-sm font-bold text-brand-navy"
-                >
-                  <RotateCcw className="h-4 w-4" />
-                  Try again
-                </motion.button>
-              ) : null}
-              {!allRight ? (
-                <motion.button
-                  type="button"
-                  whileTap={canCheck ? m.press : undefined}
-                  disabled={!canCheck}
-                  onClick={() => setChecked(true)}
-                  title={
-                    canCheck
-                      ? undefined
-                      : `Fill ${emptyZones} more ${emptyZones === 1 ? 'box' : 'boxes'} first`
-                  }
-                  className="font-baloo min-h-11 cursor-pointer rounded-xl bg-brand-pink px-6 text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Check My Answers
-                </motion.button>
-              ) : null}
-            </div>
           </div>
         ) : null}
       </div>

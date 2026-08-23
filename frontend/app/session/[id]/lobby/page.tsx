@@ -1,5 +1,6 @@
 'use client';
 
+import { ROLE_LABEL } from '@/lib/roles';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { BookOpen, Clock, Rocket, BookMarked, Sparkles, VideoOff, Copy, Check } from 'lucide-react';
@@ -447,14 +448,14 @@ function LobbyPageContent() {
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-[#3d3b62] flex items-center justify-center text-white font-bold text-sm">
-                    {isGuestMode ? 'G' : 'H'}
+                    {isGuestMode ? 'E' : 'A'}
                   </div>
                   <div className="flex flex-col">
                     <span className="font-karla text-sm font-semibold text-[#3d3b62]">
-                      {isGuestMode ? 'Guest' : 'You (Host)'}
+                      {isGuestMode ? ROLE_LABEL.guest : `You (${ROLE_LABEL.host})`}
                     </span>
                     <span className="font-karla text-[10px] bg-[#3d3b62] text-white w-fit px-2 py-0.5 rounded-full uppercase tracking-tighter">
-                      {isGuestMode ? 'Guest' : 'Host'}
+                      {isGuestMode ? ROLE_LABEL.guest : ROLE_LABEL.host}
                     </span>
                   </div>
                 </div>

@@ -5,45 +5,70 @@
    values, so a per-book theme (see BookTheme on the backend) can override the
    whole room by setting a handful of custom properties on `.room-root`.
 
-   The defaults below are the "Daylight" theme: a bright, illustrated sky —
-   deliberately the opposite of the previous near-black room, which read as a
-   video-conference tool rather than a place to read a picture book.
+   The defaults below are the "Storynight" theme, measured from the client's
+   2026-08 screens: a deep aubergine room lit by a sparse star field. The room
+   was previously a bright "Daylight" sky; those values still exist verbatim
+   under `[data-chrome="light"]` below, so a book theme can still ask for a
+   light room.
    ─────────────────────────────────────────────────────────────────────────── */
 
 .room-root {
   /* ── Backdrop ─────────────────────────────────────────────────────────── */
-  --room-bg-1: #cfe6fb;          /* sky, top */
-  --room-bg-2: #a9d3f5;          /* sky, bottom */
+  --room-bg-1: #2f2143;          /* mid-field, lit */
+  --room-bg-2: #201a37;          /* corners, deep */
   --room-bg-angle: 170deg;
   --room-bg-image: none;         /* set by BookTheme for image/video backdrops */
-  --room-cloud: rgba(255, 255, 255, 0.55);
+  --room-cloud: rgba(255, 255, 255, 0.34);   /* star/sparkle ink */
 
   /* ── Ink & chrome ─────────────────────────────────────────────────────── */
-  --room-ink: #23324a;           /* primary text on the backdrop */
-  --room-ink-soft: rgba(35, 50, 74, 0.62);
-  --room-accent: #3d3b62;
-  --room-accent-contrast: #ffffff;
-  --room-chrome: rgba(255, 255, 255, 0.72);
-  --room-chrome-strong: rgba(255, 255, 255, 0.92);
-  --room-chrome-line: rgba(35, 50, 74, 0.12);
+  --room-ink: #f5eff7;           /* primary text on the backdrop */
+  --room-ink-soft: rgba(245, 239, 247, 0.66);
+  --room-accent: #f0c75e;        /* gold — rings, active tools, primary CTAs */
+  --room-accent-contrast: #2a1f3d;
+  --room-chrome: rgba(50, 36, 80, 0.72);
+  --room-chrome-strong: rgba(30, 22, 45, 0.92);
+  --room-chrome-line: rgba(255, 255, 255, 0.08);
+
+  /* ── Signal colours ───────────────────────────────────────────────────────
+     Named roles rather than hues, so a theme can retint them. Measured off the
+     screens: the End Session pill, the activity-room label, the Secure badge
+     and the role pill. */
+  --c-pink: #e4577e;
+  --c-teal: #5fb3d4;
+  --c-green: #5fd396;
+  --c-role: #936c96;
+
+  /* ── Room layout ──────────────────────────────────────────────────────────
+     The room is a three-row grid (header / body / dock) whose middle row is a
+     two-column grid (canvas / sidebar). These are measured from the 1920x928
+     screens, and every region reads them rather than hardcoding a width, so
+     one change here moves the whole room consistently. */
+  --room-gutter: 16px;
+  --room-gap: 32px;
+  --room-sidebar: 352px;
+  --room-header-h: 80px;
+  --room-dock-h: 104px;
 
   /* ── Book presentation ────────────────────────────────────────────────── */
-  --book-paper: #fdfbf7;
-  --book-edge: rgba(35, 50, 74, 0.10);
+  --book-paper: #f7eee4;
+  --book-edge: rgba(20, 12, 34, 0.24);
   --book-tilt: -2deg;
   --book-shadow:
-    0 2px 6px rgba(23, 34, 51, 0.14),
-    0 28px 60px -18px rgba(23, 34, 51, 0.42);
-  --book-gutter: rgba(35, 50, 74, 0.16);
+    0 2px 6px rgba(10, 6, 20, 0.34),
+    0 28px 60px -18px rgba(10, 6, 20, 0.62);
+  --book-gutter: rgba(20, 12, 34, 0.20);
 
   /* ── Radius scale ─────────────────────────────────────────────────────── */
   --r-sm: 8px;
   --r-md: 16px;
   --r-lg: 26px;
+  /* Measured: header bar and dock are 20px, the canvas card 24px. */
+  --r-bar: 20px;
+  --r-card: 24px;
 
   /* ── Elevation ────────────────────────────────────────────────────────── */
-  --elev-1: 0 2px 10px rgba(23, 34, 51, 0.08);
-  --elev-2: 0 12px 34px -8px rgba(23, 34, 51, 0.22);
+  --elev-1: 0 2px 10px rgba(6, 3, 14, 0.28);
+  --elev-2: 0 12px 34px -8px rgba(6, 3, 14, 0.52);
 
   /* ── Motion ───────────────────────────────────────────────────────────── */
   --ease-calm: cubic-bezier(0.22, 0.61, 0.36, 1);
@@ -56,42 +81,81 @@
 
   color: var(--room-ink);
   background-color: var(--room-bg-2);
+  /* A vignette, not a linear ramp: the screens are lit from the upper middle
+     and fall off to the corners. --room-bg-angle is still honoured for the
+     linear fallback so BookTheme rows that only set an angle still read. */
   background-image:
     var(--room-bg-image),
-    linear-gradient(var(--room-bg-angle), var(--room-bg-1) 0%, var(--room-bg-2) 100%);
+    radial-gradient(120% 90% at 50% 8%, var(--room-bg-1) 0%, var(--room-bg-2) 72%);
   background-size: cover;
   background-position: center;
 }
 
-/* Dark-chrome themes (night sky, deep ocean) flip the readable ink so a book
-   theme only has to declare `--chrome-mode: dark`. */
-.room-root[data-chrome="dark"] {
-  --room-ink: #f2f6ff;
-  --room-ink-soft: rgba(242, 246, 255, 0.66);
-  --room-chrome: rgba(14, 22, 38, 0.62);
-  --room-chrome-strong: rgba(14, 22, 38, 0.86);
-  --room-chrome-line: rgba(255, 255, 255, 0.16);
-  --room-accent-contrast: #0e1626;
-  /* White clouds at daylight opacity read as grey smears against a night sky,
-     so a dark theme gets a much fainter cloud field. */
-  --room-cloud: rgba(255, 255, 255, 0.06);
+/* Light-chrome themes keep the old "Daylight" sky. A book theme opts in with
+   `--chrome-mode: light`. */
+.room-root[data-chrome="light"] {
+  --room-bg-1: #cfe6fb;
+  --room-bg-2: #a9d3f5;
+  --room-cloud: rgba(255, 255, 255, 0.55);
+  --room-ink: #23324a;
+  --room-ink-soft: rgba(35, 50, 74, 0.62);
+  --room-accent: #3d3b62;
+  --room-accent-contrast: #ffffff;
+  --room-chrome: rgba(255, 255, 255, 0.72);
+  --room-chrome-strong: rgba(255, 255, 255, 0.92);
+  --room-chrome-line: rgba(35, 50, 74, 0.12);
+  --book-paper: #fdfbf7;
+  --book-edge: rgba(35, 50, 74, 0.10);
+  --book-shadow:
+    0 2px 6px rgba(23, 34, 51, 0.14),
+    0 28px 60px -18px rgba(23, 34, 51, 0.42);
+  --book-gutter: rgba(35, 50, 74, 0.16);
+  --elev-1: 0 2px 10px rgba(23, 34, 51, 0.08);
+  --elev-2: 0 12px 34px -8px rgba(23, 34, 51, 0.22);
+  background-image:
+    var(--room-bg-image),
+    linear-gradient(var(--room-bg-angle), var(--room-bg-1) 0%, var(--room-bg-2) 100%);
 }
 
-/* ── Soft cloud field ──────────────────────────────────────────────────────
+/* Night-sky and deep-ocean book themes are now the same family as the default,
+   so this block only has to deepen it. */
+.room-root[data-chrome="dark"] {
+  --room-chrome: rgba(14, 22, 38, 0.62);
+  --room-chrome-strong: rgba(14, 22, 38, 0.86);
+  --room-cloud: rgba(255, 255, 255, 0.22);
+}
+
+/* ── Star field ────────────────────────────────────────────────────────────
    Drawn with gradients rather than an image so it costs nothing to load and
-   recolours automatically with the theme. Suppressed for image/video
-   backdrops, which supply their own art. */
+   recolours automatically with the theme. Small, hard dots — the screens show
+   sparkles, not the soft cloud smears this used to paint. Suppressed for
+   image/video backdrops, which supply their own art. */
 .room-sky::before {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background:
+  background-image:
+    radial-gradient(1.5px 1.5px at 12% 18%, var(--room-cloud) 0%, transparent 100%),
+    radial-gradient(1px 1px at 27% 62%, var(--room-cloud) 0%, transparent 100%),
+    radial-gradient(2px 2px at 41% 12%, var(--room-cloud) 0%, transparent 100%),
+    radial-gradient(1px 1px at 58% 78%, var(--room-cloud) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 69% 34%, var(--room-cloud) 0%, transparent 100%),
+    radial-gradient(1px 1px at 83% 66%, var(--room-cloud) 0%, transparent 100%),
+    radial-gradient(2px 2px at 91% 22%, var(--room-cloud) 0%, transparent 100%),
+    radial-gradient(1px 1px at 7% 84%, var(--room-cloud) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 48% 46%, var(--room-cloud) 0%, transparent 100%),
+    radial-gradient(1px 1px at 34% 92%, var(--room-cloud) 0%, transparent 100%);
+  opacity: 0.9;
+}
+
+/* A light room has no stars — it gets its clouds back. */
+.room-root[data-chrome="light"] .room-sky::before {
+  background-image:
     radial-gradient(38% 26% at 12% 22%, var(--room-cloud) 0%, transparent 62%),
     radial-gradient(30% 20% at 78% 14%, var(--room-cloud) 0%, transparent 60%),
     radial-gradient(46% 30% at 62% 88%, var(--room-cloud) 0%, transparent 66%),
     radial-gradient(26% 18% at 30% 72%, var(--room-cloud) 0%, transparent 58%);
-  opacity: 0.9;
 }
 
 .room-root[data-backdrop="image"] .room-sky::before,
@@ -115,6 +179,57 @@
   border-radius: var(--r-lg);
   box-shadow: var(--elev-2);
   backdrop-filter: blur(18px) saturate(1.15);
+}
+
+/* ── Room shell ────────────────────────────────────────────────────────────
+   The room is a document, not a stack of floating overlays. Three rows —
+   header, body, dock — and the body is two columns: canvas and sidebar. The
+   previous room positioned its header, rail and participant strip with
+   `fixed`, so nothing reserved space and the regions overlapped the book at
+   small sizes; here every region occupies a real grid cell.
+
+   Below `lg` the two body columns collapse to one and the sidebar follows the
+   canvas in document order, so it scrolls into view rather than covering it. */
+.room-shell {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  row-gap: 24px;
+  height: 100%;
+  min-height: 0;
+  padding: var(--room-gutter);
+  padding-bottom: calc(var(--room-gutter) + env(safe-area-inset-bottom, 0px));
+}
+
+.room-shell-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--room-gap);
+  min-height: 0;
+}
+
+@media (min-width: 1024px) {
+  .room-shell-body {
+    grid-template-columns: minmax(0, 1fr) var(--room-sidebar);
+  }
+}
+
+/* The bar surfaces: header and dock. Measured 20px radius, a hairline edge and
+   a frosted fill that lets the star field through. */
+.room-bar {
+  background: var(--room-chrome);
+  border: 1px solid var(--room-chrome-line);
+  border-radius: var(--r-bar);
+  box-shadow: var(--elev-1);
+  backdrop-filter: blur(14px) saturate(1.1);
+}
+
+/* The canvas card — the stage the book, picker or activity sits on. */
+.room-card {
+  background: var(--activity-paper);
+  border: 1px solid var(--room-chrome-line);
+  border-radius: var(--r-card);
+  box-shadow: var(--elev-2);
+  color: var(--room-ink);
 }
 
 /* Every interactive control in the room clears the 44px minimum, including the
@@ -153,28 +268,45 @@
    resolving to nothing — the hotspot popup and the drawing rail came out
    transparent, with the illustration legible straight through the text. */
 :root {
-  --activity-paper: #fdfcff;
-  --activity-edge: rgba(35, 50, 74, 0.14);
-  --activity-shadow: 0 18px 48px -16px rgba(23, 34, 51, 0.34);
+  --activity-paper: #3b2b52;
+  --activity-edge: rgba(255, 255, 255, 0.07);
+  --activity-shadow: 0 18px 48px -16px rgba(6, 3, 14, 0.52);
   /* The panes also paint with these. Every --room-* token is scoped to
      .room-root, so outside a session they resolved to nothing: an unstyled
-     check on no background rather than white-on-accent. Light-theme values,
-     matching the .room-root defaults above. */
-  --room-ink: #23324a;
-  --room-ink-soft: rgba(35, 50, 74, 0.62);
-  --room-accent: #3d3b62;
-  --room-accent-contrast: #ffffff;
+     check on no background rather than white-on-accent. Kept in step with the
+     .room-root defaults above, so the staff builder's preview matches the
+     room it is previewing. */
+  --room-ink: #f5eff7;
+  --room-ink-soft: rgba(245, 239, 247, 0.66);
+  --room-accent: #f0c75e;
+  --room-accent-contrast: #2a1f3d;
+  --room-chrome-line: rgba(255, 255, 255, 0.08);
+  --c-pink: #e4577e;
+  --c-teal: #5fb3d4;
+  --c-green: #5fd396;
+  --c-role: #936c96;
+  --r-sm: 8px;
+  --r-md: 16px;
+  --r-bar: 20px;
+  --r-card: 24px;
+  --tap-min: 44px;
 }
 
 .room-root {
+  --activity-paper: #3b2b52;
+  --activity-edge: rgba(255, 255, 255, 0.07);
+  --activity-shadow: 0 18px 48px -16px rgba(6, 3, 14, 0.52);
+}
+
+.room-root[data-chrome="light"] {
   --activity-paper: #fdfcff;
   --activity-edge: rgba(35, 50, 74, 0.14);
   --activity-shadow: 0 18px 48px -16px rgba(23, 34, 51, 0.34);
 }
 
 .room-root[data-chrome="dark"] {
-  --activity-paper: #171f33;
-  --activity-edge: rgba(255, 255, 255, 0.14);
+  --activity-paper: #2d2040;
+  --activity-edge: rgba(255, 255, 255, 0.10);
   --activity-shadow: 0 18px 48px -16px rgba(0, 0, 0, 0.6);
 }
 

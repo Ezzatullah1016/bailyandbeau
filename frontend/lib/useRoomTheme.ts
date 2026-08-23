@@ -13,8 +13,8 @@ import type { BookThemeData } from './api';
  * A null theme returns empty style, so the room keeps its default sky look.
  */
 /** Fallbacks mirror the `.room-root` defaults in app/room-tokens.css. */
-const DEFAULT_ACCENT = '#3d3b62';
-const DEFAULT_BOOK_INK = '#fdfbf7';
+const DEFAULT_ACCENT = '#f0c75e';
+const DEFAULT_BOOK_INK = '#f7eee4';
 
 /**
  * Pick black or white text for a background colour.
@@ -53,7 +53,10 @@ export function useRoomTheme(theme: BookThemeData | null | undefined) {
       return {
         style: {} as CSSProperties,
         backdrop: 'gradient',
-        chrome: 'light' as const,
+        // `dark` is the room's own family now. This used to say `light`, which
+        // stamped data-chrome="light" on every un-themed book and so opted them
+        // all out of the default palette into the old Daylight sky.
+        chrome: 'dark' as const,
         accent: DEFAULT_ACCENT,
         bookInk: DEFAULT_BOOK_INK,
       };

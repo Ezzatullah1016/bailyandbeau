@@ -37,54 +37,59 @@ import {
 import { MAX_LIVEKIT_ROOM_PARTICIPANTS } from '@/lib/sessionLimits';
 import ActivityRoom from '@/components/activity/ActivityRoom';
 import { ActivityPicker } from '@/components/activity/ActivityPicker';
-import { BrandLogo } from '@/components/brand/BrandLogo';
+import { ACTIVITY_TYPE_LABEL } from '@/components/activity/typeMeta';
+import type { PaneCta } from '@/components/activity/panes/shared';
 import type { ActivityConfigData } from '@/components/activity/types';
-import { AnnotationToolbar, DockTip, type ReadingInteractionMode } from '@/components/annotation/AnnotationToolbar';
+import type {
+  AnnotationShape,
+  ReadingInteractionMode,
+} from '@/components/annotation/types';
 import type {
   AnnotationCanvasHandle,
   AnnotationCanvasProps,
 } from '@/components/annotation/AnnotationCanvas';
-import { RoomRail, type RailItem } from '@/components/reading/RoomRail';
-import { ToolStrip } from '@/components/reading/ToolStrip';
 import { ChatPopup } from '@/components/session/ChatPopup';
-import { ParticipantStrip } from '@/components/session/ParticipantStrip';
+import { DockPopovers } from '@/components/session/DockPopovers';
+import { ParticipantList } from '@/components/session/ParticipantTile';
+import { RoomDock, type DockCta, type DockItem } from '@/components/session/RoomDock';
+import { RoomHeaderBar } from '@/components/session/RoomHeaderBar';
+import { RoomShell } from '@/components/session/RoomShell';
+import { RoomSidebar } from '@/components/session/RoomSidebar';
 import type { Book3DProps } from '@/components/reading/Book3D/Scene';
 import { useRoomTheme } from '@/lib/useRoomTheme';
 import { useRoomIdle, useRoomSounds } from '@/lib/useRoomSounds';
 import type { BookThemeData } from '@/lib/api';
 import {
   AlarmClock,
-  BookMarked,
   BookOpen,
   ChevronLeft,
   ChevronRight,
-  Check,
-  Copy,
+  Eraser,
+  Gamepad2,
+  LayoutGrid,
   Loader2,
-  Link2,
   MessageCircle,
   Mic,
   MicOff,
-  Pencil,
-  Rocket,
+  MousePointer2,
+  PaintBucket,
+  Pen,
+  Redo2,
+  Scissors,
+  Shapes,
   SlidersHorizontal,
+  Smile,
   Star,
-  Timer,
-  User,
+  Undo2,
   Users,
   Video,
   VideoOff,
+  Volume2,
+  VolumeX,
   WifiOff,
   X,
   ZoomIn,
   ZoomOut,
-  LayoutGrid,
-  ShieldCheck,
-  Gamepad2,
-  GripVertical,
-  Phone,
-  Volume2,
-  VolumeX,
 } from 'lucide-react';
 
 // Dynamic import for Fabric canvas (SSR-unsafe).
@@ -219,236 +224,6 @@ function ConnectionBanner() {
     >
       <BannerIcon className={`w-5 h-5 ${s.text}`} aria-hidden="true" />
       <span className={`text-sm font-medium tracking-tight ${s.text}`}>{s.label}</span>
-    </div>
-  );
-}
-
-// ─── Participant tile ─────────────────────────────────────────────────────────
-
-/** Initials from a display name, for the placeholder when video is off. */
-function participantInitials(label: string): string {
-  const parts = label.trim().split(/[\s._-]+/).filter(Boolean);
-  if (parts.length === 0) return '?';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-}
-
-/**
- * A 1:1 rounded square, sized by its container.
- *
- * This was a fixed-size round bubble with the name revealed only on hover. In a
- * grid that wasted space (a circle inscribed in its cell loses ~21% of it) and
- * cropped faces tightly, and a name you must hover to read is no use on a touch
- * screen. A square fills its cell, and the name sits on a gradient strip over
- * the video so it is always legible without a separate row.
- *
- * With the camera off it shows initials on the room accent rather than a
- * generic person glyph, so several people with cameras off are still tellable
- * apart. A muted badge sits in the corner, because whether someone can hear you
- * is the thing people check most often in a call.
- */
-function ParticipantTile({ identity, label, isHost }: { identity: string; label: string; isHost: boolean }) {
-  const cameraTracks = useTracks([Track.Source.Camera]);
-  const micTracks = useTracks([Track.Source.Microphone]);
-
-  const track = cameraTracks.find((t) => t.participant.identity === identity);
-  const cameraOn = Boolean(track && !track.publication?.isMuted);
-
-  const micPub = micTracks.find((t) => t.participant.identity === identity);
-  // No publication at all also means no audio reaching anyone, so it reads as
-  // muted rather than as unknown.
-  const micOn = Boolean(micPub && !micPub.publication?.isMuted);
-
-  return (
-    <div
-      className="relative aspect-square w-full min-w-0 overflow-hidden rounded-2xl"
-      style={{
-        background: 'var(--room-chrome-strong)',
-        border: '1px solid var(--room-chrome-line)',
-        boxShadow: 'var(--elev-1)',
-      }}
-    >
-      {cameraOn && track ? (
-        <VideoTrack trackRef={track} className="h-full w-full object-cover" />
-      ) : (
-        <div
-          className="flex h-full w-full items-center justify-center"
-          style={{ background: 'var(--room-accent)' }}
-        >
-          <span
-            className="text-2xl font-bold tracking-wide"
-            style={{ color: 'var(--room-accent-contrast)' }}
-            aria-hidden
-          >
-            {participantInitials(label)}
-          </span>
-        </div>
-      )}
-
-      <div
-        className="absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full"
-        style={{
-          background: micOn ? 'rgba(0,0,0,0.45)' : '#c0392b',
-          color: '#ffffff',
-        }}
-        title={micOn ? `${label} is unmuted` : `${label} is muted`}
-      >
-        {micOn ? (
-          <Mic className="h-3.5 w-3.5" aria-hidden />
-        ) : (
-          <MicOff className="h-3.5 w-3.5" aria-hidden />
-        )}
-        <span className="sr-only">{micOn ? 'Microphone on' : 'Microphone muted'}</span>
-      </div>
-
-      <div className="absolute inset-x-0 bottom-0 flex items-center gap-1 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-4">
-        <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-white">
-          {label}
-        </span>
-        {isHost && (
-          <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-white/85">
-            Host
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/**
- * Two per row, which is what fits legibly at the panel's width. `min-w-0` on the
- * children is load-bearing: without it a long participant name forces the grid
- * wider than its container and the panel grows a horizontal scrollbar.
- */
-function ParticipantList({ hostIdentity }: { hostIdentity?: string }) {
-  const participants = useParticipants();
-  // A lone participant gets the full width rather than half of a two-column
-  // grid with an empty cell beside them.
-  const columns = participants.length <= 1 ? 'grid-cols-1' : 'grid-cols-2';
-  return (
-    <div className={`grid w-full gap-2 ${columns}`}>
-      {participants.map((p) => (
-        <ParticipantTile
-          key={p.identity}
-          identity={p.identity}
-          label={p.name || p.identity}
-          isHost={p.identity === hostIdentity}
-        />
-      ))}
-    </div>
-  );
-}
-
-
-// ─── Local controls ───────────────────────────────────────────────────────────
-
-
-/** Large circular mic / camera controls for bottom dock */
-function SessionMediaDock() {
-  const { localParticipant, isMicrophoneEnabled, isCameraEnabled } = useLocalParticipant();
-  const pill =
-    'flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-2 transition-all active:scale-95 sm:h-16 sm:w-16';
-  return (
-    <div className="flex items-center gap-2 sm:gap-3">
-      <button
-        type="button"
-        onClick={() => localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)}
-        aria-label={isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}
-        aria-pressed={!isMicrophoneEnabled}
-        className={`${pill} ${isMicrophoneEnabled ? 'border-[#3b85a6] bg-[#3b85a6]/25 text-white shadow-[0_0_20px_rgba(59,133,166,0.35)]' : 'border-red-500/60 bg-red-950/40 text-red-200'}`}
-      >
-        {isMicrophoneEnabled ? <Mic className="h-6 w-6 sm:h-7 sm:w-7" /> : <MicOff className="h-6 w-6 sm:h-7 sm:w-7" />}
-      </button>
-      <button
-        type="button"
-        onClick={() => localParticipant.setCameraEnabled(!isCameraEnabled)}
-        aria-label={isCameraEnabled ? 'Turn off camera' : 'Turn on camera'}
-        aria-pressed={!isCameraEnabled}
-        className={`${pill} ${isCameraEnabled ? 'border-[#3b85a6] bg-[#3b85a6]/25 text-white shadow-[0_0_20px_rgba(59,133,166,0.35)]' : 'border-red-500/60 bg-red-950/40 text-red-200'}`}
-      >
-        {isCameraEnabled ? <Video className="h-6 w-6 sm:h-7 sm:w-7" /> : <VideoOff className="h-6 w-6 sm:h-7 sm:w-7" />}
-      </button>
-    </div>
-  );
-}
-
-/** Wraps AnnotationToolbar and injects LiveKit mic/camera state */
-function SessionTimerRing({
-  remaining,
-  totalSecs,
-  timerActive,
-  role,
-  onStart,
-}: {
-  remaining: number;
-  totalSecs: number;
-  timerActive: boolean;
-  role: 'host' | 'guest';
-  onStart: () => void;
-}) {
-  const radius = 34;
-  const c = 2 * Math.PI * radius;
-  const pct = timerActive && totalSecs > 0 ? Math.min(1, Math.max(0, remaining / totalSecs)) : 0;
-  const dash = c * (1 - pct);
-
-  return (
-    <div className="flex flex-col items-center gap-2">
-      <div
-        className={`relative flex h-[124px] w-[124px] items-center justify-center ${role === 'host' && !timerActive ? 'cursor-pointer' : ''}`}
-        onClick={role === 'host' && !timerActive ? onStart : undefined}
-        onKeyDown={(e) => {
-          if (role === 'host' && !timerActive && (e.key === 'Enter' || e.key === ' ')) {
-            e.preventDefault();
-            onStart();
-          }
-        }}
-        role={role === 'host' && !timerActive ? 'button' : undefined}
-        tabIndex={role === 'host' && !timerActive ? 0 : undefined}
-        title={role === 'host' && !timerActive ? 'Start session timer' : undefined}
-      >
-        <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 88 88" aria-hidden>
-          <circle
-            cx="44"
-            cy="44"
-            r={radius}
-            fill="none"
-            stroke="var(--room-chrome-line)"
-            strokeWidth="5"
-          />
-          <circle
-            cx="44"
-            cy="44"
-            r={radius}
-            fill="none"
-            stroke="#ffb955"
-            strokeWidth="5"
-            strokeLinecap="round"
-            strokeDasharray={c}
-            strokeDashoffset={dash}
-            className="transition-[stroke-dashoffset] duration-500"
-          />
-        </svg>
-        <div className="relative z-10 flex flex-col items-center text-center">
-          <span
-            className="font-baloo text-xl font-bold tabular-nums"
-            style={{ color: 'var(--room-ink)' }}
-          >
-            {fmtTime(remaining)}
-          </span>
-          <span
-            className="text-[9px] font-semibold uppercase tracking-wider"
-            style={{ color: 'var(--room-ink-soft)' }}
-          >
-            {timerActive ? 'remaining' : role === 'host' ? 'starts live' : 'waiting'}
-          </span>
-        </div>
-      </div>
-      <p
-        className="text-center text-[10px] font-bold uppercase tracking-widest"
-        style={{ color: 'var(--room-ink-soft)' }}
-      >
-        {timerActive ? 'Reading' : 'Session'}
-      </p>
     </div>
   );
 }
@@ -597,9 +372,53 @@ function RoomContent({
   // that used to hold all of these meant opening chat also covered the
   // participants and the settings, and the drawing options sat three clicks
   // away from the pen button that turns drawing on.
-  const [drawOpen, setDrawOpen] = useState(false);
+  /**
+   * Which dock popover is open, if any. One at a time: two open popovers over a
+   * 104px dock overlap each other.
+   */
+  const [toolPopover, setToolPopover] = useState<'pen' | 'fill' | 'shapes' | 'reactions' | null>(
+    null,
+  );
   const [chatOpen, setChatOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  /**
+   * The primary action the current activity wants in the dock, and the callback
+   * behind it.
+   *
+   * Split in two on purpose: the descriptor is state, so a label or disabled
+   * change re-renders the dock, while the handler is a ref, so a pane that
+   * rebuilds its closure every render does not re-render the dock with it.
+   */
+  const [activityCta, setActivityCta] = useState<DockCta | null>(null);
+  const activityCtaRef = useRef<(() => void) | null>(null);
+  const handleActivityCta = useCallback((cta: (PaneCta & { run: () => void }) | null) => {
+    activityCtaRef.current = cta?.run ?? null;
+    setActivityCta((prev) => {
+      if (!cta) return prev === null ? prev : null;
+      // Only re-render when something visible actually changed — panes publish
+      // their CTA on every state change, and an unconditional setState here
+      // would loop with the pane's own render.
+      if (
+        prev &&
+        prev.label === cta.label &&
+        prev.tone === cta.tone &&
+        prev.disabled === cta.disabled &&
+        prev.icon === cta.icon &&
+        prev.iconTrailing === cta.iconTrailing
+      ) {
+        return prev;
+      }
+      return {
+        label: cta.label,
+        tone: cta.tone,
+        icon: cta.icon,
+        disabled: cta.disabled,
+        iconTrailing: cta.iconTrailing,
+        onClick: () => activityCtaRef.current?.(),
+      };
+    });
+  }, []);
 
   // ── Timer ─────────────────────────────────────────────────────────────────
   const [timerActive, setTimerActive] = useState(false);
@@ -620,6 +439,7 @@ function RoomContent({
   const drawingEnabled = interactionMode !== 'book';
   const [annColor, setAnnColor] = useState('#ef4444');
   const [annBrush, setAnnBrush] = useState(8);
+  const [annShape, setAnnShape] = useState<AnnotationShape>('rect');
   const canvasRef = useRef<AnnotationCanvasHandle>(null);
   const transformRecalcTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentPageRef = useRef(0);
@@ -644,42 +464,6 @@ function RoomContent({
       if (transformRecalcTimerRef.current) clearTimeout(transformRecalcTimerRef.current);
     },
     [],
-  );
-
-  /** Bottom AnnotationToolbar: anchored bottom-left; persisted via sessionStorage. */
-  const readingHudBoundsRef = useRef<HTMLDivElement>(null);
-  const [readingHudSize, setReadingHudSize] = useState({ w: 0, h: 0 });
-
-  useEffect(() => {
-    const el = readingHudBoundsRef.current;
-    if (!el) return;
-    const update = () => {
-      const r = el.getBoundingClientRect();
-      setReadingHudSize({ w: Math.floor(r.width), h: Math.floor(r.height) });
-    };
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  const clampBookHud = useCallback(
-    (x: number, y: number) => {
-      const W = readingHudSize.w;
-      const H = readingHudSize.h;
-      if (W < 64 || H < 64) {
-        return { x, y };
-      }
-      const barReserve = 140;
-      const maxRightOffset = Math.max(48, W - barReserve);
-      const minRightOffset = -48;
-      const maxYup = Math.max(56, H - 28);
-      return {
-        x: Math.min(maxRightOffset, Math.max(minRightOffset, x)),
-        y: Math.min(maxYup, Math.max(-Math.min(100, H * 0.2), y)),
-      };
-    },
-    [readingHudSize.w, readingHudSize.h],
   );
 
   // ── Reactions overlay ─────────────────────────────────────────────────────
@@ -1330,70 +1114,137 @@ function RoomContent({
   const openActivitiesRef = useRef(handleOpenActivities);
   openActivitiesRef.current = handleOpenActivities;
 
-  const railItems: RailItem[] = useMemo(
+  /**
+   * The dock's tool set, which differs by screen.
+   *
+   * Reading gets the library, the pen and eraser, reactions, the mic, who is
+   * here, and the way out. An activity swaps the reading tools for the drawing
+   * ones the client's screens show over each pane — select, pen, eraser,
+   * reactions, fill, shapes, undo, redo — because during an activity the canvas
+   * is the activity, not a book to turn pages in.
+   *
+   * `hidden` rather than a conditional array so a tool keeps a stable position
+   * across modes: a control that moves when the mode changes has to be found
+   * again every time.
+   */
+  // Inside an activity the dock carries drawing tools; the picker is still a
+  // "choose something" screen and keeps the room-level set, as the screens show.
+  const inActivity = isActivityMode && activityEntered;
+
+  const dockItems: DockItem[] = useMemo(
     () => [
+      // ── Reading ──────────────────────────────────────────────────────────
       {
         icon: BookOpen,
-        label: 'Back to library',
+        label: 'Library',
+        hidden: inActivity,
         onClick: () => router.push('/dashboard/library'),
       },
 
-      // Reading tools. Hidden during an activity, which has its own canvas.
+      // ── Activity: pointer mode, which is "not drawing" ───────────────────
       {
-        icon: Pencil,
-        label: drawingEnabled ? 'Stop drawing' : 'Draw on the page',
-        active: drawingEnabled,
-        hidden: isActivityMode,
-        separatorBefore: true,
-        // One button, one mental model: the pen turns drawing on and reveals its
-        // options together, rather than the options living somewhere else.
+        icon: MousePointer2,
+        label: 'Select',
+        hidden: !inActivity,
+        active: !drawingEnabled,
         onClick: () => {
-          const next = !drawingEnabled;
-          setInteractionMode(next ? 'pen' : 'book');
-          setDrawOpen(next);
+          setInteractionMode('book');
+          setToolPopover(null);
+        },
+      },
+
+      // ── Ink ──────────────────────────────────────────────────────────────
+      {
+        icon: Pen,
+        label: 'Pen',
+        active: interactionMode === 'pen',
+        separatorBefore: true,
+        onClick: () => {
+          // One button, one mental model: the pen turns drawing on and reveals
+          // its colour and width options together.
+          const on = interactionMode !== 'pen';
+          setInteractionMode(on ? 'pen' : 'book');
+          setToolPopover(on ? 'pen' : null);
         },
       },
       {
-        icon: ZoomIn,
-        label: 'Zoom in',
-        hidden: isActivityMode,
-        onClick: () => setBookZoom((z) => Math.min(2.5, z + 0.2)),
+        icon: Eraser,
+        label: 'Eraser',
+        active: interactionMode === 'eraser',
+        onClick: () => {
+          setInteractionMode(interactionMode === 'eraser' ? 'book' : 'eraser');
+          setToolPopover(null);
+        },
       },
       {
-        icon: ZoomOut,
-        label: 'Zoom out',
-        hidden: isActivityMode,
-        onClick: () => setBookZoom((z) => Math.max(0.6, z - 0.2)),
+        icon: Smile,
+        label: 'Reactions',
+        active: toolPopover === 'reactions',
+        onClick: () => setToolPopover((v) => (v === 'reactions' ? null : 'reactions')),
       },
       {
-        icon: LayoutGrid,
-        label: 'Fit book to view',
-        hidden: isActivityMode,
-        onClick: () => setBookZoom(1),
+        icon: PaintBucket,
+        label: 'Fill',
+        hidden: !inActivity,
+        active: interactionMode === 'fill',
+        onClick: () => {
+          const on = interactionMode !== 'fill';
+          setInteractionMode(on ? 'fill' : 'book');
+          setToolPopover(on ? 'fill' : null);
+        },
+      },
+      {
+        icon: Shapes,
+        label: 'Shapes',
+        hidden: !inActivity,
+        active: interactionMode === 'shape',
+        onClick: () => {
+          const on = interactionMode !== 'shape';
+          setInteractionMode(on ? 'shape' : 'book');
+          setToolPopover(on ? 'shapes' : null);
+        },
+      },
+      {
+        icon: Undo2,
+        label: 'Undo',
+        hidden: !inActivity,
+        onClick: () => canvasRef.current?.undo(),
+      },
+      {
+        icon: Redo2,
+        label: 'Redo',
+        hidden: !inActivity,
+        onClick: () => canvasRef.current?.redo(),
       },
 
-      // Presence: your own mic and camera, then who else is here.
+      // ── Presence ─────────────────────────────────────────────────────────
       {
         icon: isMicrophoneEnabled ? Mic : MicOff,
-        label: isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone',
+        label: isMicrophoneEnabled ? 'Mic' : 'Muted',
         active: !isMicrophoneEnabled,
         separatorBefore: true,
         onClick: () => localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled),
       },
       {
         icon: isCameraEnabled ? Video : VideoOff,
-        label: isCameraEnabled ? 'Turn camera off' : 'Turn camera on',
+        label: isCameraEnabled ? 'Camera' : 'No cam',
         active: !isCameraEnabled,
         onClick: () => localParticipant.setCameraEnabled(!isCameraEnabled),
       },
       {
+        icon: Users,
+        label: 'Participants',
+        badge: participants.length,
+        onClick: () => setShowTransferModal(true),
+      },
+      {
         icon: MessageCircle,
-        label: chatOpen ? 'Close chat' : 'Open chat',
+        label: 'Chat',
         active: chatOpen,
         onClick: () => setChatOpen((v) => !v),
       },
 
-      // Room-level actions.
+      // ── Room ─────────────────────────────────────────────────────────────
       {
         icon: Gamepad2,
         label: 'Activities',
@@ -1403,9 +1254,26 @@ function RoomContent({
       },
       {
         icon: sounds.muted ? VolumeX : Volume2,
-        label: sounds.muted ? 'Turn sound on' : 'Turn sound off',
-        separatorBefore: isActivityMode || role !== 'host' || activities.length === 0,
+        label: sounds.muted ? 'Sound off' : 'Sound',
         onClick: sounds.toggleMuted,
+      },
+      {
+        icon: ZoomIn,
+        label: 'Zoom in',
+        hidden: inActivity,
+        onClick: () => setBookZoom((z) => Math.min(2.5, z + 0.2)),
+      },
+      {
+        icon: ZoomOut,
+        label: 'Zoom out',
+        hidden: inActivity,
+        onClick: () => setBookZoom((z) => Math.max(0.6, z - 0.2)),
+      },
+      {
+        icon: LayoutGrid,
+        label: 'Fit',
+        hidden: inActivity,
+        onClick: () => setBookZoom(1),
       },
       {
         icon: SlidersHorizontal,
@@ -1413,19 +1281,15 @@ function RoomContent({
         active: settingsOpen,
         onClick: () => setSettingsOpen(true),
       },
-      {
-        icon: Phone,
-        label: role === 'host' ? 'End session' : 'Leave session',
-        danger: true,
-        separatorBefore: true,
-        onClick: () => endSessionRef.current(false),
-      },
     ],
-    // The two handlers are reached through refs: both are redefined on every
-    // render, so depending on them directly would rebuild the whole rail each
-    // time and defeat this useMemo.
+    // `openActivitiesRef` is a ref for a reason: the handler it holds is
+    // redefined on every render, so depending on it directly would rebuild the
+    // whole dock each time and defeat this useMemo.
     [
+      interactionMode,
       drawingEnabled,
+      toolPopover,
+      inActivity,
       router,
       sounds.muted,
       sounds.toggleMuted,
@@ -1433,12 +1297,48 @@ function RoomContent({
       isMicrophoneEnabled,
       isCameraEnabled,
       localParticipant,
+      participants.length,
       role,
       activities.length,
       chatOpen,
       settingsOpen,
     ],
   );
+
+  /** The dock's popovers, anchored above it. */
+  const dockPopovers = (
+    <DockPopovers
+      open={toolPopover}
+      color={annColor}
+      brushSize={annBrush}
+      shape={annShape}
+      onColorChange={setAnnColor}
+      onBrushSizeChange={setAnnBrush}
+      onShapeChange={setAnnShape}
+      onReact={handleReaction}
+      onClear={handleClearCanvas}
+    />
+  );
+
+  /**
+   * The dock's primary action.
+   *
+   * Reading ends the session. Inside an activity the pane owns it — "Next
+   * Question", "How Did We Do?", "Complete Activity" — published up through
+   * `onCtaChange` so the button lives in the dock where the screens put it
+   * rather than being repeated inside every pane's footer.
+   */
+  const dockCta: DockCta | undefined = useMemo(() => {
+    if (isActivityMode && activityEntered && activityCta) {
+      return { ...activityCta, onClick: () => activityCtaRef.current?.() };
+    }
+    return {
+      label: role === 'host' ? 'End Session' : 'Leave',
+      icon: Scissors,
+      tone: 'pink',
+      onClick: () => endSessionRef.current(false),
+    };
+  }, [isActivityMode, activityEntered, activityCta, role]);
 
   // Activity-mode picker: host chooses an activity; broadcast to guests.
   const handlePickActivity = (pickIndex: number) => {
@@ -1460,16 +1360,32 @@ function RoomContent({
     );
   };
 
-  // Drives the header breadcrumb. Prefers the authored `ui.title` (what the
-  // child is shown) over the admin-facing record title.
+  // Drives the header. Prefers the authored `ui.title` (what the child is
+  // shown) over the admin-facing record title.
   const currentActivityTitle =
     activities[activityIndex]?.config?.ui?.title || activities[activityIndex]?.title || '';
+
+  /**
+   * The header's room label and guidance line.
+   *
+   * The label is the activity *type* in the family's words ("Story Quest"), not
+   * the activity's own title — the screens read "ACTIVITY ROOM • STORY QUEST",
+   * which tells you what kind of thing you are doing. The authored title and
+   * instructions belong to the pane, and the instruction is lifted up here
+   * because the screens put it in the header rather than repeating it above
+   * every canvas.
+   */
+  const currentActivityLabel =
+    ACTIVITY_TYPE_LABEL[activities[activityIndex]?.activity_type ?? ''] || currentActivityTitle;
+
+  const currentActivityInstruction = activities[activityIndex]?.config?.ui?.instructions || '';
 
   // One activity element, rendered either as the reading-mode popup (modal) or,
   // in activity mode, in-flow on the stage canvas.
   const activityElement = (activities.length > 0) ? (
       <ActivityRoom
         role={role}
+        onCtaChange={handleActivityCta}
         activities={activities}
         open={isActivityMode ? true : activityOpen}
         variant={isActivityMode ? 'stage' : 'modal'}
@@ -1537,116 +1453,60 @@ function RoomContent({
       )}
 
       <div
-        className="room-root room-sky relative isolate flex h-[100dvh] min-h-0 w-screen flex-col overflow-hidden pb-[env(safe-area-inset-bottom,0px)]"
+        className="room-root room-sky relative isolate h-[100dvh] min-h-0 w-screen overflow-hidden"
         data-backdrop={roomTheme.backdrop}
         data-chrome={roomTheme.chrome}
         data-idle={!isActivityMode && readerIdle ? 'true' : 'false'}
         style={roomTheme.style}
       >
-
-        {/* ── Header ────────────────────────────────────────────────────────
-            No bar, no panel, no backdrop blur: the title floats top-left and
-            the way out floats top-right, so the sky runs unbroken behind the
-            book. The old header was a full-width frosted strip carrying a
-            duplicate sound toggle and a third copy of the page counter. */}
-        <header className="room-recede pointer-events-none fixed left-0 right-0 top-0 z-50 flex w-full items-start justify-between px-4 pt-[max(10px,env(safe-area-inset-top))] sm:px-6">
-          <div className="pointer-events-auto flex min-w-0 items-center gap-2 sm:gap-3">
-            <BrandLogo variant="dark" className="h-7 shrink-0 sm:h-8" />
-            {/* Breadcrumb: book / activity. Replaces a "← Choose another
-                activity" link that sat `self-start` on the full-width stage,
-                stranding it in the far top-left with no relationship to the
-                activity — and which only the host could see, so a guest had no
-                indication of where they were at all. */}
-            <h1
-              className="font-baloo min-w-0 truncate text-sm font-semibold tracking-tight sm:text-base"
-              style={{ color: 'var(--room-ink)' }}
-            >
-              {bookTitle}
-            </h1>
-            {isActivityMode && activityEntered && currentActivityTitle ? (
-              <>
-                <span
-                  className="shrink-0 text-sm opacity-40"
-                  style={{ color: 'var(--room-ink)' }}
-                  aria-hidden
-                >
-                  /
-                </span>
-                {role === 'host' ? (
-                  <button
-                    type="button"
-                    onClick={handleBackToPicker}
-                    title="Back to all activities"
-                    className="room-tap font-baloo flex min-w-0 cursor-pointer items-center gap-1 rounded-full pl-1.5 pr-3 text-sm font-semibold transition-colors"
-                    style={{ background: 'var(--room-chrome-strong)', color: 'var(--room-ink)' }}
-                  >
-                    <ChevronLeft className="h-4 w-4 shrink-0" aria-hidden />
-                    <span className="truncate">{currentActivityTitle}</span>
-                  </button>
-                ) : (
-                  // Navigation is synced, so a guest pressing back would move
-                  // the host. They get the location without the control.
-                  <span
-                    className="font-baloo min-w-0 truncate text-sm font-semibold"
-                    style={{ color: 'var(--room-ink)' }}
-                  >
-                    {currentActivityTitle}
-                  </span>
-                )}
-              </>
-            ) : null}
-          </div>
-
-          <div className="pointer-events-auto flex shrink-0 items-center gap-2">
-            <div
-              className={`room-tap flex items-center gap-1.5 rounded-full px-3 text-xs font-bold tabular-nums transition-colors ${
-                remaining <= 2 * 60 ? 'text-red-700' : ''
-              }`}
-              title={
-                role === 'host' && !timerActive
-                  ? 'Session timer — starts automatically when connected; tap if you paused it.'
+        <RoomShell
+          header={
+            <RoomHeaderBar
+              bookTitle={bookTitle}
+              kind={isActivityMode ? 'activity' : 'reading'}
+              activityLabel={
+                isActivityMode && activityEntered ? currentActivityLabel : undefined
+              }
+              instruction={
+                isActivityMode && activityEntered ? currentActivityInstruction : undefined
+              }
+              /* Navigation is synced, so a guest pressing back would move the
+                 host. They see where they are without the control. */
+              onBack={
+                isActivityMode && activityEntered && role === 'host'
+                  ? handleBackToPicker
                   : undefined
               }
-              onClick={role === 'host' && !timerActive ? handleStartTimer : undefined}
-              style={{
-                background: 'var(--room-chrome-strong)',
-                color: remaining <= 2 * 60 ? undefined : 'var(--room-ink)',
-                cursor: role === 'host' && !timerActive ? 'pointer' : undefined,
-              }}
-            >
-              <Timer className="h-3.5 w-3.5" aria-hidden />
-              {fmtTime(remaining)}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => handleEndSession(false)}
-              className="room-tap cursor-pointer gap-1.5 rounded-full px-4 text-[11px] font-bold transition-all active:scale-95"
-              style={{
-                background: 'var(--room-chrome-strong)',
-                color: 'var(--room-ink)',
-              }}
-            >
-              <X className="h-3.5 w-3.5" aria-hidden />
-              {role === 'host' ? 'End session' : 'Leave'}
-            </button>
-          </div>
-        </header>
-
-        <main className="relative flex h-full flex-1 overflow-hidden pt-[max(5rem,calc(4rem+env(safe-area-inset-top,0px)))]">
-
-          {/* Drawing options, docked beside the rail's pen button. */}
-          {drawOpen && !isActivityMode && (
-            <ToolStrip
-              color={annColor}
-              brushSize={annBrush}
-              onColorChange={setAnnColor}
-              onBrushSizeChange={setAnnBrush}
-              onUndo={() => canvasRef.current?.undo()}
-              onClear={handleClearCanvas}
+              participantCount={participants.length}
+              role={role}
+              onInvite={handleCopyInviteLink}
+              inviteCopied={linkCopied}
+              onOverflow={() => setSettingsOpen(true)}
+              onEnd={() => handleEndSession(false)}
+              endLabel={role === 'host' ? 'End Session' : 'Leave'}
             />
-          )}
-
+          }
+          sidebar={
+            <RoomSidebar
+              remaining={remaining}
+              totalSecs={SESSION_DURATION_S}
+              timerActive={timerActive}
+              timerMode={
+                !isActivityMode ? 'reading' : activityEntered ? 'activity' : 'activities'
+              }
+              role={role}
+              onStartTimer={handleStartTimer}
+              activityType={
+                isActivityMode && activityEntered
+                  ? activities[activityIndex]?.activity_type
+                  : undefined
+              }
+            >
+              <ParticipantList hostIdentity={hostIdentity} viewerRole={role} />
+            </RoomSidebar>
+          }
+          dock={<RoomDock items={dockItems} cta={dockCta}>{dockPopovers}</RoomDock>}
+        >
           {chatOpen && (
             <ChatPopup
               messages={chatMessages}
@@ -1726,7 +1586,7 @@ function RoomContent({
                       className="flex w-full cursor-pointer items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold"
                       style={{ background: 'var(--room-chrome)', color: 'var(--room-ink)' }}
                     >
-                      <Timer className="h-4 w-4" aria-hidden />
+                      <AlarmClock className="h-4 w-4" aria-hidden />
                       Start session timer
                     </button>
                   )}
@@ -1762,12 +1622,12 @@ function RoomContent({
             </>
           )}
 
-          {/* ── Main area ────────────────────────────────────────────────────── */}
-          {/* The book now gets the whole stage. The old layout reserved 288px
-              on the right for the participant aside and up to 192px at the
-              bottom for the control dock, which together took roughly a third
-              of the room away from the thing people came to look at. */}
-          <section className="relative ml-0 flex min-h-0 flex-1 flex-col overflow-hidden pb-[calc(3rem+env(safe-area-inset-bottom,0px))] pl-14 sm:pl-16">
+          {/* ── Main area ──────────────────────────────────────────────────────
+              A grid cell now, not a padded stage. The rail gutter (`pl-14`) and
+              the dock allowance (`pb-12`) are gone: the shell gives each region
+              its own cell, so the canvas no longer pads itself to dodge chrome
+              positioned on top of it. */}
+          <section className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
             <ConnectionBanner />
             <TimerWarning remaining={remaining} />
 
@@ -1775,7 +1635,7 @@ function RoomContent({
             {showExtendModal && role === 'host' && (
               <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60">
                 <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-sm w-full mx-4 text-center space-y-4">
-                  <div className="text-4xl">⏰</div>
+                  <AlarmClock className="mx-auto h-10 w-10 text-[#c84a71]" aria-hidden />
                   <h2 className="font-baloo text-xl font-bold text-[#3d3b62]">Time&apos;s up!</h2>
                   <p className="text-stone-500 text-sm">The 20-minute session has ended. Would you like to add 5 more minutes or end the session now?</p>
                   <div className="flex gap-3">
@@ -1808,31 +1668,46 @@ function RoomContent({
               </div>
             )}
 
-            {/* Book viewer + on-book controls */}
-            <div className="flex min-h-0 flex-1 flex-col">
+            {/* The canvas card: one surface holding the book, the activity
+                picker or an activity. The screens frame all three identically,
+                so the card lives here rather than being re-declared by each. */}
+            <div className="room-card relative flex min-h-0 flex-1 flex-col overflow-hidden">
+              {/* Reading progress: a hairline along the bottom of the card it
+                  measures. It used to span the whole room and ran underneath the
+                  dock, where it read as a stray sliver of chrome. */}
+              {!isActivityMode && pages.length > 0 && (
+                <div
+                  className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-1"
+                  style={{ background: 'rgba(0,0,0,0.25)' }}
+                  role="progressbar"
+                  aria-label="Reading progress"
+                  aria-valuenow={Math.round(progressPct)}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                >
+                  <div
+                    className="h-full transition-all duration-500"
+                    style={{ width: `${progressPct}%`, background: 'var(--room-accent)' }}
+                  />
+                </div>
+              )}
               <div
-                ref={readingHudBoundsRef}
                 /* An entered activity is top-aligned so it reads as page
                    content on the canvas; the book and the picker stay centred. */
-                className={`relative flex min-h-0 flex-1 justify-center px-3 py-4 sm:px-5 sm:py-5 ${
+                className={`relative flex min-h-0 flex-1 justify-center px-4 py-4 sm:px-8 sm:py-7 ${
                   isActivityMode && activityEntered ? 'items-stretch' : 'items-center'
                 }`}
               >
                 {isActivityMode ? (
                   activityEntered ? (
-                    // Top-aligned and scrollable: the activity is content on the
-                    // canvas now, not a centred card, so a tall one (drawing,
-                    // drag & drop) must be able to run past the fold rather
-                    // than being squeezed into the viewport's middle.
-                    // Back-to-picker lives in the header breadcrumb.
-                    <div className="h-full w-full overflow-y-auto py-2">
+                    // Scrollable: a tall activity (drawing, drag & drop) must be
+                    // able to run past the fold rather than being squeezed into
+                    // the card's middle. Back-to-picker lives in the header.
+                    <div className="h-full w-full overflow-y-auto">
                       {activityElement}
                     </div>
                   ) : (
-                    // The picker is a single carousel row now, so it no longer
-                    // needs its own vertical scroller — one would also fight the
-                    // horizontal rail inside it.
-                    <div className="flex w-full items-center justify-center">
+                    <div className="h-full w-full overflow-y-auto">
                       <ActivityPicker
                         activities={activities}
                         role={role}
@@ -1884,6 +1759,7 @@ function RoomContent({
                         <AnnotationCanvas
                           ref={canvasRef}
                           tool={annTool}
+                          shape={annShape}
                           color={annColor}
                           brushSize={annBrush}
                           drawingEnabled={drawingEnabled && !turning}
@@ -1938,25 +1814,7 @@ function RoomContent({
               </div>
             </div>
           </section>
-
-          {/* Activities keep their tool dock — the tools are the point of that
-              screen — so their rail carries only the room-level controls. */}
-          <RoomRail items={railItems} />
-
-          {/* Participants float over the backdrop instead of taking a fixed
-              288px column away from the book on every desktop session. */}
-          <ParticipantStrip count={participants.length} compact={isActivityMode}>
-            <ParticipantList hostIdentity={hostIdentity} />
-          </ParticipantStrip>
-        </main>
-
-        {/* Reading progress bar */}
-        <div className="fixed bottom-0 left-0 w-full h-1 bg-[#353535] z-[60]">
-          <div
-            className="h-full bg-[#ffb955] shadow-[0_0_10px_#ffb955] transition-all duration-500"
-            style={{ width: `${progressPct}%` }}
-          />
-        </div>
+        </RoomShell>
 
         {/* Host transfer modal */}
         {showTransferModal && (

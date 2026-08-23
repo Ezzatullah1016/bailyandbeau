@@ -1,3 +1,5 @@
+import type { LucideIcon } from 'lucide-react';
+
 /**
  * Types shared between the activity shell and the four panes.
  *
@@ -8,12 +10,37 @@
 /** One drawn stroke. Points are flat [x0,y0,x1,y1,…] in canvas pixel space. */
 export type Line = { points: number[]; color: string; width: number; eraser?: boolean };
 
+/**
+ * A pane's primary action, surfaced by the room's dock.
+ *
+ * The pane describes the button; the room renders it. This keeps the most
+ * important control on the screen in one predictable place across all four
+ * activity types, instead of each pane growing its own footer.
+ *
+ * `icon` is a lucide component — never an emoji, which would not inherit the
+ * button's colour and would be announced by its CLDR name mid-label.
+ */
+export type PaneCta = {
+  label: string;
+  tone: 'gold' | 'pink';
+  icon?: LucideIcon;
+  disabled?: boolean;
+  /** Places the icon after the label, for "Next Question →". */
+  iconTrailing?: boolean;
+};
+
 /** Props every pane receives from the shell's dispatch. */
 export type PaneProps = {
   payload: Record<string, unknown>;
   role: 'host' | 'guest';
   state: Record<string, unknown>;
   patchCurrent: (patch: Record<string, unknown>) => void;
+  /**
+   * Publish (or clear) this pane's dock action. Panes call it from an effect, so
+   * the descriptor must be stable enough not to loop — see the identity check in
+   * SessionRoomPage's `handleActivityCta`.
+   */
+  onCtaChange?: (cta: (PaneCta & { run: () => void }) | null) => void;
 };
 
 export type QuizQuestion = {

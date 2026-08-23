@@ -8,7 +8,7 @@ import {
   useCallback,
 } from 'react';
 import type { Ref } from 'react';
-import type { AnnotationTool } from './AnnotationToolbar';
+import type { AnnotationShape, AnnotationTool } from './types';
 
 // Fabric.js is imported dynamically to avoid SSR issues — no static type available.
 type FabricCanvas = any;
@@ -21,12 +21,17 @@ export interface AnnotationCanvasHandle {
   clearCanvas(local?: boolean): void;
   getJSON(): string;
   undo(): void;
+  redo(): void;
+  /** True when there is an undone object waiting to be restored. */
+  canRedo(): boolean;
   /** After CSS transforms (e.g. zoom) change, refresh size + pointer mapping */
   recalcLayout(): void;
 }
 
 export interface AnnotationCanvasProps {
   tool: AnnotationTool;
+  /** Which shape the `shape` tool draws. Ignored by every other tool. */
+  shape?: AnnotationShape;
   color: string;
   brushSize: number;
   onSync: (json: string) => void;
@@ -53,7 +58,7 @@ function hexToRgba(hex: string, alpha: number): string {
 /** Cursor shown over the book while annotating (Fabric + wrapper). */
 function cursorForTool(tool: AnnotationTool, drawingEnabled: boolean): string {
   if (!drawingEnabled) return 'default';
-  if (tool === 'eraser') return 'pointer';
+  if (tool === 'eraser' || tool === 'fill') return 'pointer';
   return 'crosshair';
 }
 
@@ -64,7 +69,13 @@ function setFabricSurfaceCursors(canvas: FabricCanvas, cssCursor: string) {
   if (lower) lower.style.cursor = cssCursor;
 }
 
-type FabricNS = { PencilBrush?: new (canvas: FabricCanvas) => unknown };
+type FabricCtor = new (...args: any[]) => any;
+type FabricNS = {
+  PencilBrush?: new (canvas: FabricCanvas) => unknown;
+  Rect?: FabricCtor;
+  Ellipse?: FabricCtor;
+  Line?: FabricCtor;
+};
 
 function ensureFreeDrawingBrush(canvas: FabricCanvas, fabricNS: FabricNS | null | undefined) {
   if (canvas.freeDrawingBrush || !fabricNS?.PencilBrush) return;
@@ -75,6 +86,108 @@ function ensureFreeDrawingBrush(canvas: FabricCanvas, fabricNS: FabricNS | null 
   }
 }
 
+/**
+ * Drag-to-draw for the shape tool.
+ *
+ * A shape is created on pointer-down and resized live on move, so the child
+ * sees the rectangle they are dragging out rather than only its result. It is
+ * added to the canvas immediately, which means `object:added` fires once — the
+ * sync happens on pointer-up, after the size is final, rather than on every
+ * mouse-move frame (which would flood the data channel).
+ */
+function bindShapeTool(
+  canvas: FabricCanvas,
+  shape: AnnotationShape,
+  color: string,
+  brushSize: number,
+  emitSync: (c: FabricCanvas) => void,
+  fabricNS?: FabricNS | null,
+) {
+  let active: any = null;
+  let originX = 0;
+  let originY = 0;
+
+  canvas.on('mouse:down', (opt: any) => {
+    const p = canvas.getPointer(opt.e);
+    originX = p.x;
+    originY = p.y;
+
+    const common = {
+      left: originX,
+      top: originY,
+      stroke: color,
+      strokeWidth: Math.max(2, brushSize),
+      fill: 'transparent',
+      selectable: false,
+      evented: false,
+      // Strokes must not scale with the object, or a thin line dragged wide
+      // ends up with a hairline on one axis and a slab on the other.
+      strokeUniform: true,
+      originX: 'left' as const,
+      originY: 'top' as const,
+    };
+
+    if (shape === 'rect' && fabricNS?.Rect) {
+      active = new fabricNS.Rect({ ...common, width: 0, height: 0 });
+    } else if (shape === 'ellipse' && fabricNS?.Ellipse) {
+      active = new fabricNS.Ellipse({ ...common, rx: 0, ry: 0 });
+    } else if (shape === 'line' && fabricNS?.Line) {
+      active = new fabricNS.Line([originX, originY, originX, originY], {
+        stroke: color,
+        strokeWidth: Math.max(2, brushSize),
+        selectable: false,
+        evented: false,
+        strokeUniform: true,
+      });
+    }
+    if (active) canvas.add(active);
+  });
+
+  canvas.on('mouse:move', (opt: any) => {
+    if (!active) return;
+    const p = canvas.getPointer(opt.e);
+
+    if (shape === 'line') {
+      active.set({ x2: p.x, y2: p.y });
+    } else {
+      // Dragging up or left gives a negative extent; move the origin instead of
+      // rendering a zero-size shape.
+      const width = Math.abs(p.x - originX);
+      const height = Math.abs(p.y - originY);
+      active.set({
+        left: Math.min(originX, p.x),
+        top: Math.min(originY, p.y),
+        ...(shape === 'rect' ? { width, height } : { rx: width / 2, ry: height / 2 }),
+      });
+    }
+    canvas.requestRenderAll();
+  });
+
+  const finish = () => {
+    if (!active) return;
+    // A tap with no drag leaves a zero-size artefact that cannot be seen but
+    // still serialises and syncs. Drop it.
+    const tiny =
+      shape === 'line'
+        ? Math.hypot(active.x2 - active.x1, active.y2 - active.y1) < 4
+        : shape === 'rect'
+          ? active.width < 4 || active.height < 4
+          : active.rx < 2 || active.ry < 2;
+    if (tiny) {
+      canvas.remove(active);
+      active = null;
+      canvas.requestRenderAll();
+      return;
+    }
+    active.setCoords?.();
+    active = null;
+    canvas.requestRenderAll();
+    emitSync(canvas);
+  };
+
+  canvas.on('mouse:up', finish);
+}
+
 function applyToolToCanvas(
   canvas: FabricCanvas,
   tool: AnnotationTool,
@@ -83,9 +196,11 @@ function applyToolToCanvas(
   emitSync: (c: FabricCanvas) => void,
   drawingEnabled: boolean,
   fabricNS?: FabricNS | null,
+  shape: AnnotationShape = 'rect',
 ) {
   canvas.off('mouse:down');
   canvas.off('mouse:move');
+  canvas.off('mouse:up');
 
   if (!drawingEnabled) {
     canvas.isDrawingMode = false;
@@ -136,6 +251,30 @@ function applyToolToCanvas(
         emitSync(canvas);
       }
     });
+  } else if (tool === 'shape') {
+    canvas.isDrawingMode = false;
+    canvas.defaultCursor = cursor;
+    canvas.hoverCursor = cursor;
+    // Target-finding would let a drag start on an existing shape and move it
+    // instead of drawing a new one.
+    canvas.skipTargetFind = true;
+    bindShapeTool(canvas, shape, color, brushSize, emitSync, fabricNS);
+  } else if (tool === 'fill') {
+    canvas.isDrawingMode = false;
+    canvas.defaultCursor = 'pointer';
+    canvas.hoverCursor = 'pointer';
+    canvas.skipTargetFind = false;
+    // Fill recolours a shape rather than flood-filling raster pixels: the layer
+    // is vector, and the page underneath is a WebGL texture this canvas cannot
+    // read. Tapping a shape's interior fills it; tapping bare page does nothing.
+    canvas.on('mouse:down', (opt: any) => {
+      const target = canvas.findTarget(opt.e, false);
+      if (target && typeof target.set === 'function') {
+        target.set({ fill: color });
+        canvas.requestRenderAll();
+        emitSync(canvas);
+      }
+    });
   }
 
   setFabricSurfaceCursors(canvas, cursor);
@@ -143,7 +282,7 @@ function applyToolToCanvas(
 
 const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
   function AnnotationCanvas(
-    { tool, color, brushSize, onSync, drawingEnabled, forwardedRef },
+    { tool, shape = 'rect', color, brushSize, onSync, drawingEnabled, forwardedRef },
     ref,
   ) {
     // Lazy-loaded callers supply the handle via `forwardedRef` (see the shim in
@@ -154,8 +293,17 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
     const fabricRef = useRef<FabricCanvas | null>(null);
     const fabricLibRef = useRef<FabricNS | null>(null);
     const layoutResizeRef = useRef<(() => void) | null>(null);
-    const annPropsRef = useRef({ tool, color, brushSize, drawingEnabled });
-    annPropsRef.current = { tool, color, brushSize, drawingEnabled };
+    const annPropsRef = useRef({ tool, shape, color, brushSize, drawingEnabled });
+    annPropsRef.current = { tool, shape, color, brushSize, drawingEnabled };
+    /**
+     * Objects removed by `undo()`, newest last, so `redo()` can put them back.
+     *
+     * Cleared whenever the canvas is replaced wholesale — a remote load or a
+     * clear means the stack refers to objects that are no longer part of this
+     * drawing's history, and restoring one would resurrect a stroke from a page
+     * the reader has already left.
+     */
+    const redoStackRef = useRef<any[]>([]);
     const isRemoteLoadRef = useRef(false);
     const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -238,6 +386,7 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
           emitSync,
           annPropsRef.current.drawingEnabled,
           fabricLibRef.current,
+          annPropsRef.current.shape,
         );
 
         resizeObs = new ResizeObserver(resize);
@@ -277,8 +426,17 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
       const canvas = fabricRef.current;
       if (!canvas) return;
 
-      applyToolToCanvas(canvas, tool, color, brushSize, emitSync, drawingEnabled, fabricLibRef.current);
-    }, [tool, color, brushSize, drawingEnabled, emitSync]);
+      applyToolToCanvas(
+        canvas,
+        tool,
+        color,
+        brushSize,
+        emitSync,
+        drawingEnabled,
+        fabricLibRef.current,
+        shape,
+      );
+    }, [tool, shape, color, brushSize, drawingEnabled, emitSync]);
 
     /**
      * The 3D book sits directly beneath this overlay and registers its own
@@ -310,6 +468,7 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
           const canvas = fabricRef.current;
           if (!canvas) return;
           cancelPendingDebouncedSync();
+          redoStackRef.current = [];
           isRemoteLoadRef.current = true;
           canvas.loadFromJSON(json, () => {
             canvas.renderAll();
@@ -322,6 +481,7 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
               emitSync,
               annPropsRef.current.drawingEnabled,
               fabricLibRef.current,
+              annPropsRef.current.shape,
             );
           });
         },
@@ -330,6 +490,7 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
           const canvas = fabricRef.current;
           if (!canvas) return;
           cancelPendingDebouncedSync();
+          redoStackRef.current = [];
           isRemoteLoadRef.current = true;
           canvas.clear();
           canvas.setBackgroundColor('white', () => {
@@ -344,6 +505,7 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
               emitSync,
               annPropsRef.current.drawingEnabled,
               fabricLibRef.current,
+              annPropsRef.current.shape,
             );
           });
         },
@@ -359,10 +521,29 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
           if (!canvas) return;
           const objects = canvas.getObjects();
           if (objects.length > 0) {
-            canvas.remove(objects[objects.length - 1]);
+            const removed = objects[objects.length - 1];
+            canvas.remove(removed);
+            // Keep the object itself rather than a serialised copy: re-adding
+            // the same instance restores it exactly, with no round-trip through
+            // Fabric's JSON revivers.
+            redoStackRef.current.push(removed);
             canvas.requestRenderAll();
             emitSync(canvas);
           }
+        },
+
+        redo() {
+          const canvas = fabricRef.current;
+          if (!canvas) return;
+          const restored = redoStackRef.current.pop();
+          if (!restored) return;
+          canvas.add(restored);
+          canvas.requestRenderAll();
+          emitSync(canvas);
+        },
+
+        canRedo() {
+          return redoStackRef.current.length > 0;
         },
 
         recalcLayout() {
@@ -379,6 +560,7 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
             emitSync,
             annPropsRef.current.drawingEnabled,
             fabricLibRef.current,
+            annPropsRef.current.shape,
           );
         },
       }),

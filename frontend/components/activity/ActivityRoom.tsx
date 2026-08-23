@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRoomContext } from '@livekit/components-react';
 import { ChevronLeft, ChevronRight, RotateCcw, X } from 'lucide-react';
+import type { PaneCta } from './panes/shared';
 import type { ActivityConfigData } from './types';
 import { DragDropPane } from './panes/DragDropPane';
 import { DrawingPane } from './panes/DrawingPane';
@@ -27,6 +28,16 @@ interface Props {
   variant?: 'modal' | 'stage';
   /** @deprecated use variant. `fullscreen` maps to 'stage'. */
   fullscreen?: boolean;
+  /**
+   * Lets the active pane put its primary action in the room's dock, where the
+   * client's screens place it — "Next Question", "How Did We Do?", "Complete
+   * Activity". Panes used to render their own footer button inside the card,
+   * which meant the most important control on the screen sat in a different
+   * place for every activity type.
+   *
+   * Called with `null` when the pane has no action to offer.
+   */
+  onCtaChange?: (cta: (PaneCta & { run: () => void }) | null) => void;
 }
 
 function buildMsg(type: string, payload: Record<string, unknown>): Uint8Array {
@@ -44,9 +55,12 @@ export default function ActivityRoom({
   onActivityStateSync,
   variant,
   fullscreen = false,
+  onCtaChange,
 }: Props) {
   const room = useRoomContext();
   const isStage = variant === 'stage' || fullscreen;
+
+  useEffect(() => () => onCtaChange?.(null), [onCtaChange]);
 
   const [index, setIndex] = useState(initialIndex);
   const [stateByActivity, setStateByActivity] = useState<Record<string, Record<string, unknown>>>(
@@ -150,6 +164,9 @@ export default function ActivityRoom({
 
   // Stage variant is an in-flow card that lives in the center stage (Activity
   // Room). Modal variant is the centered popup used inside the reading room.
+  // On the stage, moving between activities is the breadcrumb's and the
+  // picker's job, so only Reset survives here; in the modal the arrows are the
+  // only way through a multi-activity set.
   const hostControls = role === 'host' ? (
     <div className="flex shrink-0 items-center gap-1.5">
       <button
@@ -161,7 +178,7 @@ export default function ActivityRoom({
         <RotateCcw className="h-4 w-4" />
         Reset
       </button>
-      {activities.length > 1 ? (
+      {!isStage && activities.length > 1 ? (
         <>
           <button
             type="button"
@@ -205,7 +222,12 @@ export default function ActivityRoom({
   const header = (
     <header className="mb-4 flex items-start justify-between gap-4">
       <div className="min-w-0">
-        {activities.length > 1 ? (
+        {/* The multi-activity counter is a *modal* affordance: in the reading
+            room the popup is the only place to move between activities. On the
+            stage the room's header breadcrumb and the picker do that job, and
+            the screens show the pane's own progress here instead — two progress
+            rows on one screen invite counting the wrong one. */}
+        {!isStage && activities.length > 1 ? (
           <div className="mb-1.5 flex items-center gap-2">
             <p
               className="text-[10px] font-bold uppercase tracking-widest"
@@ -227,17 +249,24 @@ export default function ActivityRoom({
             </div>
           </div>
         ) : null}
-        <h2
-          className="font-baloo truncate text-2xl font-bold md:text-3xl"
-          style={{ color: 'var(--room-ink)' }}
-        >
-          {ui.title || current.title}
-        </h2>
-        {ui.instructions ? (
-          <p className="mt-0.5 max-w-2xl text-sm" style={{ color: 'var(--room-ink-soft)' }}>
-            {ui.instructions}
-          </p>
-        ) : null}
+        {/* On the stage the room's header bar already carries the title and the
+            instruction, so repeating them here would print each twice on the
+            same screen. The modal has no such bar and keeps them. */}
+        {!isStage && (
+          <>
+            <h2
+              className="font-baloo truncate text-2xl font-bold md:text-3xl"
+              style={{ color: 'var(--room-ink)' }}
+            >
+              {ui.title || current.title}
+            </h2>
+            {ui.instructions ? (
+              <p className="mt-0.5 max-w-2xl text-sm" style={{ color: 'var(--room-ink-soft)' }}>
+                {ui.instructions}
+              </p>
+            ) : null}
+          </>
+        )}
       </div>
       {hostControls}
     </header>
@@ -247,6 +276,7 @@ export default function ActivityRoom({
     // keyed on index so switching activities fades in cleanly
     <div key={current.id} className="activity-in">
       <ActivityBody
+        onCtaChange={onCtaChange}
         activity={current}
         payload={payload}
         role={role}
@@ -270,11 +300,11 @@ export default function ActivityRoom({
    * the book, and there it should look like one.
    */
   if (isStage) {
+    // No `pr` dodge any more: participants occupy their own grid column, so
+    // nothing overlaps the host controls, and no card of its own — the room's
+    // canvas card is already the surface underneath.
     return (
-      // pr on large screens keeps the host controls clear of the participant
-      // tile, which is fixed at right:20px/top:50px and would otherwise clip
-      // Reset and the prev/next arrows.
-      <div className="mx-auto w-full max-w-5xl px-1 lg:pr-[190px]">
+      <div className="mx-auto w-full max-w-6xl">
         {header}
         {body}
       </div>
@@ -319,12 +349,14 @@ function ActivityBody({
   role,
   state,
   patchCurrent,
+  onCtaChange,
 }: {
   activity: ActivityConfigData;
   payload: Record<string, unknown>;
   role: 'host' | 'guest';
   state: Record<string, unknown>;
   patchCurrent: (patch: Record<string, unknown>) => void;
+  onCtaChange?: (cta: (PaneCta & { run: () => void }) | null) => void;
 }) {
   switch (activity.activity_type) {
     case 'drawing':
@@ -333,6 +365,7 @@ function ActivityBody({
           payload={payload}
           lines={(state.lines as Line[] | undefined) ?? []}
           setLines={(lines) => patchCurrent({ lines })}
+          onCtaChange={onCtaChange}
         />
       );
     case 'quiz':
@@ -342,6 +375,7 @@ function ActivityBody({
           role={role}
           state={state}
           patchCurrent={patchCurrent}
+          onCtaChange={onCtaChange}
         />
       );
     case 'drag_drop':
@@ -350,6 +384,7 @@ function ActivityBody({
           payload={payload}
           assignments={(state.assignments as Record<string, string> | undefined) ?? {}}
           patchCurrent={patchCurrent}
+          onCtaChange={onCtaChange}
         />
       );
     case 'hotspot':
@@ -359,6 +394,7 @@ function ActivityBody({
           openId={(state.openId as string | null | undefined) ?? null}
           visitedIds={(state.visitedIds as string[] | undefined) ?? []}
           patchCurrent={patchCurrent}
+          onCtaChange={onCtaChange}
         />
       );
     default:
