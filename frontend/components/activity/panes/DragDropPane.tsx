@@ -449,9 +449,12 @@ function ImageDragDrop({
           </AnimatePresence>
         </motion.div>
 
+        {/* The instruction is the only thing telling a child *how* to play, so
+            it takes near-full ink rather than the muted tone — at 13px on the
+            dark card, --room-ink-soft rendered close to invisible. */}
         <p
-          className="text-center font-karla text-[13px]"
-          style={{ color: 'var(--room-ink-soft)' }}
+          className="text-center font-karla text-[14px]"
+          style={{ color: 'rgba(245,239,247,0.86)' }}
         >
           {picked
             ? 'Now tap a box on the picture.'

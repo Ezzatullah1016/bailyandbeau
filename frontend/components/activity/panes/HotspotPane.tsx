@@ -329,7 +329,10 @@ export function HotspotPane({
                 animate="show"
                 exit="exit"
                 className="font-karla text-[14px]"
-                style={{ color: 'var(--room-ink-soft)' }}
+                /* Near-full ink: this is how a child knows there is more to
+                   find, and the muted tone read as almost invisible at 14px on
+                   the dark card. */
+                style={{ color: 'rgba(245,239,247,0.86)' }}
               >
                 {visited.size} of {hotspots.length} spots found
               </motion.p>
