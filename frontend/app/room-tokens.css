@@ -14,8 +14,11 @@
 
 .room-root {
   /* ── Backdrop ─────────────────────────────────────────────────────────── */
-  --room-bg-1: #2f2143;          /* mid-field, lit */
-  --room-bg-2: #201a37;          /* corners, deep */
+  /* Sampled from the screens: the lit mid-field reads (32,26,55) and the deep
+     corners a touch below it. The first pass here was #2f2143, which sampled
+     (45,32,64) — noticeably lighter and redder than the mock. */
+  --room-bg-1: #241d3a;          /* mid-field, lit */
+  --room-bg-2: #1b1730;          /* corners, deep */
   --room-bg-angle: 170deg;
   --room-bg-image: none;         /* set by BookTheme for image/video backdrops */
   --room-cloud: rgba(255, 255, 255, 0.34);   /* star/sparkle ink */
@@ -25,8 +28,11 @@
   --room-ink-soft: rgba(245, 239, 247, 0.66);
   --room-accent: #f0c75e;        /* gold — rings, active tools, primary CTAs */
   --room-accent-contrast: #2a1f3d;
-  --room-chrome: rgba(50, 36, 80, 0.72);
-  --room-chrome-strong: rgba(30, 22, 45, 0.92);
+  /* The bars sit *above* the backdrop in the screens, not below it: sampled
+     (50,40,76) against a (32,26,55) field. A 0.72 alpha over the new, darker
+     backdrop sampled far too dark, so the fill is both lighter and more opaque. */
+  --room-chrome: rgba(62, 50, 92, 0.88);
+  --room-chrome-strong: rgba(38, 30, 60, 0.94);
   --room-chrome-line: rgba(255, 255, 255, 0.08);
 
   /* ── Signal colours ───────────────────────────────────────────────────────
@@ -40,12 +46,18 @@
 
   /* ── Room layout ──────────────────────────────────────────────────────────
      The room is a three-row grid (header / body / dock) whose middle row is a
-     two-column grid (canvas / sidebar). These are measured from the 1920x928
-     screens, and every region reads them rather than hardcoding a width, so
-     one change here moves the whole room consistently. */
-  --room-gutter: 16px;
-  --room-gap: 32px;
-  --room-sidebar: 352px;
+     two-column grid (canvas / sidebar). Every region reads these rather than
+     hardcoding a width, so one change here moves the whole room consistently.
+
+     Measured off all four client screens, which agree: page content runs
+     x=246..1682 of 1920 — a centred 1436px column, not an edge-to-edge one.
+     The room used to fill the viewport, which on a wide monitor spread the dock
+     tools thin and threw the primary action into the far corner, a good 400px
+     from the tools it belongs with. */
+  --room-max: 1436px;
+  --room-gutter: 24px;
+  --room-gap: 28px;
+  --room-sidebar: 354px;
   --room-header-h: 80px;
   --room-dock-h: 104px;
 
@@ -117,11 +129,12 @@
     linear-gradient(var(--room-bg-angle), var(--room-bg-1) 0%, var(--room-bg-2) 100%);
 }
 
-/* Night-sky and deep-ocean book themes are now the same family as the default,
-   so this block only has to deepen it. */
+/* `dark` is the default family now, so this block must not restate the chrome.
+   It used to set a cold blue-black (14,22,38) here — which, once dark became the
+   default `chrome_mode`, silently overrode the measured aubergine chrome on
+   every book and left the header and dock reading (37,28,58) instead of the
+   screens' (50,40,76). Only the star density differs for a night-sky book. */
 .room-root[data-chrome="dark"] {
-  --room-chrome: rgba(14, 22, 38, 0.62);
-  --room-chrome-strong: rgba(14, 22, 38, 0.86);
   --room-cloud: rgba(255, 255, 255, 0.22);
 }
 
@@ -189,13 +202,21 @@
    small sizes; here every region occupies a real grid cell.
 
    Below `lg` the two body columns collapse to one and the sidebar follows the
-   canvas in document order, so it scrolls into view rather than covering it. */
+   canvas in document order, so it scrolls into view rather than covering it.
+
+   The shell is centred and capped at `--room-max`. It fills the viewport on
+   anything narrower than ~1484px, so laptops and tablets are unaffected; the cap
+   only binds on a wide monitor, where the screens show the room held together in
+   the middle rather than stretched to both edges. */
 .room-shell {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   row-gap: 24px;
   height: 100%;
   min-height: 0;
+  width: 100%;
+  max-width: calc(var(--room-max) + var(--room-gutter) * 2);
+  margin-inline: auto;
   padding: var(--room-gutter);
   padding-bottom: calc(var(--room-gutter) + env(safe-area-inset-bottom, 0px));
 }
@@ -223,12 +244,33 @@
   backdrop-filter: blur(14px) saturate(1.1);
 }
 
-/* The canvas card — the stage the book, picker or activity sits on. */
+/* The canvas card — the stage the book, picker or activity sits on.
+   Dark by default: on the activity screens the card is a workspace behind
+   coloured cards and option rows, and the screens sample it at #3B2B52. */
 .room-card {
   background: var(--activity-paper);
   border: 1px solid var(--room-chrome-line);
   border-radius: var(--r-card);
   box-shadow: var(--elev-2);
+  color: var(--room-ink);
+}
+
+/* Reading is the exception. In the client's reading screen the card and the book
+   pages sample the *same* cream (251,235,223): the spread fills the card, so
+   there is no dark surround at all. Painting a dark card behind the book left a
+   thick frame the screens do not have, and made the paper read as a small object
+   floating on a panel rather than as the page you are reading. */
+.room-card[data-surface="paper"] {
+  background: var(--book-paper);
+  border-color: rgba(20, 12, 34, 0.14);
+  /* Everything inside a paper card reads dark ink. The room's own ink is a near
+     white tuned for the aubergine backdrop; left inherited it made the loading
+     spinner and the "no pages yet" message invisible on cream. */
+  --room-ink: #2b2118;
+  --room-ink-soft: rgba(43, 33, 24, 0.62);
+  --room-chrome: rgba(255, 255, 255, 0.82);
+  --room-chrome-strong: rgba(255, 255, 255, 0.94);
+  --room-chrome-line: rgba(20, 12, 34, 0.14);
   color: var(--room-ink);
 }
 
@@ -304,9 +346,10 @@
   --activity-shadow: 0 18px 48px -16px rgba(23, 34, 51, 0.34);
 }
 
+/* As with the chrome above: `dark` is the default family, so restating the
+   activity paper here overrode the measured #3B2B52 on every book. Only the
+   shadow deepens for a night-sky theme. */
 .room-root[data-chrome="dark"] {
-  --activity-paper: #2d2040;
-  --activity-edge: rgba(255, 255, 255, 0.10);
   --activity-shadow: 0 18px 48px -16px rgba(0, 0, 0, 0.6);
 }
 

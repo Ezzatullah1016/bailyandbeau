@@ -1669,9 +1669,15 @@ function RoomContent({
             )}
 
             {/* The canvas card: one surface holding the book, the activity
-                picker or an activity. The screens frame all three identically,
-                so the card lives here rather than being re-declared by each. */}
-            <div className="room-card relative flex min-h-0 flex-1 flex-col overflow-hidden">
+                picker or an activity.
+                Reading takes the paper surface, because in the client's reading
+                screen the card and the book pages are the same cream — the
+                spread *is* the card. The activity screens keep the dark
+                workspace, which their coloured cards and option rows sit on. */}
+            <div
+              className="room-card relative flex min-h-0 flex-1 flex-col overflow-hidden"
+              data-surface={isActivityMode ? undefined : 'paper'}
+            >
               {/* Reading progress: a hairline along the bottom of the card it
                   measures. It used to span the whole room and ran underneath the
                   dock, where it read as a stray sliver of chrome. */}
@@ -1693,10 +1699,13 @@ function RoomContent({
               )}
               <div
                 /* An entered activity is top-aligned so it reads as page
-                   content on the canvas; the book and the picker stay centred. */
-                className={`relative flex min-h-0 flex-1 justify-center px-4 py-4 sm:px-8 sm:py-7 ${
-                  isActivityMode && activityEntered ? 'items-stretch' : 'items-center'
-                }`}
+                   content on the canvas; the book and the picker stay centred.
+                   Reading gets no padding: the spread runs to the card's edges
+                   in the screens, and an inset here drew a thick frame around
+                   the paper that the mock does not have. */
+                className={`relative flex min-h-0 flex-1 justify-center ${
+                  isActivityMode ? 'px-4 py-4 sm:px-8 sm:py-7' : ''
+                } ${isActivityMode && activityEntered ? 'items-stretch' : 'items-center'}`}
               >
                 {isActivityMode ? (
                   activityEntered ? (
@@ -1778,8 +1787,13 @@ function RoomContent({
                             <span
                               className="room-tap grid place-items-center rounded-full transition-transform group-hover:scale-105"
                               style={{
-                                background: 'var(--room-chrome-strong)',
-                                color: 'var(--room-ink)',
+                                /* Literal, not the card's chrome: these sit on
+                                   cream paper, where the paper card's white
+                                   chrome would make them invisible. The screens
+                                   show dark aubergine discs with a white
+                                   glyph. */
+                                background: '#332a5c',
+                                color: '#ffffff',
                                 boxShadow: 'var(--elev-1)',
                               }}
                             >
@@ -1796,8 +1810,13 @@ function RoomContent({
                             <span
                               className="room-tap grid place-items-center rounded-full transition-transform group-hover:scale-105"
                               style={{
-                                background: 'var(--room-chrome-strong)',
-                                color: 'var(--room-ink)',
+                                /* Literal, not the card's chrome: these sit on
+                                   cream paper, where the paper card's white
+                                   chrome would make them invisible. The screens
+                                   show dark aubergine discs with a white
+                                   glyph. */
+                                background: '#332a5c',
+                                color: '#ffffff',
                                 boxShadow: 'var(--elev-1)',
                               }}
                             >
