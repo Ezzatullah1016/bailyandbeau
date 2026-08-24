@@ -322,7 +322,10 @@ export default function ActivityRoom({
   );
 
   return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-brand-navy/95 backdrop-blur-md p-4">
+    <div
+      className="fixed inset-0 flex items-center justify-center bg-brand-navy/95 p-4 backdrop-blur-md"
+      style={{ zIndex: 'var(--z-modal)' }}
+    >
       {CardInner}
     </div>
   );

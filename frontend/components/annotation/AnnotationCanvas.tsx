@@ -22,8 +22,13 @@ export interface AnnotationCanvasHandle {
   getJSON(): string;
   undo(): void;
   redo(): void;
-  /** True when there is an undone object waiting to be restored. */
-  canRedo(): boolean;
+  /**
+   * How much there is to undo and to redo, so the dock's buttons can be
+   * disabled honestly instead of looking live and no-opping at the ends of the
+   * stack. Replaces a `canRedo()` that nothing ever called — and said nothing
+   * about undo, which is the button people actually reach for.
+   */
+  depth(): { undo: number; redo: number };
   /** After CSS transforms (e.g. zoom) change, refresh size + pointer mapping */
   recalcLayout(): void;
 }
@@ -212,7 +217,7 @@ function applyToolToCanvas(
   }
 
   const cursor = cursorForTool(tool, true);
-  if (tool === 'pen' || tool === 'highlighter') {
+  if (tool === 'pen') {
     ensureFreeDrawingBrush(canvas, fabricNS);
   }
   const brush = canvas.freeDrawingBrush;
@@ -401,11 +406,6 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
           if (isRemoteLoadRef.current) return;
           emitSync(canvas);
         });
-
-        canvas.on('object:added', () => {
-          if (isRemoteLoadRef.current) return;
-          // Emit after stamp or other object adds
-        });
       });
 
       return () => {
@@ -542,8 +542,12 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
           emitSync(canvas);
         },
 
-        canRedo() {
-          return redoStackRef.current.length > 0;
+        depth() {
+          const canvas = fabricRef.current;
+          return {
+            undo: canvas ? canvas.getObjects().length : 0,
+            redo: redoStackRef.current.length,
+          };
         },
 
         recalcLayout() {

@@ -8,6 +8,19 @@ import type { AnnotationShape } from '@/components/annotation/types';
 export const REACTION_EMOJI = ['❤️', '😂', '😮', '👏', '⭐', '🎉'];
 
 const COLORS = ['#ef4444', '#f0c75e', '#5fd396', '#5fb3d4', '#764f84', '#2a1f3d'];
+/**
+ * Spoken names for the swatches. The labels used to interpolate the hex value
+ * itself, so a screen reader announced "Use the #ef4444 pen" — six buttons that
+ * were, to anyone not reading the screen, indistinguishable strings of digits.
+ */
+const COLOR_NAMES: Record<string, string> = {
+  '#ef4444': 'red',
+  '#f0c75e': 'yellow',
+  '#5fd396': 'green',
+  '#5fb3d4': 'blue',
+  '#764f84': 'purple',
+  '#2a1f3d': 'black',
+};
 const BRUSHES = [4, 8, 14, 22];
 const SHAPES: Array<{ id: AnnotationShape; label: string; Icon: typeof Square }> = [
   { id: 'rect', label: 'Rectangle', Icon: Square },
@@ -34,6 +47,7 @@ export function DockPopovers({
   onShapeChange,
   onReact,
   onClear,
+  canClear = true,
 }: {
   open: 'pen' | 'fill' | 'shapes' | 'reactions' | null;
   color: string;
@@ -44,12 +58,15 @@ export function DockPopovers({
   onShapeChange: (s: AnnotationShape) => void;
   onReact: (emoji: string) => void;
   onClear: () => void;
+  /** False when there is nothing on the page to erase. */
+  canClear?: boolean;
 }) {
   if (!open) return null;
 
   return (
     <div
-      className="room-bar absolute bottom-full left-4 z-30 mb-2 flex items-center gap-3 px-3 py-2.5"
+      className="room-bar absolute bottom-full left-4 mb-2 flex max-w-[calc(100vw-3rem)] flex-wrap items-center gap-3 px-3 py-2.5"
+      style={{ zIndex: 'var(--z-popover)' }}
       role="group"
       aria-label="Tool options"
     >
@@ -91,7 +108,7 @@ export function DockPopovers({
                 key={c}
                 type="button"
                 onClick={() => onColorChange(c)}
-                aria-label={`Use the ${c} pen`}
+                aria-label={`Use the ${COLOR_NAMES[c] ?? c} pen`}
                 aria-pressed={color === c}
                 className="h-8 w-8 cursor-pointer rounded-full transition-transform hover:scale-110 focus-visible:outline-none"
                 style={{
@@ -149,7 +166,8 @@ export function DockPopovers({
               <button
                 type="button"
                 onClick={onClear}
-                className="cursor-pointer whitespace-nowrap rounded-xl px-3 py-2 font-karla text-[13px] font-semibold transition-colors hover:bg-white/10"
+                disabled={!canClear}
+                className="cursor-pointer whitespace-nowrap rounded-xl px-3 py-2 font-karla text-[13px] font-semibold transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                 style={{ color: 'var(--c-pink)' }}
               >
                 Clear page

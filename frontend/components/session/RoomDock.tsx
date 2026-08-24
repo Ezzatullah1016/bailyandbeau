@@ -118,14 +118,29 @@ export function RoomDock({
               />
               {menuOpen && (
                 <div
-                  className="room-bar absolute bottom-full left-0 z-20 mb-2 flex w-max max-w-[70vw] flex-wrap gap-1 p-2"
+                  className="room-bar absolute bottom-full left-0 mb-2 flex w-max max-w-[70vw] flex-wrap gap-1 p-2"
+                  style={{ zIndex: 'var(--z-dock-menu)' }}
                   role="group"
                   aria-label="More tools"
                 >
                   {overflow.map((item) => (
                     <DockButton
                       key={item.label}
-                      item={{ ...item, onClick: () => { item.onClick(); setMenuOpen(false); } }}
+                      item={{
+                        ...item,
+                        /*
+                         * A disabled item keeps the menu open. It used to close
+                         * it either way, so a tool that early-returns — Undo on
+                         * an empty page, Activities with none authored — looked
+                         * like it had acted: the menu dismissed and nothing
+                         * else happened.
+                         */
+                        onClick: () => {
+                          if (item.disabled) return;
+                          item.onClick();
+                          setMenuOpen(false);
+                        },
+                      }}
                     />
                   ))}
                 </div>
@@ -156,8 +171,6 @@ function DockButton({ item, expanded }: { item: DockItem; expanded?: boolean }) 
         type="button"
         onClick={onClick}
         disabled={disabled}
-        aria-label={label}
-        title={label}
         aria-pressed={expanded === undefined ? active : undefined}
         aria-expanded={expanded}
         className="group flex shrink-0 cursor-pointer flex-col items-center gap-1 rounded-xl px-1.5 py-1 transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--room-accent)] disabled:cursor-not-allowed disabled:opacity-35"
@@ -189,8 +202,8 @@ function DockButton({ item, expanded }: { item: DockItem; expanded?: boolean }) 
           )}
         </span>
         <span
-          className="font-montserrat text-[10px] font-semibold uppercase leading-none tracking-wide"
-          style={{ color: active ? 'var(--room-accent)' : 'var(--room-ink-soft)' }}
+          className="max-w-[72px] truncate font-montserrat text-[11px] font-semibold uppercase leading-none tracking-wide"
+          style={{ color: active ? 'var(--room-accent)' : 'var(--room-ink-strong)' }}
         >
           {label}
         </span>

@@ -55,6 +55,8 @@ import { RoomDock, type DockCta, type DockItem } from '@/components/session/Room
 import { RoomHeaderBar } from '@/components/session/RoomHeaderBar';
 import { RoomShell } from '@/components/session/RoomShell';
 import { RoomSidebar } from '@/components/session/RoomSidebar';
+import { useToast } from '@/components/ui/Toast';
+import { ROLE_LABEL } from '@/lib/roles';
 import type { Book3DProps } from '@/components/reading/Book3D/Scene';
 import { useRoomTheme } from '@/lib/useRoomTheme';
 import { useRoomIdle, useRoomSounds } from '@/lib/useRoomSounds';
@@ -66,6 +68,7 @@ import {
   ChevronRight,
   Eraser,
   Gamepad2,
+  Highlighter,
   LayoutGrid,
   Loader2,
   MessageCircle,
@@ -277,6 +280,7 @@ function RoomContent({
   bookTitle,
   inviteToken,
   onEnd,
+  onRoleChange,
   mode = 'reading',
 }: {
   role: 'host' | 'guest';
@@ -288,9 +292,16 @@ function RoomContent({
   bookTitle: string;
   inviteToken: string | null;
   onEnd: () => void;
+  /**
+   * Called when control changes hands, so the session record — the thing every
+   * `role === 'host'` check reads — actually changes. Without it the host
+   * published HOST_TRANSFERRED into the void and neither side moved.
+   */
+  onRoleChange: (next: 'host' | 'guest') => void;
   mode?: 'reading' | 'activity';
 }) {
   const room = useRoomContext();
+  const toast = useToast();
   // Mic and camera state feed the rail directly now that it is the room's only
   // control surface.
   const { localParticipant, isMicrophoneEnabled, isCameraEnabled } = useLocalParticipant();
@@ -436,6 +447,19 @@ function RoomContent({
   // ── Annotation ────────────────────────────────────────────────────────────
   const [interactionMode, setInteractionMode] = useState<ReadingInteractionMode>('book');
   const annTool = interactionMode === 'book' ? 'pen' : interactionMode;
+  /**
+   * Undo/redo depth, mirrored into state so the dock can disable those two
+   * buttons. The canvas exposes it through an imperative handle (a ref), which
+   * render cannot observe — so it is sampled after every sync, which is exactly
+   * when the stacks can have changed.
+   */
+  const [annotationDepth, setAnnotationDepth] = useState({ undo: 0, redo: 0 });
+
+  /** See the HOST_TRANSFERRED case: the data-channel effect never re-subscribes. */
+  const onRoleChangeRef = useRef(onRoleChange);
+  useEffect(() => {
+    onRoleChangeRef.current = onRoleChange;
+  }, [onRoleChange]);
   const drawingEnabled = interactionMode !== 'book';
   const [annColor, setAnnColor] = useState('#ef4444');
   const [annBrush, setAnnBrush] = useState(8);
@@ -785,6 +809,28 @@ function RoomContent({
           break;
         }
 
+        case 'HOST_TRANSFERRED': {
+          /*
+           * The host published this and nothing listened for it, so a transfer
+           * completed on the server and neither client changed: the new host
+           * still saw a guest's read-only room, and the old host kept the
+           * controls until a reload sorted it out.
+           */
+          const newHost = msg.payload.new_host_participant_id;
+          if (typeof newHost !== 'string') break;
+          // Through a ref: this effect deliberately does not re-subscribe on
+          // every render, so calling the prop directly would pin the first
+          // render's closure.
+          if (newHost === participantId) {
+            if (role !== 'host') onRoleChangeRef.current('host');
+          } else if (role === 'host') {
+            // Someone else now holds the pen; step down without waiting for a
+            // reload to reveal it.
+            onRoleChangeRef.current('guest');
+          }
+          break;
+        }
+
         case 'ACTIVITY_NAV':
           if (role === 'guest' && typeof msg.payload.index === 'number') {
             setActivityIndex(msg.payload.index);
@@ -883,6 +929,7 @@ function RoomContent({
   // ── Annotation sync callback ──────────────────────────────────────────────
   const handleCanvasSync = useCallback(
     (json: string) => {
+      setAnnotationDepth(canvasRef.current?.depth() ?? { undo: 0, redo: 0 });
       const fi = Math.floor(currentPageRef.current / 2);
       spreadInkRef.current[String(fi)] = json;
       room.localParticipant.publishData(
@@ -904,6 +951,10 @@ function RoomContent({
     const fi = Math.floor(currentPageRef.current / 2);
     delete spreadInkRef.current[String(fi)];
     canvasRef.current?.clearCanvas(true);
+    // `clearCanvas` does not route through `onSync`, so the dock's undo/redo
+    // depth has to be resampled here or both buttons stay enabled over an empty
+    // canvas.
+    setAnnotationDepth(canvasRef.current?.depth() ?? { undo: 0, redo: 0 });
     try {
       room.localParticipant.publishData(buildMsg('CANVAS_CLEAR', { spread_index: fi }), { reliable: true });
     } catch {
@@ -1036,15 +1087,38 @@ function RoomContent({
     setTransferring(true);
     try {
       await transferHost(sessionId, participantId, newParticipantId);
-      room.localParticipant.publishData(
-        buildMsg('HOST_TRANSFERRED', { new_host_participant_id: newParticipantId }),
-        { reliable: true },
-      );
+      try {
+        room.localParticipant.publishData(
+          buildMsg('HOST_TRANSFERRED', { new_host_participant_id: newParticipantId }),
+          { reliable: true },
+        );
+      } catch {
+        // The server has already recorded the handover, so a dropped data
+        // channel is not a failed transfer — the other client picks it up on
+        // its next snapshot.
+      }
       setShowTransferModal(false);
-    } catch { /* ignore */ } finally {
+      // The old host steps down locally too, so the controls move immediately
+      // rather than lingering until a reload.
+      onRoleChangeRef.current('guest');
+    } catch (err) {
+      // Previously swallowed, which left the modal open and the row merely
+      // un-dimmed — indistinguishable from a button that does nothing.
+      toast.error('Could not hand over the Adventure Guide role.', err);
+    } finally {
       setTransferring(false);
     }
   }
+
+  /* Escape dismisses the transfer dialog, as it does the settings sheet. */
+  useEffect(() => {
+    if (!showTransferModal) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setShowTransferModal(false);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showTransferModal]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const pageCount = pages.length || 1;
@@ -1131,6 +1205,33 @@ function RoomContent({
   // "choose something" screen and keeps the room-level set, as the screens show.
   const inActivity = isActivityMode && activityEntered;
 
+  /*
+   * The dock's ink tools drive `canvasRef` — the AnnotationCanvas layered over
+   * the book — and that canvas only mounts in the reading branch below. They used
+   * to be gated on `inActivity`, which is exactly backwards: they were shown in
+   * activities, where `canvasRef.current` is always null and every one of them
+   * was a guaranteed no-op (Clear page even asked for confirmation first), and
+   * hidden while reading, which is the only place they work.
+   *
+   * An entered activity draws on the pane's own canvas instead, whose tools come
+   * from the authored payload — which palette, which brush sizes, whether the
+   * eraser and fill are allowed at all — so they belong to the pane that knows
+   * those answers, not to the room-level dock.
+   */
+  const inkTools = !inActivity;
+
+  /*
+   * Undo/redo depth, so those two buttons can be honestly disabled rather than
+   * looking live and doing nothing at the ends of the stack. `AnnotationCanvas`
+   * already exposed `canRedo()` and nothing had ever called it.
+   *
+   * Read from a state counter bumped on every canvas change: the imperative
+   * handle is a ref, so reading it during render would not re-run when the
+   * stacks change.
+   */
+  const canUndo = inkTools && annotationDepth.undo > 0;
+  const canRedo = inkTools && annotationDepth.redo > 0;
+
   const dockItems: DockItem[] = useMemo(
     () => [
       // ── Reading ──────────────────────────────────────────────────────────
@@ -1145,7 +1246,7 @@ function RoomContent({
       {
         icon: MousePointer2,
         label: 'Select',
-        hidden: !inActivity,
+        hidden: !inkTools,
         active: !drawingEnabled,
         onClick: () => {
           setInteractionMode('book');
@@ -1157,6 +1258,7 @@ function RoomContent({
       {
         icon: Pen,
         label: 'Pen',
+        hidden: !inkTools,
         active: interactionMode === 'pen',
         separatorBefore: true,
         onClick: () => {
@@ -1168,8 +1270,27 @@ function RoomContent({
         },
       },
       {
+        /*
+         * The canvas has always had a working highlighter — translucent ink,
+         * minimum 20px width — and no control anywhere set that mode, so the
+         * whole branch was unreachable. It is a genuinely useful tool for
+         * marking a word in a sentence without hiding it, so it gets a button
+         * rather than being deleted.
+         */
+        icon: Highlighter,
+        label: 'Highlight',
+        hidden: !inkTools,
+        active: interactionMode === 'highlighter',
+        onClick: () => {
+          const on = interactionMode !== 'highlighter';
+          setInteractionMode(on ? 'highlighter' : 'book');
+          setToolPopover(on ? 'pen' : null);
+        },
+      },
+      {
         icon: Eraser,
         label: 'Eraser',
+        hidden: !inkTools,
         active: interactionMode === 'eraser',
         onClick: () => {
           setInteractionMode(interactionMode === 'eraser' ? 'book' : 'eraser');
@@ -1185,7 +1306,7 @@ function RoomContent({
       {
         icon: PaintBucket,
         label: 'Fill',
-        hidden: !inActivity,
+        hidden: !inkTools,
         active: interactionMode === 'fill',
         onClick: () => {
           const on = interactionMode !== 'fill';
@@ -1196,7 +1317,7 @@ function RoomContent({
       {
         icon: Shapes,
         label: 'Shapes',
-        hidden: !inActivity,
+        hidden: !inkTools,
         active: interactionMode === 'shape',
         onClick: () => {
           const on = interactionMode !== 'shape';
@@ -1207,13 +1328,15 @@ function RoomContent({
       {
         icon: Undo2,
         label: 'Undo',
-        hidden: !inActivity,
+        hidden: !inkTools,
+        disabled: !canUndo,
         onClick: () => canvasRef.current?.undo(),
       },
       {
         icon: Redo2,
         label: 'Redo',
-        hidden: !inActivity,
+        hidden: !inkTools,
+        disabled: !canRedo,
         onClick: () => canvasRef.current?.redo(),
       },
 
@@ -1290,6 +1413,11 @@ function RoomContent({
       drawingEnabled,
       toolPopover,
       inActivity,
+      // Without these the dock never rebuilt as the undo/redo stacks changed,
+      // so both buttons kept whatever disabled state they had at mount.
+      inkTools,
+      canUndo,
+      canRedo,
       router,
       sounds.muted,
       sounds.toggleMuted,
@@ -1317,6 +1445,7 @@ function RoomContent({
       onShapeChange={setAnnShape}
       onReact={handleReaction}
       onClear={handleClearCanvas}
+      canClear={canUndo}
     />
   );
 
@@ -1439,7 +1568,10 @@ function RoomContent({
 
       {/* Reaction overlay — floats above everything */}
       {reactions.length > 0 && (
-        <div className="fixed inset-0 z-[200] pointer-events-none overflow-hidden">
+        <div
+          className="pointer-events-none fixed inset-0 overflow-hidden"
+          style={{ zIndex: 'var(--z-reaction)' }}
+        >
           {reactions.map((r) => (
             <span
               key={r.id}
@@ -1522,13 +1654,15 @@ function RoomContent({
               <button
                 type="button"
                 aria-label="Close settings"
-                className="fixed inset-0 z-[65] bg-black/40"
+                className="fixed inset-0 bg-black/40"
+                style={{ zIndex: 'calc(var(--z-sheet) - 1)' }}
                 onClick={() => setSettingsOpen(false)}
               />
               <div
                 role="dialog"
                 aria-label="Session settings"
-                className="room-panel-strong fixed bottom-0 left-0 right-0 z-[70] flex max-h-[min(80dvh,560px)] flex-col overflow-hidden rounded-t-3xl sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:w-[min(100vw-2rem,400px)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl"
+                className="room-panel-strong fixed bottom-0 left-0 right-0 flex max-h-[min(80dvh,560px)] flex-col overflow-hidden rounded-t-3xl sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:w-[min(100vw-2rem,400px)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl"
+                style={{ zIndex: 'var(--z-sheet)' }}
               >
                 <div
                   className="flex shrink-0 items-center justify-between px-4 py-3"
@@ -1633,7 +1767,13 @@ function RoomContent({
 
             {/* ── Timer end-state modal (host only) ─────────────────────────── */}
             {showExtendModal && role === 'host' && (
-              <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60">
+              <div
+                className="fixed inset-0 flex items-center justify-center bg-black/60"
+                style={{ zIndex: 'var(--z-modal)' }}
+                role="dialog"
+                aria-modal="true"
+                aria-label="Session time is up"
+              >
                 <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-sm w-full mx-4 text-center space-y-4">
                   <AlarmClock className="mx-auto h-10 w-10 text-[#c84a71]" aria-hidden />
                   <h2 className="font-baloo text-xl font-bold text-[#3d3b62]">Time&apos;s up!</h2>
@@ -1837,34 +1977,70 @@ function RoomContent({
 
         {/* Host transfer modal */}
         {showTransferModal && (
-          <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4" onClick={() => setShowTransferModal(false)}>
-            <div className="bg-[#20201f] rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-5">
-                <h3 className="font-baloo text-[#e5e2e1] text-xl">Transfer Host</h3>
-                <button onClick={() => setShowTransferModal(false)} aria-label="Close" className="text-[#c3c9b9] hover:text-white">
-                  <X className="w-5 h-5" />
+          <div
+            className="fixed inset-0 flex items-center justify-center bg-black/70 p-4"
+            style={{ zIndex: 'var(--z-modal)' }}
+          >
+            {/* A real button, so the backdrop is reachable by keyboard and
+                announced — it used to be a bare div with a click handler, which
+                left no way to dismiss this modal without a mouse. */}
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={() => setShowTransferModal(false)}
+              className="absolute inset-0 h-full w-full cursor-default"
+            />
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="transfer-guide-title"
+              className="relative w-full max-w-sm rounded-2xl bg-[#20201f] p-6 shadow-2xl"
+            >
+              <div className="mb-5 flex items-center justify-between gap-3">
+                <h3 id="transfer-guide-title" className="font-baloo text-xl text-[#e5e2e1]">
+                  Pass the {ROLE_LABEL.host} role
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowTransferModal(false)}
+                  aria-label="Close"
+                  className="shrink-0 cursor-pointer text-[#c3c9b9] hover:text-white"
+                >
+                  <X className="h-5 w-5" aria-hidden />
                 </button>
               </div>
-              <p className="text-[#c3c9b9] text-sm mb-5">Select a participant to give host controls to:</p>
+              <p className="mb-5 text-sm text-[#c3c9b9]">
+                Choose who leads from here. They get the page turns and the tools; you become an{' '}
+                {ROLE_LABEL.guest}.
+              </p>
               <div className="flex flex-col gap-3">
                 {participants
                   .filter((p) => p.identity !== String(participantId))
                   .map((p) => (
                     <button
                       key={p.identity}
+                      type="button"
                       onClick={() => handleTransferHost(p.identity)}
                       disabled={transferring}
-                      className="flex items-center gap-3 p-3 rounded-xl bg-[#2a2a2a] hover:bg-[#764f84] text-[#e5e2e1] hover:text-white transition-all disabled:opacity-50"
+                      className="flex cursor-pointer items-center gap-3 rounded-xl bg-[#2a2a2a] p-3 text-[#e5e2e1] transition-all hover:bg-[#764f84] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      <div className="w-8 h-8 rounded-full bg-[#353535] flex items-center justify-center text-sm font-bold">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#353535] text-sm font-bold">
                         {p.name?.[0]?.toUpperCase() ?? '?'}
                       </div>
-                      <span className="font-medium">{p.name ?? p.identity}</span>
-                      <Users className="w-4 h-4 ml-auto opacity-50" />
+                      <span className="min-w-0 flex-1 truncate text-left font-medium">
+                        {p.name ?? p.identity}
+                      </span>
+                      {transferring ? (
+                        <Loader2 className="ml-auto h-4 w-4 shrink-0 animate-spin" aria-hidden />
+                      ) : (
+                        <Users className="ml-auto h-4 w-4 shrink-0 opacity-50" aria-hidden />
+                      )}
                     </button>
                   ))}
                 {participants.filter((p) => p.identity !== String(participantId)).length === 0 && (
-                  <p className="text-[#c3c9b9]/60 text-sm text-center py-4">No other participants in session.</p>
+                  <p className="py-4 text-center text-sm text-[#c3c9b9]/60">
+                    Nobody else has joined yet.
+                  </p>
                 )}
               </div>
             </div>
@@ -1967,6 +2143,16 @@ export function SessionRoomPage({ mode = 'reading' }: { mode?: 'reading' | 'acti
           bookTitle={bookTitle}
           inviteToken={inviteToken}
           mode={mode}
+          onRoleChange={(next) =>
+            setSession({
+              sessionId: sessionId ?? id,
+              token: connectToken,
+              role: next,
+              roomName,
+              livekitUrl,
+              participantId: participantId!,
+            })
+          }
           onEnd={() => router.push('/dashboard')}
         />
       </LiveKitRoom>

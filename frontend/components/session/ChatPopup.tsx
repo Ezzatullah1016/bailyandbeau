@@ -39,7 +39,11 @@ export function ChatPopup({ messages, input, onInputChange, onSend, onClose }: C
     <div
       role="dialog"
       aria-label="Session chat"
-      className="room-panel-strong pointer-events-auto fixed bottom-4 right-4 z-[70] flex max-h-[min(70dvh,460px)] w-[min(100vw-2rem,320px)] flex-col overflow-hidden rounded-2xl"
+      /* Clear of the dock: `bottom-4` put this straight on top of the dock's
+         primary CTA — the one control the room exists to offer — so it sits a
+         dock-height above it instead. */
+      className="room-panel-strong pointer-events-auto fixed right-4 flex max-h-[min(70dvh,460px)] w-[min(100vw-2rem,320px)] flex-col overflow-hidden rounded-2xl"
+      style={{ bottom: 'calc(var(--room-dock-h) + var(--room-gutter))', zIndex: 'var(--z-sheet)' }}
     >
       <div
         className="flex shrink-0 items-center justify-between px-3 py-2"
