@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Baby, Bell, CheckCircle, Clock, Download, LogOut, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { apiRequest, type UserBadgeData } from '@/lib/api';
+import { apiBaseUrl, apiRequest, type UserBadgeData } from '@/lib/api';
+import { useToast } from '@/components/ui/Toast';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { HeaderProfileAvatar, dashboardInitials, resolveUserAvatarUrl } from '@/components/dashboard/AccountAvatar';
 
@@ -110,6 +111,7 @@ function SectionHeader({ title, subtitle }: { title: string; subtitle: string })
 
 function DeleteAccountButton() {
   const router = useRouter();
+  const toast = useToast();
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -132,6 +134,11 @@ function DeleteAccountButton() {
       localStorage.removeItem('bb_access_token');
       localStorage.removeItem('bb_refresh_token');
       router.replace('/login');
+    } catch (err) {
+      // Without this the request could fail and the only visible change was the
+      // spinner stopping — leaving someone who had just confirmed permanent
+      // deletion to assume it had happened while they were still signed in.
+      toast.error('Could not delete your account. Please try again or contact support.', err);
     } finally {
       setDeleting(false);
     }
@@ -165,6 +172,7 @@ function DeleteAccountButton() {
 export default function SettingsPage() {
   const router = useRouter();
   const pathname = usePathname();
+  const toast = useToast();
   const [me, setMe] = useState<MeData | null>(null);
   const [children, setChildren] = useState<ChildProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -176,6 +184,8 @@ export default function SettingsPage() {
   const [newChildName, setNewChildName] = useState('');
   const [newChildAge, setNewChildAge] = useState('3-5');
   const [addingChild, setAddingChild] = useState(false);
+  const [removingChildId, setRemovingChildId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [entitlement, setEntitlement] = useState<EntitlementData | null>(null);
   const [recentSessions, setRecentSessions] = useState<RecentSessionRow[]>([]);
@@ -255,6 +265,8 @@ export default function SettingsPage() {
       setMe(r.data);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      toast.error('Could not save your profile.', err);
     } finally {
       setSaving(false);
     }
@@ -272,14 +284,72 @@ export default function SettingsPage() {
       setChildren((prev) => [...prev, r.data]);
       setNewChildName('');
       setShowAddChild(false);
+      toast.success(`${r.data.display_name} added.`);
+    } catch (err) {
+      toast.error('Could not add that child profile.', err);
     } finally {
       setAddingChild(false);
     }
   }
 
+  /**
+   * Removing a child profile deletes their reading history, so it asks first and
+   * only drops the row once the server has actually accepted the delete. It used
+   * to fire on a single click and filter the list even when the request failed —
+   * so a failed delete looked exactly like a successful one until the next
+   * reload brought the child back.
+   */
+  /**
+   * GDPR data export.
+   *
+   * This was a plain `<a href="/api/v1/me/export/">`, which resolves against the
+   * *frontend* origin — the API lives on a different port and there is no rewrite
+   * in `next.config.mjs`, so the link 404'd, and being a bare anchor it sent no
+   * `Authorization` header, so it would have 401'd even if it had reached Django.
+   * The endpoint requires a bearer token, which means fetching the body
+   * ourselves and handing the browser a blob.
+   */
+  async function exportMyData() {
+    setExporting(true);
+    try {
+      const token = localStorage.getItem('bb_access_token');
+      const res = await fetch(`${apiBaseUrl}/me/export/`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!res.ok) throw new Error(`Export failed with status ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `bailey-and-beau-data-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Revoked on the next tick: revoking synchronously can cancel the download
+      // in some browsers before it has read the blob.
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+      toast.success('Your data is downloading.');
+    } catch (err) {
+      toast.error('Could not export your data. Please try again.', err);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   async function removeChild(id: string) {
-    await apiRequest(`/children/${id}/`, { method: 'DELETE' }).catch(() => {});
-    setChildren((prev) => prev.filter((c) => c.id !== id));
+    const child = children.find((c) => c.id === id);
+    const name = child?.display_name ?? 'this child';
+    if (!window.confirm(`Remove ${name}? This also deletes their reading history.`)) return;
+    setRemovingChildId(id);
+    try {
+      await apiRequest(`/children/${id}/`, { method: 'DELETE' });
+      setChildren((prev) => prev.filter((c) => c.id !== id));
+      toast.success(`${name} removed.`);
+    } catch (err) {
+      toast.error(`Could not remove ${name}.`, err);
+    } finally {
+      setRemovingChildId(null);
+    }
   }
 
   const sessionsLeft =
@@ -441,10 +511,15 @@ export default function SettingsPage() {
                         <button
                           type="button"
                           onClick={() => removeChild(child.id)}
-                          className="text-slate-300 transition-colors hover:text-red-500"
+                          disabled={removingChildId === child.id}
+                          className="text-slate-300 transition-colors hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-40"
                           aria-label={`Remove ${child.display_name}`}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          {removingChildId === child.id ? (
+                            <RefreshCw className="h-4 w-4 animate-spin" aria-hidden />
+                          ) : (
+                            <Trash2 className="h-4 w-4" aria-hidden />
+                          )}
                         </button>
                       </div>
                     ))}
@@ -658,12 +733,19 @@ export default function SettingsPage() {
                   >
                     <LogOut className="h-4 w-4" /> Sign out
                   </button>
-                  <a
-                    href="/api/v1/me/export/"
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#eccdca] bg-white py-2.5 text-sm font-semibold text-[#3d3b62] hover:bg-stone-50"
+                  <button
+                    type="button"
+                    onClick={exportMyData}
+                    disabled={exporting}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#eccdca] bg-white py-2.5 text-sm font-semibold text-[#3d3b62] hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    <Download className="h-4 w-4" /> Export my data
-                  </a>
+                    {exporting ? (
+                      <RefreshCw className="h-4 w-4 animate-spin" aria-hidden />
+                    ) : (
+                      <Download className="h-4 w-4" aria-hidden />
+                    )}
+                    {exporting ? 'Preparing your data…' : 'Export my data'}
+                  </button>
                   <DeleteAccountButton />
                 </div>
                 <p className="mt-4 text-center text-xs text-stone-400">

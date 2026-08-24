@@ -26,6 +26,11 @@
   /* ── Ink & chrome ─────────────────────────────────────────────────────── */
   --room-ink: #f5eff7;           /* primary text on the backdrop */
   --room-ink-soft: rgba(245, 239, 247, 0.66);
+  /* Between `ink` and `ink-soft`, for small text that must still be *read*
+     rather than merely noticed — instructions, progress counts, tool labels.
+     `--room-ink-soft` at 0.66 tested close to invisible below ~14px on the dark
+     card, and the fix was being hardcoded as a literal at each site it bit. */
+  --room-ink-strong: rgba(245, 239, 247, 0.86);
   --room-accent: #f0c75e;        /* gold — rings, active tools, primary CTAs */
   --room-accent-contrast: #2a1f3d;
   /* The bars sit *above* the backdrop in the screens, not below it: sampled
@@ -320,6 +325,7 @@
      room it is previewing. */
   --room-ink: #f5eff7;
   --room-ink-soft: rgba(245, 239, 247, 0.66);
+  --room-ink-strong: rgba(245, 239, 247, 0.86);
   --room-accent: #f0c75e;
   --room-accent-contrast: #2a1f3d;
   --room-chrome-line: rgba(255, 255, 255, 0.08);
@@ -331,15 +337,37 @@
   --r-md: 16px;
   --r-bar: 20px;
   --r-card: 24px;
+  /* `--r-lg` was missing from this mirror while `.room-activity-card` below
+     resolves its radius from it, so the staff builder's preview rendered the
+     activity card with square corners. */
+  --r-lg: 28px;
   --tap-min: 44px;
+
+  /* ── Stacking order ──────────────────────────────────────────────────────
+     One scale, defined once, because the ad-hoc values had started colliding:
+     chat and the settings sheet both sat at 70 (so DOM order silently decided
+     which won), the reaction overlay and the transfer modal both at 200, and
+     the dock's overflow menu at 20 sat *below* the dock popovers at 30 — so
+     opening a tool popover painted it over the menu.
+
+     Layers are spaced so a future insertion does not force a renumber. Anything
+     that overlays the room belongs here rather than carrying its own literal. */
+  --z-canvas: 10;
+  --z-dock-menu: 20;
+  --z-popover: 30;
+  --z-modal: 60;
+  --z-sheet: 70;
+  --z-toast: 80;
+  /* Above everything: reactions are `pointer-events: none` decoration, so they
+     may safely paint over a modal without trapping a click. */
+  --z-reaction: 90;
 }
 
-.room-root {
-  --activity-paper: #3b2b52;
-  --activity-edge: rgba(255, 255, 255, 0.07);
-  --activity-shadow: 0 18px 48px -16px rgba(6, 3, 14, 0.52);
-}
-
+/* `--activity-*` are deliberately NOT restated for the default `.room-root`.
+   `dark` is the default chrome family, so a `.room-root` block repeating the
+   `:root` values above added nothing and was one more place for the two copies
+   to drift apart — the same failure that silently overrode the measured chrome
+   on every book last time. Only genuine *overrides* get their own block. */
 .room-root[data-chrome="light"] {
   --activity-paper: #fdfcff;
   --activity-edge: rgba(35, 50, 74, 0.14);

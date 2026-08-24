@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { BookOpen, Heart, RefreshCw, Sparkles } from 'lucide-react';
 import { apiRequest, listActivityGroups, listThemes } from '@/lib/api';
+import { useToast } from '@/components/ui/Toast';
 import type { ActivityGroupData, ThemeData } from '@/lib/api';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { usePathname } from 'next/navigation';
@@ -29,11 +30,13 @@ type Tab = 'books' | 'adventures';
 export default function LibraryPage() {
   const router = useRouter();
   const pathname = usePathname();
+  const toast = useToast();
   const [me, setMe] = useState<MeData | null>(null);
   const [books, setBooks] = useState<Book[]>([]);
   const [adventures, setAdventures] = useState<ActivityGroupData[]>([]);
   const [themes, setThemes] = useState<ThemeData[]>([]);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [pendingFavorites, setPendingFavorites] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<Tab>('books');
   const [filter, setFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
@@ -50,13 +53,53 @@ export default function LibraryPage() {
     ]).catch(() => router.replace('/login')).finally(() => setLoading(false));
   }, [router]);
 
+  /**
+   * Optimistic favourite toggle that actually rolls back.
+   *
+   * It used to swallow the error and update local state regardless, so a
+   * rejected request still filled the heart — the UI claimed a favourite the
+   * server had refused, until a reload quietly undid it. The in-flight guard
+   * matters too: this is one tap on a touch device, and two fast taps used to
+   * fire an interleaved POST and DELETE whose arrival order decided the result.
+   */
   async function toggleFavorite(bookId: string) {
-    if (favorites.has(bookId)) {
-      await apiRequest(`/library/favorites/${bookId}/`, { method: 'DELETE' }).catch(() => {});
-      setFavorites((prev) => { const s = new Set(prev); s.delete(bookId); return s; });
-    } else {
-      await apiRequest('/library/favorites/', { method: 'POST', body: JSON.stringify({ book: bookId }) }).catch(() => {});
-      setFavorites((prev) => new Set([...prev, bookId]));
+    if (pendingFavorites.has(bookId)) return;
+    const wasFavorite = favorites.has(bookId);
+
+    setPendingFavorites((prev) => new Set([...prev, bookId]));
+    setFavorites((prev) => {
+      const s = new Set(prev);
+      if (wasFavorite) s.delete(bookId);
+      else s.add(bookId);
+      return s;
+    });
+
+    try {
+      if (wasFavorite) {
+        await apiRequest(`/library/favorites/${bookId}/`, { method: 'DELETE' });
+      } else {
+        await apiRequest('/library/favorites/', {
+          method: 'POST',
+          body: JSON.stringify({ book: bookId }),
+        });
+      }
+    } catch (err) {
+      setFavorites((prev) => {
+        const s = new Set(prev);
+        if (wasFavorite) s.add(bookId);
+        else s.delete(bookId);
+        return s;
+      });
+      toast.error(
+        wasFavorite ? 'Could not remove that favourite.' : 'Could not save that favourite.',
+        err,
+      );
+    } finally {
+      setPendingFavorites((prev) => {
+        const s = new Set(prev);
+        s.delete(bookId);
+        return s;
+      });
     }
   }
 
@@ -87,7 +130,7 @@ export default function LibraryPage() {
           { val: 'activity', label: 'Activity Room' },
           // 'hybrid' books had no chip, so they only ever showed under "all".
           { val: 'hybrid', label: 'Both Rooms' },
-          { val: 'favorites', label: '♥ Favourites' },
+          { val: 'favorites', label: 'Favourites', icon: Heart },
         ]
       : []),
     ...themes.map((t) => ({ val: t.slug, label: t.name, accent: t.accent })),
@@ -134,11 +177,14 @@ export default function LibraryPage() {
           {chips.map((f) => {
             const on = filter === f.val;
             const accent = (f as { accent?: string }).accent;
+            const ChipIcon = (f as { icon?: typeof Heart }).icon;
             return (
               <button
                 key={f.val}
+                type="button"
                 onClick={() => setFilter(f.val)}
-                className="cursor-pointer rounded-full border px-4 py-2 text-sm font-bold transition-all"
+                aria-pressed={on}
+                className="flex cursor-pointer items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-bold transition-all"
                 style={
                   on
                     ? { background: accent ?? '#3d3b62', color: '#fff', borderColor: accent ?? '#3d3b62' }
@@ -146,8 +192,9 @@ export default function LibraryPage() {
                 }
               >
                 {accent && !on ? (
-                  <span className="mr-1.5 inline-block h-2 w-2 rounded-full align-middle" style={{ background: accent }} />
+                  <span className="inline-block h-2 w-2 rounded-full align-middle" style={{ background: accent }} />
                 ) : null}
+                {ChipIcon ? <ChipIcon className="h-3.5 w-3.5" aria-hidden /> : null}
                 {f.label}
               </button>
             );
@@ -171,12 +218,22 @@ export default function LibraryPage() {
                     ) : (
                       <BookOpen className="w-14 h-14 text-[#764f84]/30" />
                     )}
-                    <button onClick={() => toggleFavorite(book.id)}
-                      className="absolute top-3 right-3 h-8 w-8 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center shadow-sm hover:bg-white transition-all">
+                    <button
+                      type="button"
+                      onClick={() => toggleFavorite(book.id)}
+                      disabled={pendingFavorites.has(book.id)}
+                      aria-pressed={favorites.has(book.id)}
+                      aria-label={
+                        favorites.has(book.id)
+                          ? `Remove ${book.title} from favourites`
+                          : `Add ${book.title} to favourites`
+                      }
+                      className="absolute top-3 right-3 h-8 w-8 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center shadow-sm hover:bg-white transition-all cursor-pointer disabled:cursor-wait disabled:opacity-60">
                       <Heart
                         className="w-4 h-4 transition-colors"
                         fill={favorites.has(book.id) ? '#c84a71' : 'none'}
                         color={favorites.has(book.id) ? '#c84a71' : '#9ca3af'}
+                        aria-hidden
                       />
                     </button>
                   </div>
