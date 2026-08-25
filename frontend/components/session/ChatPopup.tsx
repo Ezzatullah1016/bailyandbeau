@@ -57,7 +57,7 @@ export function ChatPopup({ messages, input, onInputChange, onSend, onClose }: C
           onClick={onClose}
           aria-label="Close chat"
           className="room-tap cursor-pointer rounded-lg"
-          style={{ color: 'var(--room-ink-soft)' }}
+          style={{ color: 'var(--room-ink-strong)' }}
         >
           <X className="h-4 w-4" aria-hidden />
         </button>
@@ -65,13 +65,13 @@ export function ChatPopup({ messages, input, onInputChange, onSend, onClose }: C
 
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden px-3 py-3">
         {messages.length === 0 && (
-          <p className="pt-6 text-center text-xs" style={{ color: 'var(--room-ink-soft)' }}>
+          <p className="pt-6 text-center text-xs" style={{ color: 'var(--room-ink-strong)' }}>
             No messages yet. Say hi!
           </p>
         )}
         {messages.map((m) => (
           <div key={m.id} className={`flex flex-col ${m.self ? 'items-end' : 'items-start'}`}>
-            <span className="mb-0.5 px-1 text-[10px]" style={{ color: 'var(--room-ink-soft)' }}>
+            <span className="mb-0.5 px-1 text-[11px]" style={{ color: 'var(--room-ink-strong)' }}>
               {m.from}
             </span>
             <div

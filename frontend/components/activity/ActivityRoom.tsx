@@ -38,6 +38,12 @@ interface Props {
    * Called with `null` when the pane has no action to offer.
    */
   onCtaChange?: (cta: (PaneCta & { run: () => void }) | null) => void;
+  /**
+   * Finish the activity for real — the room completes the session and moves to
+   * the completion screen. Panes previously wrote a `completed` flag into their
+   * own state that nothing read, so their primary button did nothing at all.
+   */
+  onComplete?: () => void;
 }
 
 function buildMsg(type: string, payload: Record<string, unknown>): Uint8Array {
@@ -56,6 +62,7 @@ export default function ActivityRoom({
   variant,
   fullscreen = false,
   onCtaChange,
+  onComplete,
 }: Props) {
   const room = useRoomContext();
   const isStage = variant === 'stage' || fullscreen;
@@ -150,8 +157,16 @@ export default function ActivityRoom({
     }
   };
 
+  /** True when this activity has any progress worth clearing. */
+  const currentIsDirty = (() => {
+    if (!current) return false;
+    const now = stateByActivity[current.id];
+    if (!now) return false;
+    return JSON.stringify(now) !== JSON.stringify(defaultStateFor(current));
+  })();
+
   const resetCurrent = () => {
-    if (!current || role !== 'host') return;
+    if (!current || role !== 'host' || !currentIsDirty) return;
     const blank = defaultStateFor(current);
     const next = { ...stateByActivity, [current.id]: blank };
     publishState(next);
@@ -172,10 +187,11 @@ export default function ActivityRoom({
       <button
         type="button"
         onClick={resetCurrent}
-        className="flex min-h-11 cursor-pointer items-center gap-1 rounded-xl px-3 text-xs font-bold transition-colors hover:bg-brand-purple/10"
-        style={{ color: 'var(--room-ink-soft)' }}
+        disabled={!currentIsDirty}
+        className="flex min-h-11 cursor-pointer items-center gap-1 rounded-xl px-3 text-xs font-bold transition-colors hover:bg-brand-purple/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+        style={{ color: 'var(--room-ink-strong)' }}
       >
-        <RotateCcw className="h-4 w-4" />
+        <RotateCcw className="h-4 w-4" aria-hidden />
         Reset
       </button>
       {!isStage && activities.length > 1 ? (
@@ -230,8 +246,8 @@ export default function ActivityRoom({
         {!isStage && activities.length > 1 ? (
           <div className="mb-1.5 flex items-center gap-2">
             <p
-              className="text-[10px] font-bold uppercase tracking-widest"
-              style={{ color: 'var(--room-ink-soft)' }}
+              className="text-[11px] font-bold uppercase tracking-widest"
+              style={{ color: 'var(--room-ink-strong)' }}
             >
               {index + 1} / {activities.length}
             </p>
@@ -277,6 +293,7 @@ export default function ActivityRoom({
     <div key={current.id} className="activity-in">
       <ActivityBody
         onCtaChange={onCtaChange}
+        onComplete={onComplete}
         activity={current}
         payload={payload}
         role={role}
@@ -336,7 +353,9 @@ function defaultStateFor(a: ActivityConfigData): Record<string, unknown> {
     case 'drawing':
       return { lines: [] as Line[] };
     case 'quiz':
-      return { selected: null as number | null, revealed: false };
+      // `qIndex` belongs here too: a 1.1 quiz navigates by it, so leaving it out
+      // meant Reset cleared the answers but left the child on question four.
+      return { selected: null as number | null, revealed: false, qIndex: 0 };
     case 'drag_drop':
       return { assignments: {} as Record<string, string> };
     case 'hotspot':
@@ -353,6 +372,7 @@ function ActivityBody({
   state,
   patchCurrent,
   onCtaChange,
+  onComplete,
 }: {
   activity: ActivityConfigData;
   payload: Record<string, unknown>;
@@ -360,6 +380,7 @@ function ActivityBody({
   state: Record<string, unknown>;
   patchCurrent: (patch: Record<string, unknown>) => void;
   onCtaChange?: (cta: (PaneCta & { run: () => void }) | null) => void;
+  onComplete?: () => void;
 }) {
   switch (activity.activity_type) {
     case 'drawing':
@@ -369,6 +390,7 @@ function ActivityBody({
           lines={(state.lines as Line[] | undefined) ?? []}
           setLines={(lines) => patchCurrent({ lines })}
           onCtaChange={onCtaChange}
+          onComplete={onComplete}
         />
       );
     case 'quiz':
@@ -379,6 +401,7 @@ function ActivityBody({
           state={state}
           patchCurrent={patchCurrent}
           onCtaChange={onCtaChange}
+          onComplete={onComplete}
         />
       );
     case 'drag_drop':
@@ -388,6 +411,7 @@ function ActivityBody({
           assignments={(state.assignments as Record<string, string> | undefined) ?? {}}
           patchCurrent={patchCurrent}
           onCtaChange={onCtaChange}
+          onComplete={onComplete}
         />
       );
     case 'hotspot':
@@ -398,6 +422,7 @@ function ActivityBody({
           visitedIds={(state.visitedIds as string[] | undefined) ?? []}
           patchCurrent={patchCurrent}
           onCtaChange={onCtaChange}
+          onComplete={onComplete}
         />
       );
     default:

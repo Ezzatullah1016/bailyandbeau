@@ -110,7 +110,7 @@ export function TimerRing({
           </span>
           <span
             className="mt-1 font-karla text-[13px] leading-none"
-            style={{ color: 'rgba(245,239,247,0.6)' }}
+            style={{ color: 'var(--room-ink-strong)' }}
           >
             {timerActive ? 'Remaining' : isHost ? 'Tap to start' : 'Waiting'}
           </span>
@@ -125,7 +125,7 @@ export function TimerRing({
           </span>
         </p>
         {mode !== 'activity' && (
-          <p className="font-karla text-[12px] leading-none" style={{ color: 'var(--room-ink-soft)' }}>
+          <p className="font-karla text-[12px] leading-none" style={{ color: 'var(--room-ink-strong)' }}>
             {timerActive
               ? `${elapsedPct}% of the ${mode === 'reading' ? 'story' : 'activity'} session left`
               : 'The timer starts when the session goes live'}

@@ -1515,6 +1515,22 @@ function RoomContent({
       <ActivityRoom
         role={role}
         onCtaChange={handleActivityCta}
+        /*
+         * A pane's "Complete Activity" now ends the session for real and moves
+         * to the completion screen, which already records the activity that was
+         * open. The panes used to write a `completed` flag into their own state
+         * that nothing read, so the button fired and nothing happened.
+         */
+        onComplete={() => {
+          // Only the Adventure Guide can complete a session server-side, so an
+          // Explorer's button asks rather than half-ending it: `handleEndSession`
+          // would otherwise just disconnect them with nothing recorded.
+          if (role === 'host') {
+            handleEndSession();
+          } else {
+            toast.success('Let your Adventure Guide know you have finished!');
+          }
+        }}
         activities={activities}
         open={isActivityMode ? true : activityOpen}
         variant={isActivityMode ? 'stage' : 'modal'}
@@ -1803,7 +1819,7 @@ function RoomContent({
                       End session
                     </button>
                   </div>
-                  <p className="text-[10px] text-stone-400">Auto-ending in 15 seconds if no action taken</p>
+                  <p className="text-xs font-medium text-stone-500">Auto-ending in 15 seconds if no action is taken</p>
                 </div>
               </div>
             )}

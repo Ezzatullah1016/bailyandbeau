@@ -24,6 +24,7 @@ export function DragDropPane({
   assignments,
   patchCurrent,
   onCtaChange,
+  onComplete,
 }: Omit<PaneProps, 'state' | 'role'> & {
   assignments: Record<string, string>;
 }) {
@@ -41,27 +42,60 @@ export function DragDropPane({
         assignments={assignments}
         onAssign={(next) => patchCurrent({ assignments: next })}
         onCtaChange={onCtaChange}
+        onComplete={onComplete}
       />
     );
   }
 
   // ── 1.0: two-column tap-to-assign (flat string lists) ─────────────────────
-  return <LegacyDragDrop payload={payload} assignments={assignments} patchCurrent={patchCurrent} />;
+  return (
+    <LegacyDragDrop
+      payload={payload}
+      assignments={assignments}
+      patchCurrent={patchCurrent}
+      onCtaChange={onCtaChange}
+      onComplete={onComplete}
+    />
+  );
 }
 
 function LegacyDragDrop({
   payload,
   assignments,
   patchCurrent,
+  onCtaChange,
+  onComplete,
 }: {
   payload: Record<string, unknown>;
   assignments: Record<string, string>;
   patchCurrent: (patch: Record<string, unknown>) => void;
+  onCtaChange?: PaneProps['onCtaChange'];
+  onComplete?: PaneProps['onComplete'];
 }) {
   const m = usePaneMotion();
   const items = (payload.items as string[]) ?? [];
   const zones = (payload.drop_zones as string[]) ?? [];
   const [picked, setPicked] = useState<string | null>(null);
+
+  /*
+   * A 1.0 activity has no `accepts` on its zones, so there is nothing to grade
+   * — but it still needs a way to say "done". This branch used to receive no
+   * `onCtaChange` at all, which meant the dock kept whatever the *previous*
+   * activity had published: a stale button belonging to another screen.
+   */
+  const allPlaced = items.length > 0 && Object.keys(assignments).length >= items.length;
+  useEffect(() => {
+    if (!onCtaChange) return;
+    onCtaChange({
+      label: 'Complete Activity',
+      tone: 'gold',
+      icon: Check,
+      iconTrailing: true,
+      disabled: !allPlaced,
+      run: () => onComplete?.(),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onCtaChange, onComplete, allPlaced]);
 
   function assign(zone: string, item: string) {
     patchCurrent({ assignments: { ...assignments, [zone]: item } });
@@ -71,7 +105,7 @@ function LegacyDragDrop({
   return (
     <div className="grid gap-6 md:grid-cols-2">
       <div>
-        <p className="mb-2 text-xs font-bold uppercase text-brand-purple">Items</p>
+        <p className="mb-2 text-xs font-bold uppercase" style={{ color: 'var(--room-ink-strong)' }}>Items</p>
         <div className="flex flex-wrap gap-2">
           {items.map((item) => (
             <motion.button
@@ -82,19 +116,19 @@ function LegacyDragDrop({
               className={`min-h-11 cursor-pointer rounded-xl border-2 px-3 text-sm font-bold transition-colors ${
                 picked === item
                   ? 'border-brand-pink bg-brand-pink/15'
-                  : 'border-brand-purple/25 bg-white'
+                  : 'border-white/20 bg-white/10'
               }`}
             >
               {item}
             </motion.button>
           ))}
         </div>
-        <p className="mt-2 text-xs text-brand-purple">
+        <p className="mt-2 text-xs" style={{ color: 'var(--room-ink-strong)' }}>
           {picked ? `Tap a zone for “${picked}”.` : 'Tap an item, then a drop zone.'}
         </p>
       </div>
       <div>
-        <p className="mb-2 text-xs font-bold uppercase text-brand-purple">Drop zones</p>
+        <p className="mb-2 text-xs font-bold uppercase" style={{ color: 'var(--room-ink-strong)' }}>Drop zones</p>
         <div className="space-y-2">
           {zones.map((zone) => (
             <motion.button
@@ -103,10 +137,10 @@ function LegacyDragDrop({
               disabled={!picked}
               whileTap={picked ? m.press : undefined}
               onClick={() => picked && assign(zone, picked)}
-              className="w-full rounded-xl border-2 border-dashed border-brand-teal/50 bg-brand-teal/5 px-4 py-6 text-left disabled:cursor-not-allowed"
+              className="w-full cursor-pointer rounded-xl border-2 border-dashed border-brand-teal/50 bg-brand-teal/5 px-4 py-6 text-left transition-opacity disabled:cursor-not-allowed disabled:opacity-45"
             >
               <span className="block text-xs font-bold text-brand-teal">{zone}</span>
-              <span className="mt-1 block font-semibold text-brand-navy">
+              <span className="mt-1 block font-semibold" style={{ color: 'var(--room-ink)' }}>
                 {assignments[zone] ?? '—'}
               </span>
             </motion.button>
@@ -264,6 +298,7 @@ function ImageDragDrop({
   assignments,
   onAssign,
   onCtaChange,
+  onComplete,
 }: {
   imageUrl: string;
   labels: LabelSpec[];
@@ -271,6 +306,7 @@ function ImageDragDrop({
   assignments: Record<string, string>;
   onAssign: (next: Record<string, string>) => void;
   onCtaChange?: PaneProps['onCtaChange'];
+  onComplete?: PaneProps['onComplete'];
 }) {
   const m = usePaneMotion();
   const [picked, setPicked] = useState<string | null>(null);
@@ -323,7 +359,19 @@ function ImageDragDrop({
   useEffect(() => {
     if (!onCtaChange) return;
     if (!gradable) {
-      onCtaChange(null);
+      /*
+       * No zone declares what it `accepts`, so there is nothing to mark. This
+       * used to publish `null` — leaving the screen with no primary action at
+       * all and no way to signal it was finished.
+       */
+      onCtaChange({
+        label: 'Complete Activity',
+        tone: 'gold',
+        icon: Check,
+        iconTrailing: true,
+        disabled: !canCheck,
+        run: () => onComplete?.(),
+      });
       return;
     }
     if (checked && !allRight) {
@@ -335,16 +383,27 @@ function ImageDragDrop({
       });
       return;
     }
+    if (checked && allRight) {
+      // Everything is in its place; the loop is over, so the button finishes.
+      onCtaChange({
+        label: 'Complete Activity',
+        tone: 'gold',
+        icon: Check,
+        iconTrailing: true,
+        run: () => onComplete?.(),
+      });
+      return;
+    }
     onCtaChange({
       label: 'How Did We Do?',
       tone: 'pink',
       icon: Star,
       iconTrailing: true,
-      disabled: !canCheck || allRight,
+      disabled: !canCheck,
       run: () => setChecked(true),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onCtaChange, gradable, checked, allRight, canCheck]);
+  }, [onCtaChange, onComplete, gradable, checked, allRight, canCheck]);
 
   function place(zoneId: string, labelId: string) {
     const next: Record<string, string> = {};
@@ -454,7 +513,7 @@ function ImageDragDrop({
             dark card, --room-ink-soft rendered close to invisible. */}
         <p
           className="text-center font-karla text-[14px]"
-          style={{ color: 'rgba(245,239,247,0.86)' }}
+          style={{ color: 'var(--room-ink-strong)' }}
         >
           {picked
             ? 'Now tap a box on the picture.'

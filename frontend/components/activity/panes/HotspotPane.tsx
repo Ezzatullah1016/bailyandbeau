@@ -62,12 +62,14 @@ export function HotspotPane({
   visitedIds,
   patchCurrent,
   onCtaChange,
+  onComplete,
 }: {
   payload: Record<string, unknown>;
   openId: string | null;
   visitedIds: string[];
   patchCurrent: (patch: Record<string, unknown>) => void;
   onCtaChange?: PaneProps['onCtaChange'];
+  onComplete?: PaneProps['onComplete'];
 }) {
   const m = usePaneMotion();
   const url = String(payload.image_url ?? '');
@@ -86,7 +88,7 @@ export function HotspotPane({
    */
   useEffect(() => {
     if (!onCtaChange) return;
-    if (!isPopup || hotspots.length === 0) {
+    if (hotspots.length === 0) {
       onCtaChange(null);
       return;
     }
@@ -96,10 +98,12 @@ export function HotspotPane({
       icon: Check,
       iconTrailing: true,
       disabled: !allFound,
-      run: () => patchCurrent({ completed: true }),
+      // Was `patchCurrent({ completed: true })` — a key nothing anywhere read,
+      // so the button fired and the screen stayed exactly as it was.
+      run: () => onComplete?.(),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onCtaChange, isPopup, hotspots.length, allFound]);
+  }, [onCtaChange, onComplete, hotspots.length, allFound]);
 
   function open(h: Hotspot) {
     patchCurrent({
@@ -332,7 +336,7 @@ export function HotspotPane({
                 /* Near-full ink: this is how a child knows there is more to
                    find, and the muted tone read as almost invisible at 14px on
                    the dark card. */
-                style={{ color: 'rgba(245,239,247,0.86)' }}
+                style={{ color: 'var(--room-ink-strong)' }}
               >
                 {visited.size} of {hotspots.length} spots found
               </motion.p>

@@ -60,7 +60,7 @@ export function RoleCard({
           </h2>
           <p
             className="mt-2 font-karla text-[12.5px] leading-relaxed"
-            style={{ color: 'var(--room-ink-soft)' }}
+            style={{ color: 'var(--room-ink-strong)' }}
           >
             {(activityType && ACTIVITY_HINT[activityType]) || blurbs[role]}
           </p>
@@ -77,7 +77,7 @@ export function RoleCard({
               </dt>
               <dd
                 className="mt-1 font-karla text-[12.5px] leading-relaxed"
-                style={{ color: 'var(--room-ink-soft)' }}
+                style={{ color: 'var(--room-ink-strong)' }}
               >
                 {blurbs[r]}
               </dd>

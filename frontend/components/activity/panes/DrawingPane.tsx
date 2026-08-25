@@ -35,7 +35,7 @@ function RailTool({
       disabled={disabled}
       whileTap={disabled ? undefined : m.press}
       aria-pressed={active}
-      className="relative flex min-h-11 cursor-pointer flex-col items-center gap-0.5 rounded-xl px-3 py-2 font-montserrat text-[10px] font-semibold uppercase tracking-wide transition-colors disabled:cursor-not-allowed disabled:opacity-35"
+      className="relative flex min-h-11 cursor-pointer flex-col items-center gap-0.5 rounded-xl px-3 py-2 font-montserrat text-[11px] font-semibold uppercase tracking-wide transition-colors disabled:cursor-not-allowed disabled:opacity-35"
       style={{ color: active ? 'var(--room-accent-contrast)' : 'var(--room-ink)' }}
     >
       {active ? (
@@ -46,7 +46,7 @@ function RailTool({
           transition={m.springSnappy}
         />
       ) : null}
-      <Icon className="relative h-4.5 w-4.5" />
+      <Icon className="relative h-[18px] w-[18px]" aria-hidden />
       <span className="relative">{label}</span>
     </motion.button>
   );
@@ -57,11 +57,13 @@ export function DrawingPane({
   lines,
   setLines,
   onCtaChange,
+  onComplete,
 }: {
   payload: Record<string, unknown>;
   lines: Line[];
   setLines: (lines: Line[]) => void;
   onCtaChange?: PaneProps['onCtaChange'];
+  onComplete?: PaneProps['onComplete'];
 }) {
   const m = usePaneMotion();
   const palette = (payload.palette as string[]) ?? ['#222'];
@@ -81,6 +83,8 @@ export function DrawingPane({
   const [width, setWidth] = useState(brushSizes[0] ?? 4);
   const [tool, setTool] = useState<Tool>('pen');
   const [submitted, setSubmitted] = useState(false);
+  /** Set when `toDataURL` throws, so the pane can say so instead of claiming a save. */
+  const [saveFailed, setSaveFailed] = useState(false);
   /**
    * Strokes popped by undo, newest last. Kept local rather than synced: redo is
    * a private "I changed my mind", and `lines` remains the single shared truth.
@@ -200,26 +204,38 @@ export function DrawingPane({
     setLines([...lines, last]);
   }
 
-  function submitArtwork() {
+  /**
+   * Save the drawing, and report honestly whether it saved.
+   *
+   * This used to set `submitted` unconditionally — including in the catch — so
+   * "Artwork saved!" appeared over a save that had just failed on a tainted
+   * canvas. It now only claims success when the download actually started.
+   */
+  function submitArtwork(): boolean {
     const c = canvasRef.current;
-    if (!c) return;
+    if (!c) return false;
     try {
       const dataUrl = c.toDataURL('image/png');
       const a = document.createElement('a');
       a.href = dataUrl;
       a.download = 'my-artwork.png';
       a.click();
+      setSubmitted(true);
+      setSaveFailed(false);
+      return true;
     } catch {
-      // Tainted canvas from a cross-origin background — skip the download.
+      // A cross-origin background taints the canvas and `toDataURL` throws.
+      setSaveFailed(true);
+      return false;
     }
-    setSubmitted(true);
   }
 
   // The dock CTA runs whatever the author allowed: save the artwork when
-  // submission is enabled, otherwise just mark the activity done.
+  // submission is enabled, then finish the activity either way. A failed save
+  // stops short of completing, so the drawing is not lost silently.
   submitRef.current = () => {
-    if (allowSubmit) submitArtwork();
-    else setSubmitted(true);
+    if (allowSubmit && !submitArtwork()) return;
+    onComplete?.();
   };
 
   function pos(e: React.MouseEvent | React.TouchEvent) {
@@ -400,7 +416,7 @@ export function DrawingPane({
           {/* Brush sizes: a squared-off pill row, so the control cannot be
               mistaken for another set of colours. */}
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-brand-purple">
+            <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--room-ink-strong)' }}>
               Size
             </span>
             <div className="flex items-center gap-1 rounded-xl bg-brand-purple/8 p-1">
@@ -428,15 +444,18 @@ export function DrawingPane({
         </div>
       </div>
 
-      {submitted ? (
+      {submitted || saveFailed ? (
         <motion.p
           variants={m.riseIn}
           initial="hidden"
           animate="show"
+          role={saveFailed ? 'alert' : undefined}
           className="text-right font-karla text-sm font-bold"
-          style={{ color: 'var(--c-green)' }}
+          style={{ color: saveFailed ? 'var(--c-pink)' : 'var(--c-green)' }}
         >
-          Artwork saved!
+          {saveFailed
+            ? 'Could not save this drawing — try again.'
+            : 'Artwork saved!'}
         </motion.p>
       ) : null}
     </div>

@@ -56,7 +56,7 @@ export function RoomSidebar({
       <div className="flex flex-col gap-2">
         <h2
           className="font-karla text-[12px] font-semibold leading-none"
-          style={{ color: 'rgba(245,239,247,0.55)' }}
+          style={{ color: 'var(--room-ink-strong)' }}
         >
           Participant
         </h2>

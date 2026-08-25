@@ -15,11 +15,14 @@ function OptionButton({
   text,
   state,
   onSelect,
+  disabled,
 }: {
   index: number;
   text: string;
   state: 'idle' | 'selected' | 'correct' | 'wrong';
   onSelect: () => void;
+  /** Locked once the answer is out — see the call site. */
+  disabled?: boolean;
 }) {
   const m = usePaneMotion();
 
@@ -64,12 +67,13 @@ function OptionButton({
     <motion.button
       type="button"
       onClick={onSelect}
+      disabled={disabled}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={m.spring}
-      whileHover={state === 'idle' ? m.hover : undefined}
-      whileTap={m.press}
-      className="flex w-full cursor-pointer items-center gap-3 border-2 px-4 py-3 text-left font-karla text-[15px] transition-colors"
+      whileHover={state === 'idle' && !disabled ? m.hover : undefined}
+      whileTap={disabled ? undefined : m.press}
+      className="flex w-full cursor-pointer items-center gap-3 border-2 px-4 py-3 text-left font-karla text-[15px] transition-colors disabled:cursor-default"
       style={{ minHeight: 68, borderRadius: 14, color: 'var(--room-ink)', ...shellStyle }}
     >
       <motion.span
@@ -125,6 +129,7 @@ export function QuizPane({
   state,
   patchCurrent,
   onCtaChange,
+  onComplete,
 }: PaneProps) {
   const m = usePaneMotion();
   const revealMode = String(payload.reveal_mode ?? 'instant');
@@ -150,8 +155,17 @@ export function QuizPane({
   // current version.
   const runRef = useRef<() => void>(() => {});
   runRef.current = () => {
-    if (multi) patchCurrent({ qIndex: Math.min(ctaIndex + 1, multi.length - 1) });
-    else patchCurrent({ revealed: true });
+    if (multi) {
+      // On the last question there is nothing to advance to, so the button
+      // finishes the activity instead. It used to read "Finished" and be
+      // permanently disabled — a quiz simply could not be completed.
+      if (ctaIsLast) onComplete?.();
+      else patchCurrent({ qIndex: Math.min(ctaIndex + 1, multi.length - 1) });
+    } else if (single1Revealed) {
+      onComplete?.();
+    } else {
+      patchCurrent({ revealed: true });
+    }
   };
 
   useEffect(() => {
@@ -163,24 +177,24 @@ export function QuizPane({
     onCtaChange(
       multi
         ? {
-            label: ctaIsLast ? 'Finished' : 'Next Question',
+            label: ctaIsLast ? 'Finish Quiz' : 'Next Question',
             tone: 'gold',
-            icon: ChevronRight,
+            icon: ctaIsLast ? Check : ChevronRight,
             iconTrailing: true,
-            disabled: ctaIsLast,
             run: () => runRef.current(),
           }
         : {
-            label: 'Reveal Answer',
+            // A one-question quiz reveals, then finishes — rather than leaving
+            // a disabled button as its final state.
+            label: single1Revealed ? 'Complete Activity' : 'Reveal Answer',
             tone: 'gold',
-            icon: Sparkles,
+            icon: single1Revealed ? Check : Sparkles,
             iconTrailing: true,
-            disabled: single1Revealed,
             run: () => runRef.current(),
           },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onCtaChange, isHost, Boolean(multi), ctaIsLast, ctaIndex, single1Revealed]);
+  }, [onCtaChange, onComplete, isHost, Boolean(multi), ctaIsLast, ctaIndex, single1Revealed]);
 
   // ── 1.1: multi-question sequence ──────────────────────────────────────────
   if (Array.isArray(questions) && questions.length > 0) {
@@ -307,6 +321,10 @@ export function QuizPane({
                           : 'idle'
                   }
                   onSelect={() => choose(i)}
+                  /* Locked after the reveal. Tapping another option used to
+                     rewrite `answers`, changing the verdict colours after the
+                     answer had already been shown. */
+                  disabled={revealed}
                 />
               ))}
             </div>
@@ -401,6 +419,7 @@ export function QuizPane({
                     : 'idle'
             }
             onSelect={() => choose1(i)}
+            disabled={revealed1}
           />
         ))}
       </div>
@@ -425,7 +444,7 @@ export function QuizPane({
         </motion.button>
       ) : null}
       {revealMode === 'host_controlled' && hostRole === 'guest' && !revealed1 ? (
-        <p className="text-center text-sm text-brand-purple">
+        <p className="text-center text-sm" style={{ color: 'var(--room-ink-strong)' }}>
           The host will reveal the answer when everyone is ready.
         </p>
       ) : null}

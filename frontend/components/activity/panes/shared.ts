@@ -41,6 +41,14 @@ export type PaneProps = {
    * SessionRoomPage's `handleActivityCta`.
    */
   onCtaChange?: (cta: (PaneCta & { run: () => void }) | null) => void;
+  /**
+   * Finish this activity for real.
+   *
+   * Panes used to signal completion by writing a key into their own state —
+   * `completed: true` — which nothing anywhere read, so the button fired and the
+   * screen did not move. This runs the room's actual completion path.
+   */
+  onComplete?: () => void;
 };
 
 export type QuizQuestion = {

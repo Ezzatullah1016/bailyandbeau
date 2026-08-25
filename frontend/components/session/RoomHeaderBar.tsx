@@ -120,7 +120,7 @@ export function RoomHeaderBar({
         {instruction && (
           <p
             className="mt-1 hidden items-center gap-1.5 font-karla text-[13px] leading-snug sm:flex"
-            style={{ color: 'rgba(245,239,247,0.72)' }}
+            style={{ color: 'var(--room-ink-strong)' }}
           >
             <Sparkles
               className="h-3.5 w-3.5 shrink-0"
