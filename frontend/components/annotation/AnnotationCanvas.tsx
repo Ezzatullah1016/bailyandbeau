@@ -349,8 +349,18 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
       let canvas: FabricCanvas;
       let resizeObs: ResizeObserver | null = null;
       let removeOffsetSync: (() => void) | null = null;
+      /*
+       * Fabric is imported dynamically, so `canvas` does not exist yet when
+       * cleanup can first run. React StrictMode mounts every effect twice in
+       * development: the first cleanup fired before this import resolved, found
+       * `canvas` undefined and disposed nothing, and the second mount then built
+       * a *second* Fabric canvas over the same element — two stacked
+       * `upper-canvas` layers, the orphan holding its listeners for the session.
+       */
+      let disposed = false;
 
       import('fabric').then(({ fabric }) => {
+        if (disposed) return;
         fabricLibRef.current = fabric as FabricNS;
         canvas = new fabric.Canvas(canvasElRef.current!, {
           isDrawingMode: true,
@@ -409,6 +419,9 @@ const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, Props>(
       });
 
       return () => {
+        // Set before anything else: an import still in flight checks this and
+        // declines to build a canvas nobody will ever dispose.
+        disposed = true;
         removeOffsetSync?.();
         removeOffsetSync = null;
         layoutResizeRef.current = null;
