@@ -4,10 +4,13 @@ import { useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, ChevronLeft, ChevronRight, Sparkles, X } from 'lucide-react';
 
+import { InkLayer } from './InkLayer';
 import { usePaneMotion } from './motion';
-import type { PaneProps, QuizQuestion } from './shared';
+import type { Line, PaneProps, QuizQuestion } from './shared';
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
+/** Widths offered to the dock's pen popover for this pane's ink overlay. */
+const INK_BRUSHES = [4, 8, 14, 22];
 
 /** Shared option button. Both the 1.1 and 1.0 paths render through this. */
 function OptionButton({
@@ -131,6 +134,8 @@ export function QuizPane({
   onCtaChange,
   onComplete,
 }: PaneProps) {
+  /** Strokes drawn over the question card by the dock's pen. */
+  const inkLines = (state.ink_lines as Line[] | undefined) ?? [];
   const m = usePaneMotion();
   const revealMode = String(payload.reveal_mode ?? 'instant');
   const questions = payload.questions as QuizQuestion[] | undefined;
@@ -227,7 +232,16 @@ export function QuizPane({
     const isWrong = revealed && selected !== undefined && selected !== q.correct_index;
 
     return (
-      <div className="space-y-5">
+      <div className="relative space-y-5">
+        {/* Ink over the whole question card, per this screen's mockup. It is
+            transparent to pointer events unless a drawing tool is selected, so
+            the options — and the host's Reveal button — stay clickable. That is
+            what the dock's Select tool is for. */}
+        <InkLayer
+          lines={inkLines}
+          setLines={(next) => patchCurrent({ ink_lines: next })}
+          brushSizes={INK_BRUSHES}
+        />
         {/* Progress rail: a dot per question on a hairline track, with the
             position badge on the left. The screens read "1 of 5"; the dots
             carry answered-ness so a host can see what is still open. */}
@@ -396,7 +410,18 @@ export function QuizPane({
   const wrong1 = revealed1 && selected1 !== null && selected1 !== correct;
 
   return (
-    <motion.div variants={m.stagger} initial="hidden" animate="show" className="space-y-4">
+    <motion.div
+      variants={m.stagger}
+      initial="hidden"
+      animate="show"
+      className="relative space-y-4"
+    >
+      {/* See the 1.1 branch above: ink over the card, out of the way in Select. */}
+      <InkLayer
+        lines={inkLines}
+        setLines={(next) => patchCurrent({ ink_lines: next })}
+        brushSizes={INK_BRUSHES}
+      />
       <motion.p
         variants={m.riseIn}
         className="font-baloo text-center text-xl font-bold"

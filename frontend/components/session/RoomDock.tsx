@@ -22,6 +22,14 @@ export type DockItem = {
    * tools. Pinning makes that contractual instead.
    */
   pinInline?: boolean;
+  /**
+   * Give up an inline slot before anything else.
+   *
+   * The inverse of `pinInline`, for a tool the mockups show behind "More" but
+   * which sits early in the array — the camera toggle would otherwise take the
+   * slot the mockup gives to Participants.
+   */
+  overflowFirst?: boolean;
   /** Small count badge, e.g. the number of people in the room. */
   badge?: number;
   /** Tints the icon — used for destructive actions. */
@@ -74,8 +82,10 @@ export function RoomDock({
    * between screens.
    */
   const pinned = visible.filter((i) => i.pinInline);
-  const rest = visible.filter((i) => !i.pinInline);
-  const keep = new Set([...pinned, ...rest.slice(0, Math.max(0, MAX_INLINE - pinned.length))]);
+  const rest = visible.filter((i) => !i.pinInline && !i.overflowFirst);
+  const last = visible.filter((i) => i.overflowFirst);
+  const room = Math.max(0, MAX_INLINE - pinned.length);
+  const keep = new Set([...pinned, ...[...rest, ...last].slice(0, room)]);
   const inline = visible.filter((i) => keep.has(i));
   const overflow = visible.filter((i) => !keep.has(i));
 

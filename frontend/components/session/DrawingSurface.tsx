@@ -43,6 +43,9 @@ export interface DrawingSurface {
   clear(): void;
   /** How much there is to undo and redo, so those buttons can disable honestly. */
   depth: { undo: number; redo: number };
+  /** Which primitive the shape tool draws, when the surface offers shapes. */
+  shape?: 'rect' | 'ellipse' | 'line';
+  setShape?: (s: 'rect' | 'ellipse' | 'line') => void;
   /**
    * Brush widths, when the surface has authored ones.
    *
@@ -82,6 +85,7 @@ function sameShape(a: DrawingSurface | null, b: DrawingSurface | null): boolean 
     a.caps.fill === b.caps.fill &&
     a.caps.shapes === b.caps.shapes &&
     a.caps.undoRedo === b.caps.undoRedo &&
+    a.shape === b.shape &&
     a.brush?.value === b.brush?.value &&
     a.brush?.sizes.length === b.brush?.sizes.length
   );

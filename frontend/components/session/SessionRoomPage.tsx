@@ -1279,8 +1279,10 @@ function RoomContent({
       redo: () => canvasRef.current?.redo(),
       clear: handleClearCanvas,
       depth: annotationDepth,
+      shape: annShape,
+      setShape: setAnnShape,
     }),
-    [interactionMode, annotationDepth, handleClearCanvas],
+    [interactionMode, annotationDepth, handleClearCanvas, annShape],
   );
 
   /** Whatever is drawable right now: a pane's canvas, or the book's ink layer. */
@@ -1425,6 +1427,9 @@ function RoomContent({
         icon: isCameraEnabled ? Video : VideoOff,
         label: isCameraEnabled ? 'Camera' : 'No cam',
         hidden: !toolset.has('camera'),
+        // Not pinned: the mockups put the camera toggle behind "More", leaving
+        // the inline row to the tools plus Mic and Participants.
+        overflowFirst: true,
         active: !isCameraEnabled,
         onClick: () => localParticipant.setCameraEnabled(!isCameraEnabled),
       },
@@ -1440,6 +1445,8 @@ function RoomContent({
         icon: MessageCircle,
         label: 'Chat',
         hidden: !toolset.has('chat'),
+        // Behind "More" in the mockups, like the camera toggle.
+        overflowFirst: true,
         active: chatOpen,
         onClick: () => setChatOpen((v) => !v),
       },
@@ -1449,6 +1456,7 @@ function RoomContent({
         icon: Gamepad2,
         label: 'Activities',
         hidden: !toolset.has('activities') || role !== 'host' || activities.length === 0,
+        overflowFirst: true,
         separatorBefore: true,
         onClick: () => openActivitiesRef.current(),
       },
@@ -1456,6 +1464,7 @@ function RoomContent({
         icon: sounds.muted ? VolumeX : Volume2,
         label: sounds.muted ? 'Sound off' : 'Sound',
         hidden: !toolset.has('sound'),
+        overflowFirst: true,
         onClick: sounds.toggleMuted,
       },
       {
@@ -1515,9 +1524,9 @@ function RoomContent({
     <DockPopovers
       open={toolPopover}
       color={annColor}
-      shape={annShape}
+      shape={activeSurface?.shape ?? annShape}
       onColorChange={setAnnColor}
-      onShapeChange={setAnnShape}
+      onShapeChange={activeSurface?.setShape ?? setAnnShape}
       onReact={handleReaction}
       onClear={handleClearCanvas}
       canClear={canUndo}
@@ -1712,6 +1721,7 @@ function RoomContent({
               onInvite={handleCopyInviteLink}
               inviteCopied={linkCopied}
               canInvite={Boolean(inviteToken)}
+              coverUrl={coverUrl}
               onOverflow={() => setSettingsOpen(true)}
               onEnd={() => handleEndSession(false)}
               endLabel={role === 'host' ? 'End Session' : 'Leave'}

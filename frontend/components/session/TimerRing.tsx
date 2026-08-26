@@ -56,7 +56,7 @@ export function TimerRing({
 
   return (
     <section
-      className="flex flex-col items-center justify-center gap-4 px-5 py-6"
+      className="relative flex flex-col items-center justify-center gap-4 overflow-hidden px-5 py-6"
       style={{
         background: '#211c33',
         border: '1px solid var(--room-chrome-line)',
@@ -64,6 +64,25 @@ export function TimerRing({
       }}
       aria-label="Session timer"
     >
+      {/* Sparkles, as the screens have them: this panel is a night sky with the
+          timer in it, not a readout in a box. Drawn as gradients so they cost
+          nothing to load and follow the room's own star ink. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          backgroundImage: [
+            'radial-gradient(2px 2px at 14% 22%, var(--room-accent) 0%, transparent 100%)',
+            'radial-gradient(1.5px 1.5px at 86% 18%, var(--room-accent) 0%, transparent 100%)',
+            'radial-gradient(1.5px 1.5px at 22% 74%, var(--room-accent) 0%, transparent 100%)',
+            'radial-gradient(2px 2px at 78% 78%, var(--room-accent) 0%, transparent 100%)',
+            'radial-gradient(1px 1px at 8% 48%, var(--room-cloud) 0%, transparent 100%)',
+            'radial-gradient(1px 1px at 92% 52%, var(--room-cloud) 0%, transparent 100%)',
+            'radial-gradient(1px 1px at 46% 8%, var(--room-cloud) 0%, transparent 100%)',
+          ].join(', '),
+          opacity: 0.75,
+        }}
+      />
       <div
         className={`relative flex h-[140px] w-[140px] items-center justify-center ${startable ? 'cursor-pointer' : ''}`}
         onClick={startable ? onStart : undefined}

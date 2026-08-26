@@ -4,8 +4,9 @@ import { useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, Sparkles, X } from 'lucide-react';
 
+import { InkLayer } from './InkLayer';
 import { usePaneMotion } from './motion';
-import type { Hotspot, PaneProps } from './shared';
+import type { Hotspot, Line, PaneProps } from './shared';
 
 /**
  * Authored hotspot text may use either newline convention — the staff builder
@@ -14,6 +15,9 @@ import type { Hotspot, PaneProps } from './shared';
  */
 const SPLIT_LINES = /\r?\n/;
 const NEWLINE = '\n';
+
+/** Widths offered to the dock's pen popover for this pane's ink overlay. */
+const INK_BRUSHES = [4, 8, 14, 22];
 
 /** Popup geometry, in percentages of the image box. */
 const CARD_W = 46; // popup width as a % of the image width
@@ -60,6 +64,7 @@ export function HotspotPane({
   payload,
   openId,
   visitedIds,
+  inkLines,
   patchCurrent,
   onCtaChange,
   onComplete,
@@ -67,6 +72,8 @@ export function HotspotPane({
   payload: Record<string, unknown>;
   openId: string | null;
   visitedIds: string[];
+  /** Strokes drawn over the illustration by the dock's pen. */
+  inkLines: Line[];
   patchCurrent: (patch: Record<string, unknown>) => void;
   onCtaChange?: PaneProps['onCtaChange'];
   onComplete?: PaneProps['onComplete'];
@@ -194,6 +201,15 @@ export function HotspotPane({
 
         {/* Anchored popup (1.1). No scrim: dimming the illustration to read one
             sentence about the illustration is backwards. */}
+        {/* Ink over the illustration, per this screen's mockup. Transparent to
+            pointer events unless the dock has a drawing tool selected, so the
+            discovery markers underneath stay tappable. */}
+        <InkLayer
+          lines={inkLines}
+          setLines={(next) => patchCurrent({ ink_lines: next })}
+          brushSizes={INK_BRUSHES}
+        />
+
         <AnimatePresence>
           {isPopup && active && place ? (
             <motion.div

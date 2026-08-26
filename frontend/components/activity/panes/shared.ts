@@ -7,8 +7,38 @@ import type { LucideIcon } from 'lucide-react';
  * the shell, and so the panes cannot import the shell (which would be circular).
  */
 
-/** One drawn stroke. Points are flat [x0,y0,x1,y1,…] in canvas pixel space. */
-export type Line = { points: number[]; color: string; width: number; eraser?: boolean };
+/**
+ * One mark on a pane's canvas. Points are flat [x0,y0,x1,y1,…] in canvas pixels.
+ *
+ * `kind` is optional on purpose. Strokes were originally distinguished from
+ * flood fills by point count — two numbers meant "fill from here" — and both
+ * persisted snapshots and in-flight ACTIVITY_SYNC messages still carry marks
+ * written that way. A shape cannot be another length special case, so it gets a
+ * real tag, and a mark with no tag falls back to the old length rules. See
+ * `markKind` below, which is the only place that decision is made.
+ */
+export type LineKind = 'stroke' | 'fill' | 'shape';
+
+export type Line = {
+  points: number[];
+  color: string;
+  width: number;
+  eraser?: boolean;
+  kind?: LineKind;
+  /** Which primitive to draw, for `kind: 'shape'`. */
+  shape?: 'rect' | 'ellipse' | 'line';
+};
+
+/**
+ * What a mark is, tolerating the pre-tag format.
+ *
+ * Old marks: two points meant a flood fill, four or more meant a stroke. New
+ * marks say so outright.
+ */
+export function markKind(line: Line): LineKind {
+  if (line.kind) return line.kind;
+  return line.points.length === 2 ? 'fill' : 'stroke';
+}
 
 /**
  * A pane's primary action, surfaced by the room's dock.

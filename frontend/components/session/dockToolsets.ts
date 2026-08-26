@@ -49,12 +49,13 @@ export type DockTool =
 export type DockScreen = 'reading' | 'picker' | ActivityType;
 
 /**
- * The tools each mockup shows, plus the ones that live behind "More".
+ * The tools each mockup shows.
  *
- * The first entries of each set are what the mockup shows inline. Reading and
- * the picker keep a long tail (chat, sound, zoom, settings) which the mockup
- * puts behind "More"; no activity screen shows a "More" button at all, so those
- * sets are exactly what is rendered.
+ * Reading and the picker carry a long tail — camera, chat, sound, zoom, settings
+ * — which their mockups put behind "More". No activity screen shows a "More"
+ * button at all, so those sets are literally what is rendered: tools, then the
+ * primary CTA, and nothing else. Mic and the rest are deliberately absent from
+ * them rather than overflowed.
  */
 export const DOCK_TOOLSET: Record<DockScreen, ReadonlySet<DockTool>> = {
   // Mockups: reading-room-figma-screnshot.png, activity-room-list.png.
@@ -101,10 +102,6 @@ export const DOCK_TOOLSET: Record<DockScreen, ReadonlySet<DockTool>> = {
     'shapes',
     'undo',
     'redo',
-    'mic',
-    'camera',
-    'chat',
-    'settings',
   ]),
 
   // match-the-feelings.png — Select, Reactions, Undo, Redo. No ink at all: the
@@ -114,10 +111,6 @@ export const DOCK_TOOLSET: Record<DockScreen, ReadonlySet<DockTool>> = {
     'reactions',
     'undo',
     'redo',
-    'mic',
-    'camera',
-    'chat',
-    'settings',
   ]),
 
   // hotspot-activity.png and drawing-activity.png — the full set.
@@ -130,10 +123,6 @@ export const DOCK_TOOLSET: Record<DockScreen, ReadonlySet<DockTool>> = {
     'shapes',
     'undo',
     'redo',
-    'mic',
-    'camera',
-    'chat',
-    'settings',
   ]),
   drawing: new Set<DockTool>([
     'select',
@@ -144,10 +133,6 @@ export const DOCK_TOOLSET: Record<DockScreen, ReadonlySet<DockTool>> = {
     'shapes',
     'undo',
     'redo',
-    'mic',
-    'camera',
-    'chat',
-    'settings',
   ]),
 };
 

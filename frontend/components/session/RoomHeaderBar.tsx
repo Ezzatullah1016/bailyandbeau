@@ -42,6 +42,8 @@ export interface RoomHeaderBarProps {
    * nothing. There is nothing to disable *toward*, so it simply is not shown.
    */
   canInvite?: boolean;
+  /** The book's cover art, shown in the header's round frame. */
+  coverUrl?: string;
 }
 
 /**
@@ -67,6 +69,7 @@ export function RoomHeaderBar({
   endLabel,
   inviteCopied,
   canInvite = true,
+  coverUrl,
 }: RoomHeaderBarProps) {
   const RoomIcon = kind === 'reading' ? BookOpen : Palette;
 
@@ -90,10 +93,18 @@ export function RoomHeaderBar({
       ) : (
         <span
           aria-hidden
-          className="grid h-14 w-14 shrink-0 place-items-center rounded-full"
+          className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-full"
           style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid var(--room-chrome-line)' }}
         >
-          <BookOpen className="h-6 w-6" style={{ color: 'var(--room-accent)' }} />
+          {/* The screens show the book's own art here, not a glyph — it is what
+              tells a family at a glance which story they are in. The icon stays
+              as the fallback for a book with no cover yet. */}
+          {coverUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={coverUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <BookOpen className="h-6 w-6" style={{ color: 'var(--room-accent)' }} />
+          )}
         </span>
       )}
 

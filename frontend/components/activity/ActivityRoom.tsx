@@ -355,11 +355,20 @@ function defaultStateFor(a: ActivityConfigData): Record<string, unknown> {
     case 'quiz':
       // `qIndex` belongs here too: a 1.1 quiz navigates by it, so leaving it out
       // meant Reset cleared the answers but left the child on question four.
-      return { selected: null as number | null, revealed: false, qIndex: 0 };
+      return {
+        selected: null as number | null,
+        revealed: false,
+        qIndex: 0,
+        ink_lines: [] as Line[],
+      };
     case 'drag_drop':
       return { assignments: {} as Record<string, string> };
     case 'hotspot':
-      return { openId: null as string | null, visitedIds: [] as string[] };
+      return {
+        openId: null as string | null,
+        visitedIds: [] as string[],
+        ink_lines: [] as Line[],
+      };
     default:
       return {};
   }
@@ -420,6 +429,7 @@ function ActivityBody({
           payload={payload}
           openId={(state.openId as string | null | undefined) ?? null}
           visitedIds={(state.visitedIds as string[] | undefined) ?? []}
+          inkLines={(state.ink_lines as Line[] | undefined) ?? []}
           patchCurrent={patchCurrent}
           onCtaChange={onCtaChange}
           onComplete={onComplete}

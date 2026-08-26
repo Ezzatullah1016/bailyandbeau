@@ -6,12 +6,12 @@ import { Check, Pipette, RotateCcw } from 'lucide-react';
 
 import { useRegisterDrawingSurface } from '@/components/session/DrawingSurface';
 import { usePaneMotion } from './motion';
-import type { Line, PaneProps } from './shared';
+import { markKind, type Line, type PaneProps } from './shared';
 
 const CANVAS_W = 800;
 const CANVAS_H = 480;
 
-type Tool = 'pen' | 'eraser' | 'fill';
+type Tool = 'pen' | 'eraser' | 'fill' | 'shapes';
 
 export function DrawingPane({
   payload,
@@ -44,6 +44,8 @@ export function DrawingPane({
   const [customColor, setCustomColor] = useState<string | null>(null);
   const [width, setWidth] = useState(brushSizes[0] ?? 4);
   const [tool, setTool] = useState<Tool>('pen');
+  /** Which primitive the shape tool draws. Set from the dock's shapes popover. */
+  const [shape, setShape] = useState<'rect' | 'ellipse' | 'line'>('rect');
   const [submitted, setSubmitted] = useState(false);
   /** Set when `toDataURL` throws, so the pane can say so instead of claiming a save. */
   const [saveFailed, setSaveFailed] = useState(false);
@@ -112,10 +114,15 @@ export function DrawingPane({
       ctx.drawImage(img, (c.width - dw) / 2, (c.height - dh) / 2, dw, dh);
     }
     for (const line of lines) {
-      // A fill is stored as a stroke with a single point, so undo/redo and the
-      // sync protocol treat paint and strokes identically.
-      if (line.points.length === 2) {
+      const kind = markKind(line);
+      // A fill is stored with a single point, so undo/redo and the sync protocol
+      // treat paint, shapes and strokes identically.
+      if (kind === 'fill') {
         floodFill(ctx, c, line.points[0], line.points[1], line.color);
+        continue;
+      }
+      if (kind === 'shape') {
+        drawShape(ctx, line);
         continue;
       }
       if (line.points.length < 4) continue;
@@ -188,6 +195,8 @@ export function DrawingPane({
         undoRedo: true,
       },
       tool,
+      shape,
+      setShape,
       setTool: (next) => {
         // The dock speaks a wider vocabulary than this canvas: `select` means
         // "stop drawing", and `highlight`/`shapes` have no line-canvas
@@ -195,6 +204,7 @@ export function DrawingPane({
         // the pane in a mode it cannot honour.
         if (next === 'eraser' && allowEraser) setTool('eraser');
         else if (next === 'fill' && allowFill) setTool('fill');
+        else if (next === 'shapes' && allowShapes) setTool('shapes');
         else setTool('pen');
       },
       undo,
@@ -203,7 +213,7 @@ export function DrawingPane({
       depth: { undo: lines.length, redo: redoStack.length },
       brush: { sizes: brushSizes, value: width, set: setWidth },
     }),
-    [allowEraser, allowFill, allowShapes, tool, lines, redoStack, brushSizes, width],
+    [allowEraser, allowFill, allowShapes, tool, shape, lines, redoStack, brushSizes, width],
   );
 
   /**
@@ -255,7 +265,7 @@ export function DrawingPane({
   function startDraw(e: React.MouseEvent | React.TouchEvent) {
     const { x, y } = pos(e);
     if (tool === 'fill') {
-      commit([...lines, { points: [x, y], color, width: 0 }]);
+      commit([...lines, { points: [x, y], color, width: 0, kind: 'fill' }]);
       return;
     }
     drawing.current = true;
@@ -292,8 +302,21 @@ export function DrawingPane({
   function endDraw() {
     if (!drawing.current) return;
     drawing.current = false;
-    if (currentLine.current.length >= 4) {
-      commit([...lines, { points: [...currentLine.current], color, width, eraser }]);
+    const pts = currentLine.current;
+    if (tool === 'shapes' && pts.length >= 4) {
+      // Only the drag's endpoints matter for a shape, not the path between.
+      const [x0, y0] = pts;
+      const x1 = pts[pts.length - 2];
+      const y1 = pts[pts.length - 1];
+      // A tap with no drag would leave an invisible zero-size shape that still
+      // serialises and syncs.
+      if (Math.abs(x1 - x0) >= 4 || Math.abs(y1 - y0) >= 4) {
+        commit([...lines, { points: [x0, y0, x1, y1], color, width, kind: 'shape', shape }]);
+      } else {
+        redraw();
+      }
+    } else if (pts.length >= 4) {
+      commit([...lines, { points: [...pts], color, width, eraser, kind: 'stroke' }]);
     }
     currentLine.current = [];
   }
@@ -448,6 +471,34 @@ export function DrawingPane({
  * pixels, and a naive stack-of-pixels fill both blows the JS stack and takes
  * long enough to drop frames on a tablet.
  */
+/**
+ * Draw a shape primitive from its two corner points.
+ *
+ * Stored as `[x0,y0,x1,y1]` — the drag's start and end — so a shape is the same
+ * flat point array as everything else and needs no separate wire format.
+ */
+function drawShape(ctx: CanvasRenderingContext2D, line: Line) {
+  const [x0, y0, x1, y1] = line.points;
+  if (x1 === undefined || y1 === undefined) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.lineWidth = Math.max(2, line.width);
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = line.color;
+  const w = x1 - x0;
+  const h = y1 - y0;
+  if (line.shape === 'ellipse') {
+    ctx.ellipse(x0 + w / 2, y0 + h / 2, Math.abs(w) / 2, Math.abs(h) / 2, 0, 0, Math.PI * 2);
+  } else if (line.shape === 'line') {
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+  } else {
+    ctx.rect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(w), Math.abs(h));
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
 function floodFill(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
