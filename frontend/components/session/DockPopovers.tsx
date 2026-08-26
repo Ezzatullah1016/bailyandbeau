@@ -65,7 +65,11 @@ export function DockPopovers({
 
   return (
     <div
-      className="room-bar absolute bottom-full left-4 mb-2 flex max-w-[calc(100vw-3rem)] flex-wrap items-center gap-3 px-3 py-2.5"
+      /* Clamped to the dock's own width rather than the viewport's, so the pen
+         row (six swatches, four brushes and "Clear page") cannot run past the
+         dock's right edge. `right-4` alone would stretch it; `w-fit` keeps it as
+         wide as its contents and no wider. */
+      className="room-bar absolute bottom-full left-4 mb-2 flex w-fit max-w-[calc(100%-2rem)] flex-wrap items-center gap-3 px-3 py-2.5"
       style={{ zIndex: 'var(--z-popover)' }}
       role="group"
       aria-label="Tool options"
@@ -89,7 +93,6 @@ export function DockPopovers({
             type="button"
             onClick={() => onShapeChange(id)}
             aria-label={label}
-            title={label}
             aria-pressed={shape === id}
             className="room-tap cursor-pointer rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--room-accent)]"
             style={{

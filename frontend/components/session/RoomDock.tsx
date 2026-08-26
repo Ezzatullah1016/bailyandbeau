@@ -171,6 +171,7 @@ function DockButton({ item, expanded }: { item: DockItem; expanded?: boolean }) 
         type="button"
         onClick={onClick}
         disabled={disabled}
+        aria-label={label}
         aria-pressed={expanded === undefined ? active : undefined}
         aria-expanded={expanded}
         className="group flex shrink-0 cursor-pointer flex-col items-center gap-1 rounded-xl px-1.5 py-1 transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--room-accent)] disabled:cursor-not-allowed disabled:opacity-35"

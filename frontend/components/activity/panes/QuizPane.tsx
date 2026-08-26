@@ -340,6 +340,12 @@ export function QuizPane({
         </AnimatePresence>
 
         {revealMode === 'host_controlled' && hostRole === 'host' && !revealed ? (
+          /*
+           * Kept in the pane, unlike the 1.0 button below it. The dock's CTA on
+           * a multi-question quiz advances to the next question — it does not
+           * reveal — so without this the answer could never be shown in
+           * host-controlled mode.
+           */
           <motion.button
             type="button"
             onClick={reveal}
@@ -386,11 +392,6 @@ export function QuizPane({
   function choose1(i: number) {
     patchCurrent({ selected: i, revealed: revealMode === 'instant' ? true : revealed1 });
   }
-  function reveal1() {
-    if (hostRole !== 'host') return;
-    patchCurrent({ revealed: true });
-  }
-
   const correct1 = revealed1 && selected1 === correct;
   const wrong1 = revealed1 && selected1 !== null && selected1 !== correct;
 
@@ -433,19 +434,9 @@ export function QuizPane({
         ) : null}
       </AnimatePresence>
 
-      {revealMode === 'host_controlled' && hostRole === 'host' && !revealed1 ? (
-        <motion.button
-          type="button"
-          onClick={reveal1}
-          whileTap={m.press}
-          className="font-baloo mx-auto block min-h-11 cursor-pointer rounded-xl bg-brand-gold px-5 text-sm font-bold text-brand-navy"
-        >
-          Reveal answer
-        </motion.button>
-      ) : null}
       {revealMode === 'host_controlled' && hostRole === 'guest' && !revealed1 ? (
         <p className="text-center text-sm" style={{ color: 'var(--room-ink-strong)' }}>
-          The host will reveal the answer when everyone is ready.
+          Your Adventure Guide will reveal the answer when everyone is ready.
         </p>
       ) : null}
     </motion.div>
