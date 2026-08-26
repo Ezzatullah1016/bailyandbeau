@@ -1,6 +1,8 @@
 'use client';
 
+import { ROLE_LABEL } from '@/lib/roles';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { BookOpen, Clock, Rocket, BookMarked, Sparkles, VideoOff, Copy, Check } from 'lucide-react';
 import {
@@ -11,6 +13,7 @@ import {
 } from '@/lib/api';
 import { MAX_LIVEKIT_ROOM_PARTICIPANTS } from '@/lib/sessionLimits';
 import { useSession } from '@/contexts/SessionContext';
+import { useToast } from '@/components/ui/Toast';
 
 // ─── Data channel message types ───────────────────────────────────────────────
 type LobbyMsgType = 'PARTICIPANT_READY' | 'SESSION_START';
@@ -72,7 +75,17 @@ function LobbyPageContent() {
   const [displayName, setDisplayName] = useState('');
   const [micReady, setMicReady] = useState(false);
   const [camReady, setCamReady] = useState(false);
+  const toast = useToast();
   const [phase, setPhase] = useState<'check' | 'waiting' | 'starting'>('check');
+  /**
+   * A real in-flight guard for the join and start buttons.
+   *
+   * Both the join and start buttons used to guard on `phase === 'starting'`,
+   * which each of them renders outside of — so `disabled` was always false and
+   * a double tap fired the action twice. TypeScript flags the second of those
+   * comparisons as having no overlap, which is exactly the bug.
+   */
+  const [joining, setJoining] = useState(false);
   const [guestReady, setGuestReady] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
@@ -284,11 +297,13 @@ function LobbyPageContent() {
 
   // ── Host: ready → get token → connect to lobby ────────────────────────────
   async function handleHostReady() {
+    if (joining) return;
     if (!storedParticipantId) {
       setError('Session participant not found. Please recreate the session.');
       return;
     }
     setError('');
+    setJoining(true);
     try {
       const data = await readySessionWithToken(id, storedParticipantId);
       setSession({
@@ -313,16 +328,20 @@ function LobbyPageContent() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to get ready.');
       setPhase('check');
+    } finally {
+      setJoining(false);
     }
   }
 
   // ── Guest: join via invite → get token → connect to lobby ────────────────
   async function handleGuestReady() {
+    if (joining) return;
     if (!inviteToken || !displayName.trim()) {
       setError('Please enter your name.');
       return;
     }
     setError('');
+    setJoining(true);
     try {
       const data = await joinViaInvite(inviteToken, displayName.trim());
       if (data.room_type) setGuestRoomType(data.room_type);
@@ -355,11 +374,13 @@ function LobbyPageContent() {
           : msg || 'Failed to join session.',
       );
       setPhase('check');
+      setJoining(false);
     }
   }
 
   // ── Host: manual "Start Session" ─────────────────────────────────────────
   async function handleHostStart() {
+    if (joining) return;
     if (!storedParticipantId) {
       setError('Session participant not found. Please recreate the session.');
       return;
@@ -374,6 +395,7 @@ function LobbyPageContent() {
     // enter by ParticipantConnected regardless, so skipping the publish here
     // costs nothing.
     try {
+      setJoining(true);
       const lobbyRoom = livekitRoomRef.current;
       if (lobbyRoom?.state === 'connected') {
         await lobbyRoom.localParticipant.publishData(
@@ -394,10 +416,16 @@ function LobbyPageContent() {
 
   function handleCopyInvite() {
     if (!inviteUrl) return;
-    navigator.clipboard.writeText(inviteUrl).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+    navigator.clipboard
+      .writeText(inviteUrl)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      })
+      // Clipboard writes reject on a denied permission or a non-secure origin.
+      // With no catch that surfaced as an unhandled rejection and the check mark
+      // simply never appeared, which reads as a broken button.
+      .catch((err) => toast.error('Could not copy the invite link.', err));
   }
 
   const bookTitle = sessionData?.book_title ?? 'Reading Session';
@@ -447,14 +475,14 @@ function LobbyPageContent() {
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-[#3d3b62] flex items-center justify-center text-white font-bold text-sm">
-                    {isGuestMode ? 'G' : 'H'}
+                    {isGuestMode ? 'E' : 'A'}
                   </div>
                   <div className="flex flex-col">
                     <span className="font-karla text-sm font-semibold text-[#3d3b62]">
-                      {isGuestMode ? 'Guest' : 'You (Host)'}
+                      {isGuestMode ? ROLE_LABEL.guest : `You (${ROLE_LABEL.host})`}
                     </span>
                     <span className="font-karla text-[10px] bg-[#3d3b62] text-white w-fit px-2 py-0.5 rounded-full uppercase tracking-tighter">
-                      {isGuestMode ? 'Guest' : 'Host'}
+                      {isGuestMode ? ROLE_LABEL.guest : ROLE_LABEL.host}
                     </span>
                   </div>
                 </div>
@@ -473,11 +501,16 @@ function LobbyPageContent() {
                       className="font-karla flex-1 text-xs bg-[#faf7f6] border border-[#eccdca] rounded-lg px-3 py-2 text-[#43493d] truncate outline-none"
                     />
                     <button
+                      type="button"
                       onClick={handleCopyInvite}
-                      className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg bg-[#3d3b62] hover:bg-[#764f84] text-white transition-colors"
-                      title="Copy invite link"
+                      aria-label={copied ? 'Invite link copied' : 'Copy invite link'}
+                      className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg bg-[#3d3b62] hover:bg-[#764f84] text-white transition-colors cursor-pointer"
                     >
-                      {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                      {copied ? (
+                        <Check className="w-4 h-4" aria-hidden />
+                      ) : (
+                        <Copy className="w-4 h-4" aria-hidden />
+                      )}
                     </button>
                   </div>
                   <p className="font-karla text-[10px] text-[#43493d]/60 mt-1">
@@ -521,9 +554,11 @@ function LobbyPageContent() {
                       )}
                     </div>
                   )}
-                  <div className="absolute bottom-4 right-4 bg-[#c84a71] px-3 py-1 rounded-full text-[10px] text-white font-karla font-bold">
-                    LIVE
-                  </div>
+                  {camReady && (
+                    <div className="absolute bottom-4 right-4 bg-[#c84a71] px-3 py-1 rounded-full text-[11px] text-white font-karla font-bold">
+                      LIVE
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
@@ -552,10 +587,10 @@ function LobbyPageContent() {
                   <button
                     type="button"
                     onClick={isGuestMode ? handleGuestReady : handleHostReady}
-                    disabled={isLoading}
+                    disabled={joining}
                     className="font-baloo w-full rounded-lg bg-[#3d3b62] py-4 text-lg font-bold text-white shadow-lg transition-all hover:scale-[1.01] hover:bg-[#764f84] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {isGuestMode ? "I'm Ready — Join Session" : "I'm Ready — Join Session"}
+                    {joining ? 'Joining…' : "I'm Ready — Join Session"}
                   </button>
                   <p className="text-center font-karla text-xs italic text-[#43493d]/60">
                     Both participants must be ready before the session starts.
@@ -573,20 +608,21 @@ function LobbyPageContent() {
                       ? 'Starting session…'
                       : 'Waiting for the other participant to join… or start solo below.'}
                   </p>
-                  {!isGuestMode && guestReady && (
+                  {/* One button, two labels. These were two separate branches
+                      calling the same handler with the same styling, differing
+                      only in their text. */}
+                  {!isGuestMode && (
                     <button
+                      type="button"
                       onClick={handleHostStart}
-                      className="font-baloo mt-2 px-8 py-3 bg-[#f0c75e] hover:bg-[#e6b84d] text-[#3d3b62] rounded-lg font-bold text-sm transition-all hover:scale-[1.01] active:scale-95"
+                      disabled={joining}
+                      className="font-baloo mt-2 cursor-pointer rounded-lg bg-[#f0c75e] px-8 py-3 text-sm font-bold text-[#3d3b62] transition-all hover:scale-[1.01] hover:bg-[#e6b84d] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      Start Session
-                    </button>
-                  )}
-                  {!isGuestMode && !guestReady && (
-                    <button
-                      onClick={handleHostStart}
-                      className="font-baloo mt-2 px-8 py-3 bg-[#f0c75e] hover:bg-[#e6b84d] text-[#3d3b62] rounded-lg font-bold text-sm transition-all hover:scale-[1.01] active:scale-95"
-                    >
-                      Start Solo Session
+                      {joining
+                        ? 'Starting…'
+                        : guestReady
+                          ? 'Start Session'
+                          : 'Start Solo Session'}
                     </button>
                   )}
                 </div>
@@ -604,8 +640,9 @@ function LobbyPageContent() {
           {/* Footer */}
           <div className="font-karla text-[10px] text-[#764f84] flex justify-center gap-4 mt-8">
             <span>© 2025 Bailey &amp; Beau</span>
-            <span>Privacy Policy</span>
-            <span>Help Center</span>
+            <Link href="/privacy" className="underline hover:text-[#3d3b62]">
+              Privacy Policy
+            </Link>
           </div>
         </section>
 
@@ -615,8 +652,8 @@ function LobbyPageContent() {
           <div className="absolute bottom-0 left-0 w-64 h-64 bg-white/5 blur-[120px] rounded-full -ml-32 -mb-32" />
 
           <div className="relative z-10 w-full max-w-sm flex flex-col items-center text-center">
-            <div className="w-[240px] h-[320px] bg-white rounded-[8px] overflow-hidden mb-10 transform -rotate-2 hover:rotate-0 transition-transform duration-500 cursor-pointer flex items-center justify-center shadow-[0px_12px_40px_rgba(0,0,0,0.25)]">
-              <BookMarked className="w-20 h-20 text-[#3d3b62]" />
+            <div className="w-[240px] h-[320px] bg-white rounded-[8px] overflow-hidden mb-10 transform -rotate-2 flex items-center justify-center shadow-[0px_12px_40px_rgba(0,0,0,0.25)]">
+              <BookMarked className="w-20 h-20 text-[#3d3b62]" aria-hidden />
             </div>
 
             <h3 className="font-baloo text-3xl font-bold text-white mb-4">{bookTitle}</h3>

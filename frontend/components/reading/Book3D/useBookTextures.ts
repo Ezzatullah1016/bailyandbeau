@@ -24,6 +24,14 @@ export function useBookTextures(urls: (string | null)[], currentPage: number) {
   const cacheRef = useRef<Map<string, Texture>>(new Map());
   const loaderRef = useRef<TextureLoader | null>(null);
   const pendingRef = useRef<Set<string>>(new Set());
+  /**
+   * The URLs currently inside the window.
+   *
+   * Read by the load callbacks, which routinely outlive the effect that started
+   * them — a texture must be judged against the window as it is when the image
+   * lands, not against a boolean captured when the request went out.
+   */
+  const wantedRef = useRef<Set<string>>(new Set());
 
   if (!loaderRef.current) {
     loaderRef.current = new TextureLoader();
@@ -49,6 +57,7 @@ export function useBookTextures(urls: (string | null)[], currentPage: number) {
       const url = urls[i];
       if (url) wanted.add(url);
     }
+    wantedRef.current = wanted;
 
     // Drop anything that has left the window. Disposing releases the GPU
     // allocation; without this the map grows for the whole session.
@@ -59,8 +68,6 @@ export function useBookTextures(urls: (string | null)[], currentPage: number) {
       }
     });
 
-    let cancelled = false;
-
     wanted.forEach((url) => {
       if (cache.has(url) || pending.has(url)) return;
       pending.add(url);
@@ -68,8 +75,19 @@ export function useBookTextures(urls: (string | null)[], currentPage: number) {
         url,
         (texture) => {
           pending.delete(url);
-          if (cancelled) {
-            // The window moved on while this was in flight — do not leak it.
+          /*
+           * Keep it if it is still wanted, judged when the load lands rather
+           * than by a flag captured when the load started.
+           *
+           * This effect re-runs whenever the current page changes, and the old
+           * cleanup set `cancelled = true` on *every* re-run — so a texture that
+           * arrived after any page change was disposed on the spot. Since the
+           * URL had already been removed from `pending`, the next pass saw it as
+           * neither cached nor in flight and started again: pages were fetched
+           * repeatedly and the mesh never received one, which is why the book
+           * rendered as blank grey paper with the geometry working perfectly.
+           */
+          if (!wantedRef.current.has(url)) {
             texture.dispose();
             return;
           }
@@ -89,10 +107,6 @@ export function useBookTextures(urls: (string | null)[], currentPage: number) {
         },
       );
     });
-
-    return () => {
-      cancelled = true;
-    };
   }, [urls, currentPage]);
 
   // Release everything when the room unmounts.
