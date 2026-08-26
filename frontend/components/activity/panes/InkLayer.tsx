@@ -123,16 +123,18 @@ export function InkLayer({
   useRegisterDrawingSurface(
     () => ({
       /*
-       * No flood fill: an illustration has no closed region for a flood to stop
-       * at, so the tool would run to the edges of the overlay. The hotspot
-       * mockup does show Fill, but on a coloured *shape* rather than on the
-       * photo, which is what the shape tool covers.
+       * Fill here means "recolour the shape under the pointer", not a raster
+       * flood: an illustration has no closed region for a flood to stop at, so
+       * it would run to the overlay's edges. The hotspot mockup shows Fill
+       * beside Shapes, which is what it is for.
        */
-      caps: { pen: true, eraser: true, fill: false, shapes: true, undoRedo: true },
+      caps: { pen: true, eraser: true, fill: true, shapes: true, undoRedo: true },
       tool: toolRef.current,
       setTool: (next) => {
         toolRef.current =
-          next === 'eraser' || next === 'select' || next === 'shapes' ? next : 'pen';
+          next === 'eraser' || next === 'select' || next === 'shapes' || next === 'fill'
+            ? next
+            : 'pen';
         force();
       },
       shape: shapeRef.current,
@@ -168,7 +170,10 @@ export function InkLayer({
   );
 
   const drawable =
-    toolRef.current === 'pen' || toolRef.current === 'eraser' || toolRef.current === 'shapes';
+    toolRef.current === 'pen' ||
+    toolRef.current === 'eraser' ||
+    toolRef.current === 'shapes' ||
+    toolRef.current === 'fill';
 
   function at(e: React.PointerEvent) {
     const c = canvasRef.current;
@@ -180,8 +185,38 @@ export function InkLayer({
     };
   }
 
+  /** Index of the topmost shape whose box contains this point, or -1. */
+  function shapeAt(x: number, y: number): number {
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const l = lines[i];
+      if (markKind(l) !== 'shape') continue;
+      const [x0, y0, x1, y1] = l.points;
+      if (x1 === undefined || y1 === undefined) continue;
+      if (
+        x >= Math.min(x0, x1) &&
+        x <= Math.max(x0, x1) &&
+        y >= Math.min(y0, y1) &&
+        y <= Math.max(y0, y1)
+      ) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
   function start(e: React.PointerEvent) {
     if (!drawable) return;
+    if (toolRef.current === 'fill') {
+      // Recolour the shape under the pointer rather than flooding pixels: this
+      // canvas sits over an illustration with no region boundaries to stop at.
+      const { x, y } = at(e);
+      const i = shapeAt(x, y);
+      if (i < 0) return;
+      const next = lines.slice();
+      next[i] = { ...next[i], color: ink };
+      commit(next);
+      return;
+    }
     e.currentTarget.setPointerCapture?.(e.pointerId);
     const { x, y } = at(e);
     drawing.current = true;

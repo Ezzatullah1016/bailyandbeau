@@ -82,10 +82,15 @@ export function RoomDock({
    * between screens.
    */
   const pinned = visible.filter((i) => i.pinInline);
+  /*
+   * `overflowFirst` tools are never inline, even when a slot is free. The
+   * reading mockup shows six tools plus Mic and Participants and then "More", so
+   * the camera toggle and the zoom trio belong behind it regardless of whether
+   * `MAX_INLINE` would fit one more — the split follows the mockups, not the
+   * space available.
+   */
   const rest = visible.filter((i) => !i.pinInline && !i.overflowFirst);
-  const last = visible.filter((i) => i.overflowFirst);
-  const room = Math.max(0, MAX_INLINE - pinned.length);
-  const keep = new Set([...pinned, ...[...rest, ...last].slice(0, room)]);
+  const keep = new Set([...pinned, ...rest.slice(0, Math.max(0, MAX_INLINE - pinned.length))]);
   const inline = visible.filter((i) => keep.has(i));
   const overflow = visible.filter((i) => !keep.has(i));
 
@@ -230,7 +235,7 @@ function DockButton({ item, expanded }: { item: DockItem; expanded?: boolean }) 
           )}
         </span>
         <span
-          className="max-w-[84px] truncate font-montserrat text-[13px] font-semibold uppercase leading-none tracking-wide"
+          className="max-w-[104px] truncate font-montserrat text-[13px] font-semibold uppercase leading-none tracking-wide"
           style={{ color: active ? 'var(--room-accent)' : 'var(--room-ink-strong)' }}
         >
           {label}

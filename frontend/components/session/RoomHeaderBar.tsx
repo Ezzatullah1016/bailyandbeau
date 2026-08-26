@@ -84,7 +84,6 @@ export function RoomHeaderBar({
           type="button"
           onClick={onBack}
           aria-label="Back to the activity list"
-          title="Back to the activity list"
           className="room-tap shrink-0 cursor-pointer rounded-full transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--room-accent)]"
           style={{ color: 'var(--room-ink)' }}
         >

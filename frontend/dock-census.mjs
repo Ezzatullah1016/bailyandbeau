@@ -18,10 +18,9 @@ const EXPECTED = {
   quiz: ['Select', 'Pen', 'Eraser', 'Reactions', 'Shapes', 'Undo', 'Redo'],
   drag_drop: ['Select', 'Reactions', 'Undo', 'Redo'],
   hotspot: ['Select', 'Pen', 'Eraser', 'Reactions', 'Fill', 'Shapes', 'Undo', 'Redo'],
-  // Shapes is gated on the authored `allow_shapes`, which the seeded activity
-  // leaves off — so it is absent here by design, not by omission.
-  drawing: ['Select', 'Pen', 'Eraser', 'Reactions', 'Fill', 'Undo', 'Redo'],
-  hotspotFill: [],
+  // Shapes and Fill are gated on the authored `allow_shapes` / `allow_fill`, so a
+  // seeded activity that leaves one off legitimately shows one fewer button.
+  drawing: ['Select', 'Pen', 'Eraser', 'Reactions', 'Fill', 'Shapes', 'Undo', 'Redo'],
 };
 
 const results = [];
@@ -40,6 +39,16 @@ async function tokens(u, p) {
   return b.data.tokens;
 }
 
+/** Authored activity configs for a book, so the census can read its flags. */
+async function activitiesFor(H, bookId) {
+  const r = await fetch(`${API}/books/${bookId}/activities/`, { headers: H });
+  const b = await r.json().catch(() => ({}));
+  return (b?.data ?? []).map((a) => ({
+    title: a.title ?? a.config?.ui?.title ?? '',
+    payload: a.config?.payload ?? {},
+  }));
+}
+
 async function createSession(H, roomType) {
   const books = (await (await fetch(`${API}/books/`, { headers: H })).json()).data ?? [];
   const kids = (await (await fetch(`${API}/children/`, { headers: H })).json()).data ?? [];
@@ -50,7 +59,7 @@ async function createSession(H, roomType) {
     method: 'POST', headers: H,
     body: JSON.stringify({ book_id: book.id, child_profile_id: kids[0].id, room_type: roomType }),
   })).json()).data;
-  return { sid: d.id, pid: d.host_participant_id };
+  return { sid: d.id, pid: d.host_participant_id, bookId: book.id };
 }
 
 async function enterRoom(ctx, sid) {
@@ -99,13 +108,14 @@ const run = async () => {
 
   // Compare as a set: inline order follows the array, and the mockups agree on
   // membership rather than on exact index.
-  const compare = (screen, got) => {
-    const want = EXPECTED[screen];
+  const compare = (screen, got, who = '', authoredOff = []) => {
+    const want = EXPECTED[screen].filter((t) => !authoredOff.includes(t));
     const norm = (a) => [...a].map((s) => s.replace(/^Muted$/, 'Mic').replace(/^No cam$/, 'Camera')).sort();
     const g = norm(got), w = norm(want);
     const missing = w.filter((x) => !g.includes(x));
     const extra = g.filter((x) => !w.includes(x));
-    check(`${screen}: dock matches the mockup`, missing.length === 0 && extra.length === 0,
+    check(`${screen}${who ? ` (${who})` : ''}: dock matches the mockup`,
+      missing.length === 0 && extra.length === 0,
       missing.length || extra.length
         ? `missing=[${missing}] extra=[${extra}]\n        got=[${got}]`
         : `[${got}]`);
@@ -121,16 +131,17 @@ const run = async () => {
   }
 
   {
-    const { sid, pid } = await createSession(H, 'activity');
+    const { sid, pid, bookId } = await createSession(H, 'activity');
+    const authored = await activitiesFor(H, bookId);
     const ctx = await ctxFor(sid, pid);
     const page = await enterRoom(ctx, sid);
     compare('picker', await inlineTools(page));
     await page.screenshot({ path: 'e2e-screens/census-picker.png' });
 
     // Each activity card is labelled "<Type>: <Title>".
-    const cards = page.locator('button[aria-label*=": "]');
-    const n = await cards.count();
+    const n = await page.locator('button[aria-label*=": "]').count();
     for (let i = 0; i < n; i++) {
+      const cards = page.locator('button[aria-label*=": "]');
       const label = await cards.nth(i).getAttribute('aria-label');
       const kind = /^Story Quest/.test(label) ? 'quiz'
         : /^Place & Play/.test(label) ? 'drag_drop'
@@ -139,11 +150,41 @@ const run = async () => {
       if (!kind) continue;
       await cards.nth(i).click().catch(() => {});
       await page.waitForTimeout(3500);
-      compare(kind, await inlineTools(page));
+      /*
+       * Shapes and Fill are authored per activity, so an activity that leaves one
+       * off shows one fewer button by design. Read the flags from the API rather
+       * than treating that as a mismatch.
+       */
+      /*
+       * Only the drawing pane reads authored tool flags — its `allow_shapes`,
+       * `allow_fill` and `allow_eraser`, with shapes and the eraser off unless
+       * the author opted in. The ink overlay used by the quiz and hotspot panes
+       * offers a fixed set, so their expectations are not filtered.
+       */
+      const cfg =
+        kind === 'drawing'
+          ? authored.find((a) => a.title && (label ?? '').includes(a.title))
+          : undefined;
+      const off = [];
+      if (cfg) {
+        if (!cfg.payload?.allow_shapes) off.push('Shapes');
+        if (cfg.payload?.allow_fill === false) off.push('Fill');
+        if (!cfg.payload?.allow_eraser) off.push('Eraser');
+      }
+      compare(kind, await inlineTools(page), label ?? '', off);
       await page.screenshot({ path: `e2e-screens/census-${kind}.png` });
-      const back = page.locator('button[aria-label*="Back"], header button').first();
-      await back.click().catch(() => {});
-      await page.waitForTimeout(2500);
+      /*
+       * Return to the picker by its exact label, and wait for the picker's own
+       * heading before reading the next card. Matching `header button` loosely
+       * hit the cover-art frame instead, so the run carried on inside the same
+       * activity and reported one type's dock under another type's name.
+       */
+      await page.locator('button[aria-label="Back to the activity list"]').click().catch(() => {});
+      await page
+        .getByText('Choose Your Adventure', { exact: false })
+        .waitFor({ state: 'visible', timeout: 10000 })
+        .catch(() => log('WARN: never returned to the picker'));
+      await page.waitForTimeout(1200);
     }
     await ctx.close();
   }
