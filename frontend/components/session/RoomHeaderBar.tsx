@@ -34,6 +34,14 @@ export interface RoomHeaderBarProps {
   endLabel: string;
   /** Confirmation feedback for the Invite pill. */
   inviteCopied?: boolean;
+  /**
+   * Whether there is an invite link to copy at all.
+   *
+   * `inviteToken` is normally null for an Explorer, so their Invite pill was a
+   * permanent no-op — it looked identical to the host's and silently did
+   * nothing. There is nothing to disable *toward*, so it simply is not shown.
+   */
+  canInvite?: boolean;
 }
 
 /**
@@ -58,6 +66,7 @@ export function RoomHeaderBar({
   onEnd,
   endLabel,
   inviteCopied,
+  canInvite = true,
 }: RoomHeaderBarProps) {
   const RoomIcon = kind === 'reading' ? BookOpen : Palette;
 
@@ -154,14 +163,16 @@ export function RoomHeaderBar({
           {ROLE_LABEL[role]}
         </Pill>
 
-        <Pill
-          icon={LinkIcon}
-          onClick={onInvite}
-          label="Copy the invite link"
-          className="hidden md:inline-flex"
-        >
-          {inviteCopied ? 'Copied' : 'Invite'}
-        </Pill>
+        {canInvite && (
+          <Pill
+            icon={LinkIcon}
+            onClick={onInvite}
+            label="Copy the invite link"
+            className="hidden md:inline-flex"
+          >
+            {inviteCopied ? 'Copied' : 'Invite'}
+          </Pill>
+        )}
 
         <Pill icon={MoreHorizontal} onClick={onOverflow} label="More session options" />
 

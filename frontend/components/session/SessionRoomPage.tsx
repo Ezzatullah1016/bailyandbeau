@@ -322,8 +322,8 @@ function RoomContent({
         if (linkCopiedTimerRef.current) clearTimeout(linkCopiedTimerRef.current);
         linkCopiedTimerRef.current = setTimeout(() => setLinkCopied(false), 2500);
       })
-      .catch(() => {});
-  }, [inviteToken, sessionId]);
+      .catch((err) => toast.error('Could not copy the invite link.', err));
+  }, [inviteToken, sessionId, toast]);
 
   useEffect(
     () => () => {
@@ -1629,6 +1629,7 @@ function RoomContent({
               role={role}
               onInvite={handleCopyInviteLink}
               inviteCopied={linkCopied}
+              canInvite={Boolean(inviteToken)}
               onOverflow={() => setSettingsOpen(true)}
               onEnd={() => handleEndSession(false)}
               endLabel={role === 'host' ? 'End Session' : 'Leave'}

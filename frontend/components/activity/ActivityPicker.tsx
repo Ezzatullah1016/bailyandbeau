@@ -116,7 +116,7 @@ export function ActivityPicker({
               disabled={!isHost}
               onClick={() => isHost && onPick(index)}
               aria-label={`${meta.label}: ${activity.title}`}
-              className="group flex cursor-pointer flex-col overflow-hidden rounded-[20px] text-left transition-transform duration-200 enabled:hover:-translate-y-1 disabled:cursor-default disabled:opacity-90"
+              className="group flex flex-col overflow-hidden rounded-[20px] text-left transition-transform duration-200 enabled:cursor-pointer enabled:hover:-translate-y-1 disabled:cursor-default disabled:opacity-90"
               style={{
                 background: `linear-gradient(160deg, ${meta.accentSoft} 0%, ${meta.accent} 100%)`,
                 boxShadow: 'var(--elev-2)',
@@ -146,14 +146,16 @@ export function ActivityPicker({
                 <span className="font-karla flex-1 text-[14px] leading-relaxed text-white/90">
                   {meta.blurb}
                 </span>
-                {isHost && (
-                  <span
-                    className="mt-4 rounded-xl px-4 py-2.5 text-center font-baloo text-[16px] font-bold transition-colors"
-                    style={{ background: 'var(--room-accent)', color: meta.onAccent }}
-                  >
-                    Play
-                  </span>
-                )}
+                <span
+                  className="mt-4 rounded-xl px-4 py-2.5 text-center font-baloo text-[16px] font-bold transition-colors"
+                  style={
+                    isHost
+                      ? { background: 'var(--room-accent)', color: meta.onAccent }
+                      : { background: 'rgba(255,255,255,0.16)', color: '#ffffff' }
+                  }
+                >
+                  {isHost ? 'Play' : 'Your grown-up picks'}
+                </span>
               </div>
             </button>
           );
