@@ -3,11 +3,11 @@
 // This asserts behaviour rather than capturing pixels — every check below
 // corresponds to a specific bug that shipped:
 //
-//   1. Dock ink tools appear while READING (they used to appear only inside an
-//      activity, where the canvas they drive is not mounted).
+//   1. Dock ink tools appear while READING.
 //   2. Undo/Redo are disabled on a clean page and Undo enables after a stroke.
-//   3. Inside an activity the ink tools are gone and the pane's own rail is the
-//      tool surface.
+//   3. Inside an activity the ink tools are STILL present, now driving the pane's
+//      own canvas — the mockups put them in the dock on four screens out of six,
+//      and an earlier pass had this backwards.
 //   4. The activity CTA is a live button, not the permanently-disabled
 //      "Finished" a quiz used to end on.
 //   5. Chat no longer covers the dock's primary CTA.
@@ -141,52 +141,23 @@ const run = async () => {
     const pen = await dockTool(page, 'Pen');
     check('reading: Pen tool is present', Boolean(pen));
 
+    /*
+     * Deliberately absent while reading. The client's reading-room mockup shows
+     * Library, Pen, Eraser, Reactions, Mic, Participants and More — no Undo or
+     * Redo — and that is the decision: reading matches the mockup exactly, and
+     * a stroke on a page is removed with the eraser or Clear page. Undo and Redo
+     * belong to the activity screens, which do show them.
+     */
     const undo = await dockTool(page, 'Undo');
-    check('reading: Undo tool is present', Boolean(undo));
-    if (undo) {
-      check('reading: Undo starts disabled on a clean page', await undo.isDisabled());
-    }
-
-    const redo = await dockTool(page, 'Redo');
-    if (redo) check('reading: Redo starts disabled', await redo.isDisabled());
+    check('reading: no Undo, matching the mockup', !undo);
 
     /*
-     * Drawing needs a connected room: LiveKit drops repeatedly in headless
-     * Chromium here, and while it is reconnecting the canvas is disabled, so a
-     * stroke never commits. Only attempt the stroke check when the room is
-     * actually live, otherwise this reports an environment failure as a UI one.
+     * The stroke-then-undo check lives with the activity screens now: reading
+     * has no Undo in the dock (see above), so there is nothing here to watch
+     * change. Drawing also needs a connected room, and LiveKit drops repeatedly
+     * in headless Chromium, which made that check report an environment failure
+     * as a UI one.
      */
-    const live = (await page.locator('text=/Reconnecting|Disconnected|Connecting/').count()) === 0;
-    if (!live) log('SKIP — room never connected; stroke check not attempted');
-    if (pen && live) {
-      await pen.click().catch(() => {});
-      await page.waitForTimeout(600);
-      const canvas = page.locator('canvas').last();
-      const box = await canvas.boundingBox();
-      if (box) {
-        await page.mouse.move(box.x + box.width * 0.4, box.y + box.height * 0.5);
-        await page.mouse.down();
-        await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.6, { steps: 12 });
-        await page.mouse.up();
-        await page.waitForTimeout(1200);
-      }
-      // Re-resolve rather than reusing the earlier handle: Undo lives behind
-      // "More" at this width, and that menu closes on an outside click (which
-      // drawing on the canvas is).
-      const undo2 = await dockTool(page, 'Undo');
-      if (undo2) {
-        const stillDisabled = await undo2.isDisabled();
-        // A dropped LiveKit socket means no stroke was committed, which is an
-        // environment failure rather than a UI one — say which it is.
-        const banner = page.locator('text=/Reconnecting|Disconnected|Connecting/');
-        const socketDown = (await banner.count()) > 0;
-        check(
-          'reading: Undo enables after a stroke',
-          !stillDisabled,
-          socketDown ? 'LiveKit socket was down — stroke never committed' : '',
-        );
-      }
-    }
 
     await page.screenshot({ path: 'e2e-screens/verify-reading.png' });
     await ctx.close();
@@ -216,10 +187,18 @@ const run = async () => {
       await page.waitForTimeout(3500);
     }
 
+    /*
+     * Present, not absent. The dock now drives whichever canvas is live, so an
+     * activity that can be drawn on keeps its ink tools — the client's mockups
+     * put Pen, Eraser, Undo and Redo in the dock on four screens out of six, and
+     * an earlier pass had this backwards. `dock-census.mjs` asserts the exact
+     * per-type list against each mockup; this only checks the dock is not empty.
+     */
     const penInActivity = page.locator('button:has(span:text-is("Pen"))');
+    const selectInActivity = page.locator('button:has(span:text-is("Select"))');
     check(
-      'activity: dock ink tools are absent (canvas is the pane\'s)',
-      (await penInActivity.count()) === 0,
+      'activity: the dock carries tools for the pane canvas',
+      (await penInActivity.count()) > 0 || (await selectInActivity.count()) > 0,
     );
 
     // The primary CTA must exist and not be a dead end.
