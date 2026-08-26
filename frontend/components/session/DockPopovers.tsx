@@ -48,6 +48,9 @@ export function DockPopovers({
   onReact,
   onClear,
   canClear = true,
+  showColors = true,
+  showClear = true,
+  brushSizes,
 }: {
   open: 'pen' | 'fill' | 'shapes' | 'reactions' | null;
   color: string;
@@ -60,6 +63,17 @@ export function DockPopovers({
   onClear: () => void;
   /** False when there is nothing on the page to erase. */
   canClear?: boolean;
+  /**
+   * Colour lives with the pane inside an activity, so the popover shows widths
+   * only there. An activity's palette is *authored* — an arbitrary list the
+   * author chose — while these six swatches are fixed and carry spoken names, so
+   * making them dynamic would announce raw hex to a screen reader again.
+   */
+  showColors?: boolean;
+  /** The pane's own Clear Page pill owns clearing inside an activity. */
+  showClear?: boolean;
+  /** Widths offered by the live surface, when it has authored ones. */
+  brushSizes?: number[];
 }) {
   if (!open) return null;
 
@@ -105,6 +119,7 @@ export function DockPopovers({
         ))
       ) : (
         <>
+          {showColors ? (
           <div className="flex items-center gap-1.5" role="group" aria-label="Colour">
             {COLORS.map((c) => (
               <button
@@ -124,16 +139,19 @@ export function DockPopovers({
               />
             ))}
           </div>
+          ) : null}
 
           {open === 'pen' && (
             <>
-              <span
-                aria-hidden
-                className="h-8 w-px"
-                style={{ background: 'var(--room-chrome-line)' }}
-              />
+              {showColors ? (
+                <span
+                  aria-hidden
+                  className="h-8 w-px"
+                  style={{ background: 'var(--room-chrome-line)' }}
+                />
+              ) : null}
               <div className="flex items-center gap-1.5" role="group" aria-label="Brush size">
-                {BRUSHES.map((n) => (
+                {(brushSizes?.length ? brushSizes : BRUSHES).map((n) => (
                   <button
                     key={n}
                     type="button"
@@ -161,6 +179,8 @@ export function DockPopovers({
                 ))}
               </div>
 
+              {showClear ? (
+                <>
               <span
                 aria-hidden
                 className="h-8 w-px"
@@ -175,6 +195,8 @@ export function DockPopovers({
               >
                 Clear page
               </button>
+                </>
+              ) : null}
             </>
           )}
         </>

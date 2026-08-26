@@ -33,10 +33,12 @@
   --room-ink-strong: rgba(245, 239, 247, 0.86);
   --room-accent: #f0c75e;        /* gold — rings, active tools, primary CTAs */
   --room-accent-contrast: #2a1f3d;
-  /* The bars sit *above* the backdrop in the screens, not below it: sampled
-     (50,40,76) against a (32,26,55) field. A 0.72 alpha over the new, darker
-     backdrop sampled far too dark, so the fill is both lighter and more opaque. */
-  --room-chrome: rgba(62, 50, 92, 0.88);
+  /* The bars sit *above* the backdrop in the screens, not below it. Re-measured
+     across all six mockups, which agree: the header and dock sample (58,51,86)
+     against a (32,26,55) field. The first pass aimed at (50,40,76) — a touch too
+     dark and too violet. Translucent over a vignette, so the declared value and
+     the sampled one differ; tune against a screenshot, not by eye. */
+  --room-chrome: rgba(70, 61, 100, 0.9);
   --room-chrome-strong: rgba(38, 30, 60, 0.94);
   --room-chrome-line: rgba(255, 255, 255, 0.08);
 
@@ -64,7 +66,7 @@
   --room-gap: 28px;
   --room-sidebar: 354px;
   --room-header-h: 80px;
-  --room-dock-h: 104px;
+  --room-dock-h: 120px;
 
   /* ── Book presentation ────────────────────────────────────────────────── */
   --book-paper: #f7eee4;

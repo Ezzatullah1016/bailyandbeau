@@ -16,6 +16,7 @@ import {
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, RotateCcw, Star, X } from 'lucide-react';
 
+import { useRegisterDrawingSurface } from '@/components/session/DrawingSurface';
 import { usePaneMotion } from './motion';
 import type { DropZoneSpec, LabelSpec, PaneProps } from './shared';
 
@@ -405,13 +406,80 @@ function ImageDragDrop({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onCtaChange, onComplete, gradable, checked, allRight, canCheck]);
 
+  /**
+   * Placement history, for the dock's Undo and Redo.
+   *
+   * The mockup for this activity shows Undo and Redo and no ink tools at all —
+   * moving a chip back is the only reversible thing here. `assignments` is
+   * whole-state and synced, so a step is just a previous copy of it; the redo
+   * stack stays local, exactly as the drawing pane's does, because redo is a
+   * private "I changed my mind" rather than shared truth.
+   */
+  const [past, setPast] = useState<Record<string, string>[]>([]);
+  const [future, setFuture] = useState<Record<string, string>[]>([]);
+
+  /** Record the current state, then move to `next`. */
+  function commitAssign(next: Record<string, string>) {
+    setPast((p) => [...p, assignments]);
+    setFuture([]);
+    onAssign(next);
+  }
+
+  function undoAssign() {
+    if (past.length === 0) return;
+    const prev = past[past.length - 1];
+    setPast((p) => p.slice(0, -1));
+    setFuture((f) => [...f, assignments]);
+    // Stepping back past a check has to drop the verdict too, or the child sees
+    // green ticks on zones they have just emptied.
+    setChecked(false);
+    onAssign(prev);
+  }
+
+  function redoAssign() {
+    if (future.length === 0) return;
+    const next = future[future.length - 1];
+    setFuture((f) => f.slice(0, -1));
+    setPast((p) => [...p, assignments]);
+    setChecked(false);
+    onAssign(next);
+  }
+
+  /*
+   * A host Reset republishes the activity's default state, which arrives here as
+   * an external change with no history entry behind it. Dropping the stacks when
+   * the board comes back empty keeps Reset meaning what it says — a reset you
+   * can undo did not reset.
+   */
+  const assignedCount = Object.keys(assignments).length;
+  useEffect(() => {
+    if (assignedCount === 0) {
+      setPast([]);
+      setFuture([]);
+    }
+  }, [assignedCount]);
+
+  useRegisterDrawingSurface(
+    () => ({
+      // Nothing to draw on: this activity is chips and zones.
+      caps: { pen: false, eraser: false, fill: false, shapes: false, undoRedo: true },
+      tool: 'select' as const,
+      setTool: () => {},
+      undo: undoAssign,
+      redo: redoAssign,
+      clear: () => commitAssign({}),
+      depth: { undo: past.length, redo: future.length },
+    }),
+    [assignments, past, future],
+  );
+
   function place(zoneId: string, labelId: string) {
     const next: Record<string, string> = {};
     for (const [z, l] of Object.entries(assignments)) {
       if (l !== labelId && z !== zoneId) next[z] = l;
     }
     next[zoneId] = labelId;
-    onAssign(next);
+    commitAssign(next);
     setPicked(null);
     setChecked(false);
   }
@@ -435,7 +503,7 @@ function ImageDragDrop({
     for (const z of zones) {
       if (z.accepts && assignments[z.id] === z.accepts) kept[z.id] = assignments[z.id];
     }
-    onAssign(kept);
+    commitAssign(kept);
   }
   tryAgainRef.current = tryAgain;
 

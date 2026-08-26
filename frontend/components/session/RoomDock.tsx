@@ -13,6 +13,15 @@ export type DockItem = {
   hidden?: boolean;
   /** Renders a hairline before this item, grouping the dock into sections. */
   separatorBefore?: boolean;
+  /**
+   * Keep this tool inline, never in the "More" menu.
+   *
+   * The inline/overflow split is a positional slice, so which tools stay visible
+   * used to be an accident of array order — which is how Mic and Participants
+   * ended up behind "More" while every client mockup shows them beside the
+   * tools. Pinning makes that contractual instead.
+   */
+  pinInline?: boolean;
   /** Small count badge, e.g. the number of people in the room. */
   badge?: number;
   /** Tints the icon — used for destructive actions. */
@@ -59,8 +68,16 @@ export function RoomDock({
   children?: React.ReactNode;
 }) {
   const visible = items.filter((i) => !i.hidden);
-  const inline = visible.slice(0, MAX_INLINE);
-  const overflow = visible.slice(MAX_INLINE);
+  /*
+   * Pinned tools claim their slots first, then the rest fill what is left, and
+   * the result is re-sorted into the original order so nothing appears to move
+   * between screens.
+   */
+  const pinned = visible.filter((i) => i.pinInline);
+  const rest = visible.filter((i) => !i.pinInline);
+  const keep = new Set([...pinned, ...rest.slice(0, Math.max(0, MAX_INLINE - pinned.length))]);
+  const inline = visible.filter((i) => keep.has(i));
+  const overflow = visible.filter((i) => !keep.has(i));
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -203,7 +220,7 @@ function DockButton({ item, expanded }: { item: DockItem; expanded?: boolean }) 
           )}
         </span>
         <span
-          className="max-w-[72px] truncate font-montserrat text-[11px] font-semibold uppercase leading-none tracking-wide"
+          className="max-w-[84px] truncate font-montserrat text-[13px] font-semibold uppercase leading-none tracking-wide"
           style={{ color: active ? 'var(--room-accent)' : 'var(--room-ink-strong)' }}
         >
           {label}

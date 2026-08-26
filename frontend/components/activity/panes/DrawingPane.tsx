@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Eraser, PaintBucket, Pencil, Pipette, Redo2, RotateCcw, Undo2 } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { Check, Pipette, RotateCcw } from 'lucide-react';
 
+import { useRegisterDrawingSurface } from '@/components/session/DrawingSurface';
 import { usePaneMotion } from './motion';
 import type { Line, PaneProps } from './shared';
 
@@ -12,45 +12,6 @@ const CANVAS_W = 800;
 const CANVAS_H = 480;
 
 type Tool = 'pen' | 'eraser' | 'fill';
-
-/** One tool in the left rail: icon over label, with an animated active pill. */
-function RailTool({
-  icon: Icon,
-  label,
-  active,
-  disabled,
-  onClick,
-}: {
-  icon: LucideIcon;
-  label: string;
-  active?: boolean;
-  disabled?: boolean;
-  onClick: () => void;
-}) {
-  const m = usePaneMotion();
-  return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      whileTap={disabled ? undefined : m.press}
-      aria-pressed={active}
-      className="relative flex min-h-11 cursor-pointer flex-col items-center gap-0.5 rounded-xl px-3 py-2 font-montserrat text-[11px] font-semibold uppercase tracking-wide transition-colors disabled:cursor-not-allowed disabled:opacity-35"
-      style={{ color: active ? 'var(--room-accent-contrast)' : 'var(--room-ink)' }}
-    >
-      {active ? (
-        <motion.span
-          layoutId="draw-tool-pill"
-          className="absolute inset-0 rounded-xl"
-          style={{ background: 'var(--room-accent)' }}
-          transition={m.springSnappy}
-        />
-      ) : null}
-      <Icon className="relative h-[18px] w-[18px]" aria-hidden />
-      <span className="relative">{label}</span>
-    </motion.button>
-  );
-}
 
 export function DrawingPane({
   payload,
@@ -70,6 +31,7 @@ export function DrawingPane({
   const brushSizes = (payload.brush_sizes as number[]) ?? [4];
   const allowEraser = Boolean(payload.allow_eraser);
   const allowFill = payload.allow_fill !== false;
+  const allowShapes = Boolean(payload.allow_shapes);
   const backgroundUrl = typeof payload.background_url === 'string' ? payload.background_url : '';
   const allowSubmit = Boolean(payload.allow_submit);
 
@@ -204,6 +166,46 @@ export function DrawingPane({
     setLines([...lines, last]);
   }
 
+  /*
+   * Publish this canvas to the room's dock.
+   *
+   * The dock's Pen, Eraser, Fill, Undo, Redo and Clear act on whichever surface
+   * is registered, so this pane no longer needs a rail of its own — see the card
+   * header below, which keeps only Clear Page as the mockup shows.
+   *
+   * `caps` carry the *authored* flags, which is why they are read here rather
+   * than derived in `dockToolsets.ts`: `allow_fill` defaults true and
+   * `allow_eraser` defaults false, and those defaults must live in exactly one
+   * place or an existing activity silently gains an eraser its author declined.
+   */
+  useRegisterDrawingSurface(
+    () => ({
+      caps: {
+        pen: true,
+        eraser: allowEraser,
+        fill: allowFill,
+        shapes: allowShapes,
+        undoRedo: true,
+      },
+      tool,
+      setTool: (next) => {
+        // The dock speaks a wider vocabulary than this canvas: `select` means
+        // "stop drawing", and `highlight`/`shapes` have no line-canvas
+        // implementation yet, so they fall back to the pen rather than leaving
+        // the pane in a mode it cannot honour.
+        if (next === 'eraser' && allowEraser) setTool('eraser');
+        else if (next === 'fill' && allowFill) setTool('fill');
+        else setTool('pen');
+      },
+      undo,
+      redo,
+      clear: () => commit([]),
+      depth: { undo: lines.length, redo: redoStack.length },
+      brush: { sizes: brushSizes, value: width, set: setWidth },
+    }),
+    [allowEraser, allowFill, allowShapes, tool, lines, redoStack, brushSizes, width],
+  );
+
   /**
    * Save the drawing, and report honestly whether it saved.
    *
@@ -298,34 +300,11 @@ export function DrawingPane({
 
   return (
     <div className="space-y-3">
-      {/* Card header: title-side controls per the screens — a teal Clear Page
-          on the right. The tool row sits under it rather than in a left rail;
-          the room's dock now carries the same vocabulary for the reading
-          canvas, and two vertical rails on one screen read as two apps. */}
-      <div className="flex items-center justify-between gap-3">
-        <div
-          className="flex items-center gap-1 rounded-2xl p-1"
-          style={{ background: 'rgba(255,255,255,0.05)' }}
-          role="toolbar"
-          aria-label="Drawing tools"
-        >
-          <RailTool icon={Pencil} label="Pen" active={tool === 'pen'} onClick={() => setTool('pen')} />
-          {allowEraser ? (
-            <RailTool
-              icon={Eraser}
-              label="Eraser"
-              active={tool === 'eraser'}
-              onClick={() => setTool('eraser')}
-            />
-          ) : null}
-          {allowFill ? (
-            <RailTool icon={PaintBucket} label="Fill" active={tool === 'fill'} onClick={() => setTool('fill')} />
-          ) : null}
-          <span className="mx-0.5 h-8 w-px" style={{ background: 'var(--room-chrome-line)' }} />
-          <RailTool icon={Undo2} label="Undo" disabled={lines.length === 0} onClick={undo} />
-          <RailTool icon={Redo2} label="Redo" disabled={redoStack.length === 0} onClick={redo} />
-        </div>
-
+      {/* Card header: a teal Clear Page on the right and nothing else, per the
+          drawing mockup. The tools used to sit in a rail here, which put two
+          tool surfaces on one screen — the room's dock carries this vocabulary
+          now, driving whichever canvas is live. */}
+      <div className="flex items-center justify-end gap-3">
         <button
           type="button"
           onClick={() => commit([])}

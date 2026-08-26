@@ -56,6 +56,18 @@ import { RoomHeaderBar } from '@/components/session/RoomHeaderBar';
 import { RoomShell } from '@/components/session/RoomShell';
 import { RoomSidebar } from '@/components/session/RoomSidebar';
 import { useToast } from '@/components/ui/Toast';
+import {
+  DOCK_TOOLSET,
+  NO_CAPS,
+  activityToolset,
+  type DockScreen,
+} from '@/components/session/dockToolsets';
+import {
+  DrawingSurfaceProvider,
+  useDrawingSurface,
+  type DrawingSurface,
+  type SurfaceTool,
+} from '@/components/session/DrawingSurface';
 import { ROLE_LABEL } from '@/lib/roles';
 import type { Book3DProps } from '@/components/reading/Book3D/Scene';
 import { useRoomTheme } from '@/lib/useRoomTheme';
@@ -194,6 +206,24 @@ function resolveHostParticipantIdentity(room: Room, viewerRole: 'host' | 'guest'
   }
   return undefined;
 }
+
+/** The dock's tool names ↔ the reading canvas's own, which the wire format uses. */
+const READING_TO_SURFACE: Record<ReadingInteractionMode, SurfaceTool> = {
+  book: 'select',
+  pen: 'pen',
+  highlighter: 'highlight',
+  eraser: 'eraser',
+  fill: 'fill',
+  shape: 'shapes',
+};
+const SURFACE_TO_READING: Record<SurfaceTool, ReadingInteractionMode> = {
+  select: 'book',
+  pen: 'pen',
+  highlight: 'highlighter',
+  eraser: 'eraser',
+  fill: 'fill',
+  shapes: 'shape',
+};
 
 // ─── Connection banner ────────────────────────────────────────────────────────
 
@@ -1205,32 +1235,70 @@ function RoomContent({
   // "choose something" screen and keeps the room-level set, as the screens show.
   const inActivity = isActivityMode && activityEntered;
 
-  /*
-   * The dock's ink tools drive `canvasRef` — the AnnotationCanvas layered over
-   * the book — and that canvas only mounts in the reading branch below. They used
-   * to be gated on `inActivity`, which is exactly backwards: they were shown in
-   * activities, where `canvasRef.current` is always null and every one of them
-   * was a guaranteed no-op (Clear page even asked for confirmation first), and
-   * hidden while reading, which is the only place they work.
-   *
-   * An entered activity draws on the pane's own canvas instead, whose tools come
-   * from the authored payload — which palette, which brush sizes, whether the
-   * eraser and fill are allowed at all — so they belong to the pane that knows
-   * those answers, not to the room-level dock.
-   */
-  const inkTools = !inActivity;
+  /** Which of the client's six screens the dock is dressing. */
+  const dockScreen: DockScreen = !isActivityMode
+    ? 'reading'
+    : !activityEntered
+      ? 'picker'
+      : (activities[activityIndex]?.activity_type ?? 'picker');
 
   /*
-   * Undo/redo depth, so those two buttons can be honestly disabled rather than
-   * looking live and doing nothing at the ends of the stack. `AnnotationCanvas`
-   * already exposed `canRedo()` and nothing had ever called it.
-   *
-   * Read from a state counter bumped on every canvas change: the imperative
-   * handle is a ref, so reading it during render would not re-run when the
-   * stacks change.
+   * A tool popover belongs to the screen that opened it. Moving between the
+   * picker, an activity and the book changes which tools exist, so a popover
+   * left open would be offering options for a tool no longer on the dock.
    */
-  const canUndo = inkTools && annotationDepth.undo > 0;
-  const canRedo = inkTools && annotationDepth.redo > 0;
+  useEffect(() => {
+    setToolPopover(null);
+  }, [dockScreen]);
+
+  /*
+   * The reading canvas, wearing the same interface an activity pane registers.
+   *
+   * The dock's ink tools used to reach straight for `canvasRef`, which meant
+   * they only worked in the reading branch where AnnotationCanvas mounts — so
+   * they had to be hidden inside activities, and the client's mockups put them
+   * there on four screens out of six. Now both canvases satisfy one interface
+   * and the dock stops caring which is live.
+   *
+   * `setTool` is the only writer of `interactionMode`: `select` has to map back
+   * to `book`, or the dock shows Pen active while the canvas stays in page-turn
+   * mode and every stroke turns the page instead.
+   */
+  const readingSurface: DrawingSurface = useMemo(
+    () => ({
+      caps: { pen: true, eraser: true, fill: true, shapes: true, undoRedo: true },
+      /*
+       * The two vocabularies differ by a letter each — the canvas has said
+       * `shape` and `highlighter` since long before the dock existed, and its
+       * wire format carries those names — so translate here rather than renaming
+       * a persisted value.
+       */
+      tool: READING_TO_SURFACE[interactionMode],
+      setTool: (next) => setInteractionMode(SURFACE_TO_READING[next]),
+      undo: () => canvasRef.current?.undo(),
+      redo: () => canvasRef.current?.redo(),
+      clear: handleClearCanvas,
+      depth: annotationDepth,
+    }),
+    [interactionMode, annotationDepth, handleClearCanvas],
+  );
+
+  /** Whatever is drawable right now: a pane's canvas, or the book's ink layer. */
+  const registeredSurface = useDrawingSurface();
+  const activeSurface = inActivity ? registeredSurface : readingSurface;
+
+  /*
+   * What the mockup for this screen shows, narrowed to what the live surface can
+   * actually do. A tool the author disabled, or one whose pane has no canvas,
+   * loses its button rather than getting a dead one.
+   */
+  const toolset = inActivity
+    ? activityToolset(activities[activityIndex]?.activity_type, activeSurface?.caps ?? NO_CAPS)
+    : DOCK_TOOLSET[dockScreen];
+
+  const surfaceTool = activeSurface?.tool ?? 'select';
+  const canUndo = (activeSurface?.depth.undo ?? 0) > 0;
+  const canRedo = (activeSurface?.depth.redo ?? 0) > 0;
 
   const dockItems: DockItem[] = useMemo(
     () => [
@@ -1238,7 +1306,7 @@ function RoomContent({
       {
         icon: BookOpen,
         label: 'Library',
-        hidden: inActivity,
+        hidden: !toolset.has('library'),
         onClick: () => router.push('/dashboard/library'),
       },
 
@@ -1246,10 +1314,10 @@ function RoomContent({
       {
         icon: MousePointer2,
         label: 'Select',
-        hidden: !inkTools,
-        active: !drawingEnabled,
+        hidden: !toolset.has('select'),
+        active: surfaceTool === 'select',
         onClick: () => {
-          setInteractionMode('book');
+          activeSurface?.setTool('select');
           setToolPopover(null);
         },
       },
@@ -1258,14 +1326,14 @@ function RoomContent({
       {
         icon: Pen,
         label: 'Pen',
-        hidden: !inkTools,
-        active: interactionMode === 'pen',
+        hidden: !toolset.has('pen'),
+        active: surfaceTool === 'pen',
         separatorBefore: true,
         onClick: () => {
           // One button, one mental model: the pen turns drawing on and reveals
           // its colour and width options together.
-          const on = interactionMode !== 'pen';
-          setInteractionMode(on ? 'pen' : 'book');
+          const on = surfaceTool !== 'pen';
+          activeSurface?.setTool(on ? 'pen' : 'select');
           setToolPopover(on ? 'pen' : null);
         },
       },
@@ -1279,90 +1347,99 @@ function RoomContent({
          */
         icon: Highlighter,
         label: 'Highlight',
-        hidden: !inkTools,
-        active: interactionMode === 'highlighter',
+        hidden: !toolset.has('highlight'),
+        active: surfaceTool === 'highlight',
         onClick: () => {
-          const on = interactionMode !== 'highlighter';
-          setInteractionMode(on ? 'highlighter' : 'book');
+          const on = surfaceTool !== 'highlight';
+          activeSurface?.setTool(on ? 'highlight' : 'select');
           setToolPopover(on ? 'pen' : null);
         },
       },
       {
         icon: Eraser,
         label: 'Eraser',
-        hidden: !inkTools,
-        active: interactionMode === 'eraser',
+        hidden: !toolset.has('eraser'),
+        active: surfaceTool === 'eraser',
         onClick: () => {
-          setInteractionMode(interactionMode === 'eraser' ? 'book' : 'eraser');
+          activeSurface?.setTool(surfaceTool === 'eraser' ? 'select' : 'eraser');
           setToolPopover(null);
         },
       },
       {
         icon: Smile,
         label: 'Reactions',
+        hidden: !toolset.has('reactions'),
         active: toolPopover === 'reactions',
         onClick: () => setToolPopover((v) => (v === 'reactions' ? null : 'reactions')),
       },
       {
         icon: PaintBucket,
         label: 'Fill',
-        hidden: !inkTools,
-        active: interactionMode === 'fill',
+        hidden: !toolset.has('fill'),
+        active: surfaceTool === 'fill',
         onClick: () => {
-          const on = interactionMode !== 'fill';
-          setInteractionMode(on ? 'fill' : 'book');
+          const on = surfaceTool !== 'fill';
+          activeSurface?.setTool(on ? 'fill' : 'select');
           setToolPopover(on ? 'fill' : null);
         },
       },
       {
         icon: Shapes,
         label: 'Shapes',
-        hidden: !inkTools,
-        active: interactionMode === 'shape',
+        hidden: !toolset.has('shapes'),
+        active: surfaceTool === 'shapes',
         onClick: () => {
-          const on = interactionMode !== 'shape';
-          setInteractionMode(on ? 'shape' : 'book');
+          const on = surfaceTool !== 'shapes';
+          activeSurface?.setTool(on ? 'shapes' : 'select');
           setToolPopover(on ? 'shapes' : null);
         },
       },
       {
         icon: Undo2,
         label: 'Undo',
-        hidden: !inkTools,
+        hidden: !toolset.has('undo'),
         disabled: !canUndo,
-        onClick: () => canvasRef.current?.undo(),
+        onClick: () => activeSurface?.undo(),
       },
       {
         icon: Redo2,
         label: 'Redo',
-        hidden: !inkTools,
+        hidden: !toolset.has('redo'),
         disabled: !canRedo,
-        onClick: () => canvasRef.current?.redo(),
+        onClick: () => activeSurface?.redo(),
       },
 
       // ── Presence ─────────────────────────────────────────────────────────
       {
         icon: isMicrophoneEnabled ? Mic : MicOff,
         label: isMicrophoneEnabled ? 'Mic' : 'Muted',
+        hidden: !toolset.has('mic'),
         active: !isMicrophoneEnabled,
         separatorBefore: true,
+        // Pinned so it stays inline: the mockups put Mic and Participants beside
+        // the tools, and the overflow split is otherwise positional.
+        pinInline: true,
         onClick: () => localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled),
       },
       {
         icon: isCameraEnabled ? Video : VideoOff,
         label: isCameraEnabled ? 'Camera' : 'No cam',
+        hidden: !toolset.has('camera'),
         active: !isCameraEnabled,
         onClick: () => localParticipant.setCameraEnabled(!isCameraEnabled),
       },
       {
         icon: Users,
         label: 'Participants',
+        hidden: !toolset.has('participants'),
         badge: participants.length,
+        pinInline: true,
         onClick: () => setShowTransferModal(true),
       },
       {
         icon: MessageCircle,
         label: 'Chat',
+        hidden: !toolset.has('chat'),
         active: chatOpen,
         onClick: () => setChatOpen((v) => !v),
       },
@@ -1371,36 +1448,38 @@ function RoomContent({
       {
         icon: Gamepad2,
         label: 'Activities',
-        hidden: isActivityMode || role !== 'host' || activities.length === 0,
+        hidden: !toolset.has('activities') || role !== 'host' || activities.length === 0,
         separatorBefore: true,
         onClick: () => openActivitiesRef.current(),
       },
       {
         icon: sounds.muted ? VolumeX : Volume2,
         label: sounds.muted ? 'Sound off' : 'Sound',
+        hidden: !toolset.has('sound'),
         onClick: sounds.toggleMuted,
       },
       {
         icon: ZoomIn,
         label: 'Zoom in',
-        hidden: inActivity,
+        hidden: !toolset.has('zoomIn'),
         onClick: () => setBookZoom((z) => Math.min(2.5, z + 0.2)),
       },
       {
         icon: ZoomOut,
         label: 'Zoom out',
-        hidden: inActivity,
+        hidden: !toolset.has('zoomOut'),
         onClick: () => setBookZoom((z) => Math.max(0.6, z - 0.2)),
       },
       {
         icon: LayoutGrid,
         label: 'Fit',
-        hidden: inActivity,
+        hidden: !toolset.has('fit'),
         onClick: () => setBookZoom(1),
       },
       {
         icon: SlidersHorizontal,
         label: 'Settings',
+        hidden: !toolset.has('settings'),
         active: settingsOpen,
         onClick: () => setSettingsOpen(true),
       },
@@ -1409,19 +1488,17 @@ function RoomContent({
     // redefined on every render, so depending on it directly would rebuild the
     // whole dock each time and defeat this useMemo.
     [
-      interactionMode,
-      drawingEnabled,
       toolPopover,
-      inActivity,
-      // Without these the dock never rebuilt as the undo/redo stacks changed,
-      // so both buttons kept whatever disabled state they had at mount.
-      inkTools,
+      // The screen's toolset and the live surface between them decide which
+      // tools exist, which is active, and whether Undo/Redo can fire.
+      toolset,
+      activeSurface,
+      surfaceTool,
       canUndo,
       canRedo,
       router,
       sounds.muted,
       sounds.toggleMuted,
-      isActivityMode,
       isMicrophoneEnabled,
       isCameraEnabled,
       localParticipant,
@@ -1438,14 +1515,19 @@ function RoomContent({
     <DockPopovers
       open={toolPopover}
       color={annColor}
-      brushSize={annBrush}
       shape={annShape}
       onColorChange={setAnnColor}
-      onBrushSizeChange={setAnnBrush}
       onShapeChange={setAnnShape}
       onReact={handleReaction}
       onClear={handleClearCanvas}
       canClear={canUndo}
+      /* Inside an activity the pane owns colour and its own Clear Page pill, so
+         the popover narrows to brush widths — the surface's authored ones. */
+      showColors={!inActivity}
+      showClear={!inActivity}
+      brushSizes={activeSurface?.brush?.sizes}
+      brushSize={activeSurface?.brush?.value ?? annBrush}
+      onBrushSizeChange={activeSurface?.brush ? activeSurface.brush.set : setAnnBrush}
     />
   );
 
@@ -2151,6 +2233,10 @@ export function SessionRoomPage({ mode = 'reading' }: { mode?: 'reading' | 'acti
         audio
         style={{ height: '100dvh' }}
       >
+        {/* Above RoomContent so the dock and the activity panes share one
+            registry: a pane publishes its canvas, the dock reads whichever is
+            currently published. */}
+        <DrawingSurfaceProvider>
         <RoomContent
           role={role!}
           sessionId={sessionId ?? id}
@@ -2172,6 +2258,7 @@ export function SessionRoomPage({ mode = 'reading' }: { mode?: 'reading' | 'acti
           }
           onEnd={() => router.push('/dashboard')}
         />
+        </DrawingSurfaceProvider>
       </LiveKitRoom>
     </>
   );
