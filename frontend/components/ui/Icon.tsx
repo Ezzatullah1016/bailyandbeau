@@ -4,10 +4,12 @@ import {
   ChevronLeft, ChevronRight, Clock, CreditCard, DoorOpen,
   Eraser, Eye, EyeOff, FileText, Heart, Hourglass, LayoutDashboard,
   Link, Lock, LogOut, Mail, MapPin, Medal, MessageCircle, Mic,
-  MicOff, MoreHorizontal, MousePointer2, Pencil, Play, Plus, Puzzle,
-  RefreshCw, RefreshCwOff, Rocket, Save, Settings, SlidersHorizontal,
-  Sparkles, Star, Timer, Trash2, Trophy, Users, User, UserCircle,
-  Video, VideoOff, Wand2, WifiOff, X, type LucideIcon,
+  MicOff, MoreHorizontal, MousePointer2, PaintBucket, Palette, Pen,
+  Pencil, Pipette, Play, Plus, Puzzle, Redo2, RefreshCw, RefreshCwOff,
+  Rocket, RotateCcw, Save, Scissors, Search, Settings, Shapes,
+  ShieldCheck, SlidersHorizontal, Smile, Sparkles, Star, Timer, Trash2,
+  Trophy, Undo2, Users, User, UserCircle, Video, VideoOff, Wand2,
+  WifiOff, X, type LucideIcon,
 } from 'lucide-react';
 
 export const ICON_MAP: Record<string, LucideIcon> = {
@@ -69,6 +71,28 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   videocam_off:       VideoOff,
   visibility:         Eye,
   visibility_off:     EyeOff,
+
+  /* ── Room chrome, dock tools and activity marks ─────────────────────────
+     The client's screens use pictograms where a mockup would reach for an
+     emoji — the room label's book, the timer's clock, the "Got it!" sparkle,
+     the "How Did We Do?" star. They resolve here so the app never ships an
+     emoji as an interface element: emoji render differently per platform,
+     cannot inherit `currentColor`, and are read aloud by screen readers as
+     their CLDR name mid-sentence. */
+  clear_page:         RotateCcw,
+  color_picker:       Pipette,
+  discovery:          Search,
+  fill:               PaintBucket,
+  invite:             Link,
+  palette:            Palette,
+  pen:                Pen,
+  reactions:          Smile,
+  redo:               Redo2,
+  scissors:           Scissors,
+  select:             MousePointer2,
+  shapes:             Shapes,
+  shield_check:       ShieldCheck,
+  undo:               Undo2,
 };
 
 interface IconProps {

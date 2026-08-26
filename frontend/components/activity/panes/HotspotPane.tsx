@@ -1,10 +1,23 @@
 'use client';
 
+import { useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, Sparkles, X } from 'lucide-react';
 
+import { InkLayer } from './InkLayer';
 import { usePaneMotion } from './motion';
-import type { Hotspot } from './shared';
+import type { Hotspot, Line, PaneProps } from './shared';
+
+/**
+ * Authored hotspot text may use either newline convention — the staff builder
+ * posts from a browser textarea, so Windows authors send CRLF. A spot's first
+ * line becomes its heading and the rest its body.
+ */
+const SPLIT_LINES = /\r?\n/;
+const NEWLINE = '\n';
+
+/** Widths offered to the dock's pen popover for this pane's ink overlay. */
+const INK_BRUSHES = [4, 8, 14, 22];
 
 /** Popup geometry, in percentages of the image box. */
 const CARD_W = 46; // popup width as a % of the image width
@@ -51,12 +64,19 @@ export function HotspotPane({
   payload,
   openId,
   visitedIds,
+  inkLines,
   patchCurrent,
+  onCtaChange,
+  onComplete,
 }: {
   payload: Record<string, unknown>;
   openId: string | null;
   visitedIds: string[];
+  /** Strokes drawn over the illustration by the dock's pen. */
+  inkLines: Line[];
   patchCurrent: (patch: Record<string, unknown>) => void;
+  onCtaChange?: PaneProps['onCtaChange'];
+  onComplete?: PaneProps['onComplete'];
 }) {
   const m = usePaneMotion();
   const url = String(payload.image_url ?? '');
@@ -67,6 +87,30 @@ export function HotspotPane({
 
   const visited = new Set(visitedIds);
   const allFound = hotspots.length > 0 && hotspots.every((h) => visited.has(h.id));
+
+  /*
+   * "Complete Activity" lives in the room's dock, per the screens. It stays
+   * disabled until every spot has been opened — the point of this activity is
+   * the exploring, and a live Complete button invites skipping it.
+   */
+  useEffect(() => {
+    if (!onCtaChange) return;
+    if (hotspots.length === 0) {
+      onCtaChange(null);
+      return;
+    }
+    onCtaChange({
+      label: 'Complete Activity',
+      tone: 'gold',
+      icon: Check,
+      iconTrailing: true,
+      disabled: !allFound,
+      // Was `patchCurrent({ completed: true })` — a key nothing anywhere read,
+      // so the button fired and the screen stayed exactly as it was.
+      run: () => onComplete?.(),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onCtaChange, onComplete, hotspots.length, allFound]);
 
   function open(h: Hotspot) {
     patchCurrent({
@@ -79,9 +123,24 @@ export function HotspotPane({
 
   return (
     <div className="relative">
-      <div className="relative w-full overflow-hidden rounded-2xl border border-brand-purple/20 bg-brand-blush/30">
+      {/* `w-fit` + `mx-auto`: the frame hugs the image, so the absolutely
+          positioned markers (percentages of this box) line up with what they
+          mark whatever the illustration's aspect ratio is. */}
+      <div
+        className="relative mx-auto w-fit overflow-hidden rounded-2xl"
+        style={{ border: '1px solid var(--room-chrome-line)', background: 'rgba(0,0,0,0.18)' }}
+      >
+        {/* The markers are positioned as a percentage of this frame, so the
+            frame hugs the image (see `w-fit` above) rather than letting the art
+            letterbox inside a wider box — which put every spot away from the
+            thing it marked. The height cap keeps the whole activity on screen. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={url} alt="" className="mx-auto block h-auto max-h-[400px] w-full object-contain" />
+        <img
+          src={url}
+          alt=""
+          className="mx-auto block h-auto w-auto max-w-full object-contain"
+          style={{ maxHeight: 'min(52vh, 430px)' }}
+        />
 
         <div className="absolute inset-0">
           {hotspots.map((h) => {
@@ -142,6 +201,15 @@ export function HotspotPane({
 
         {/* Anchored popup (1.1). No scrim: dimming the illustration to read one
             sentence about the illustration is backwards. */}
+        {/* Ink over the illustration, per this screen's mockup. Transparent to
+            pointer events unless the dock has a drawing tool selected, so the
+            discovery markers underneath stay tappable. */}
+        <InkLayer
+          lines={inkLines}
+          setLines={(next) => patchCurrent({ ink_lines: next })}
+          brushSizes={INK_BRUSHES}
+        />
+
         <AnimatePresence>
           {isPopup && active && place ? (
             <motion.div
@@ -199,14 +267,37 @@ export function HotspotPane({
                 >
                   <X className="h-4 w-4" />
                 </button>
-                <p className="pr-9 text-sm font-semibold leading-relaxed">{active.content}</p>
+                {/* First line as a heading when the author wrote one — the
+                    screens title each discovery ("Chocolate Tanks") above its
+                    explanation. A single-line spot just gets the body. */}
+                {(() => {
+                  const parts = active.content.split(SPLIT_LINES);
+                  const first = parts[0];
+                  const body = parts.slice(1).join(NEWLINE).trim();
+                  return body ? (
+                    <>
+                      <h3 className="pr-9 font-baloo text-[16px] font-bold leading-tight">
+                        {first}
+                      </h3>
+                      <p
+                        className="mt-1.5 font-karla text-[13.5px] leading-relaxed"
+                        style={{ color: 'var(--room-ink-soft)' }}
+                      >
+                        {body}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="pr-9 font-karla text-[13.5px] leading-relaxed">{first}</p>
+                  );
+                })()}
                 <button
                   type="button"
                   onClick={() => patchCurrent({ openId: null })}
-                  className="font-baloo mt-3 min-h-11 w-full cursor-pointer rounded-xl px-4 text-sm font-bold transition-opacity hover:opacity-90"
-                  style={{ background: 'var(--room-accent)', color: 'var(--room-accent-contrast)' }}
+                  className="font-baloo mt-3 flex min-h-11 w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl px-4 text-sm font-bold transition-opacity hover:opacity-90"
+                  style={{ background: '#7c4bb0', color: '#ffffff' }}
                 >
                   Got it!
+                  <Sparkles className="h-4 w-4" aria-hidden />
                 </button>
               </div>
             </motion.div>
@@ -218,13 +309,19 @@ export function HotspotPane({
       {!isPopup ? (
         active ? (
           <div
-            className="mt-4 rounded-xl border border-brand-purple/20 p-4"
-            style={{ background: 'var(--activity-paper)', color: 'var(--room-ink)' }}
+            className="mt-4 rounded-xl p-4"
+            style={{
+              border: '1px solid var(--room-chrome-line)',
+              background: 'var(--activity-paper)',
+              color: 'var(--room-ink)',
+            }}
           >
             <p className="text-sm font-semibold">{active.content}</p>
           </div>
         ) : (
-          <p className="mt-3 text-sm text-brand-purple">Tap a highlighted area.</p>
+          <p className="mt-3 font-karla text-[14px]" style={{ color: 'var(--room-ink-soft)' }}>
+            Tap a highlighted area.
+          </p>
         )
       ) : null}
 
@@ -239,7 +336,8 @@ export function HotspotPane({
                 initial="hidden"
                 animate="show"
                 exit="exit"
-                className="font-baloo text-sm font-bold text-brand-teal"
+                className="font-baloo text-sm font-bold"
+                style={{ color: 'var(--c-green)' }}
               >
                 Every spot found — nice exploring!
               </motion.p>
@@ -250,7 +348,11 @@ export function HotspotPane({
                 initial="hidden"
                 animate="show"
                 exit="exit"
-                className="text-sm text-brand-purple"
+                className="font-karla text-[14px]"
+                /* Near-full ink: this is how a child knows there is more to
+                   find, and the muted tone read as almost invisible at 14px on
+                   the dark card. */
+                style={{ color: 'var(--room-ink-strong)' }}
               >
                 {visited.size} of {hotspots.length} spots found
               </motion.p>

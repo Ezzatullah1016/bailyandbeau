@@ -1,63 +1,22 @@
 'use client';
 
-import { Suspense } from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { ToastProvider } from '@/components/ui/Toast';
 
 /**
- * Routes that render without the marketing shell. `/` is included because it is
- * now a redirect rather than a page — showing a topbar with Dashboard/Login
- * links for the split second before it navigates just flashes chrome at people.
+ * App-wide chrome.
+ *
+ * This used to branch on the route and render a marketing topbar (brand /
+ * Dashboard / Login) for anything not in a `FULLSCREEN_PREFIXES` list. That list
+ * had grown to cover every route the app actually has, so the only pages that
+ * ever reached the topbar were `/privacy` and `/terms` — and both render their
+ * own header, so the topbar stacked a second, differently-styled header above
+ * theirs. It was unreachable everywhere it was wanted and wrong everywhere it
+ * appeared, so it is gone along with the route list and the `usePathname()`
+ * Suspense boundary it needed.
+ *
+ * What remains is the toast host: one provider at the root so any screen can
+ * report success or failure without growing its own notification plumbing.
  */
-const FULLSCREEN_PREFIXES = [
-  '/session',
-  '/invite',
-  '/dashboard',
-  '/onboarding',
-  '/login',
-  // Admin screens are signed-in tooling, not marketing: the shell's "Login"
-  // button makes no sense once you are staff and already authenticated.
-  '/admin',
-  // Rendered inside an iframe in the staff portal — chrome would be noise.
-  '/preview',
-];
-
-function AppShellInner({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  // `/` is matched exactly — a `startsWith` test would swallow every route.
-  const isFullscreen =
-    pathname === '/' || FULLSCREEN_PREFIXES.some((prefix) => pathname?.startsWith(prefix));
-
-  if (isFullscreen) {
-    // Session / invite pages are full-screen — skip the shell and topbar entirely
-    return <>{children}</>;
-  }
-
-  return (
-    <div className="shell">
-      <header className="topbar">
-        <Link className="brand" href="/">
-          Bailey &amp; Beau
-        </Link>
-        <nav className="actions">
-          <Link className="button secondary" href="/dashboard">
-            Dashboard
-          </Link>
-          <Link className="button" href="/login">
-            Login
-          </Link>
-        </nav>
-      </header>
-      {children}
-    </div>
-  );
-}
-
-/** `usePathname()` must run under Suspense (Next.js app router). */
 export function AppShell({ children }: { children: React.ReactNode }) {
-  return (
-    <Suspense fallback={<>{children}</>}>
-      <AppShellInner>{children}</AppShellInner>
-    </Suspense>
-  );
+  return <ToastProvider>{children}</ToastProvider>;
 }

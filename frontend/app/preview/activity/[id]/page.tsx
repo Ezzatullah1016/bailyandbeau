@@ -76,6 +76,11 @@ export default function ActivityPreviewPage() {
           open
           variant="stage"
           initialIndex={0}
+          /* Intentionally inert: this renders inside an iframe in the staff
+             builder, where there is no room to return to. The close control is
+             the surrounding page's, not this preview's. */
+          /* Intentionally inert: this renders inside an iframe in the staff
+             portal's activity builder, so there is no room to return to. */
           onClose={() => {}}
         />
       </RoomContext.Provider>

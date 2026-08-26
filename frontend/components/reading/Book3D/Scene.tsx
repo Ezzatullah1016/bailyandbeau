@@ -83,6 +83,8 @@ export default function Book3DScene({
   const [failed, setFailed] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [aspect, setAspect] = useState(1.6);
+  /** Detaches the current context-lost listener, if one is attached. */
+  const lostHandlerRef = useRef<(() => void) | null>(null);
 
   useEffect(() => setWebglOk(detectWebGL()), []);
 
@@ -100,7 +102,32 @@ export default function Book3DScene({
     return () => observer.disconnect();
   }, []);
 
-  const handleCreated = useCallback(() => setFailed(false), []);
+  /*
+   * A context that dies mid-session — GPU reset, driver crash, a tab
+   * backgrounded long enough to be reclaimed — drops to the static book rather
+   * than leaving a black rectangle.
+   *
+   * This used to be an `onError` prop on `<Canvas>`, which react-three-fiber
+   * does not accept, so the fallback was unreachable: the listener has to go on
+   * the real canvas element that the renderer hands back.
+   */
+  const handleCreated = useCallback((state: { gl: { domElement: HTMLCanvasElement } }) => {
+    setFailed(false);
+    const el = state.gl.domElement;
+    const onLost = (e: Event) => {
+      // Preventing the default is what allows a restore to be attempted at all;
+      // without it the context is gone for good.
+      e.preventDefault();
+      setFailed(true);
+    };
+    el.addEventListener('webglcontextlost', onLost, { passive: false });
+    // Kept so the room can detach it: `onCreated` runs again if the Canvas is
+    // recreated, and a listener per creation would accumulate.
+    lostHandlerRef.current?.();
+    lostHandlerRef.current = () => el.removeEventListener('webglcontextlost', onLost);
+  }, []);
+
+  useEffect(() => () => lostHandlerRef.current?.(), []);
 
   // Frame the open book. Measured world bounds of the rendered book are about
   // 2.21 wide x 1.78 tall (the fanned leaves make it wider than two flat pages
@@ -146,9 +173,6 @@ export default function Book3DScene({
         dpr={[1, 2]}
         camera={{ position: [0, 0, distance], fov: 45 }}
         onCreated={handleCreated}
-        // A context that dies mid-session (GPU reset, tab backgrounded too
-        // long) drops to the static book rather than leaving a black canvas.
-        onError={() => setFailed(true)}
         gl={{ antialias: true, alpha: true, preserveDrawingBuffer: false }}
       >
         {/*

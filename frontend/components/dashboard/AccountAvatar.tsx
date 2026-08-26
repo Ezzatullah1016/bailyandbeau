@@ -46,7 +46,7 @@ export function SidebarProfileAvatar({ me }: { me: DashboardMe | null }) {
         <img src={url} alt="" className="h-full w-full object-cover" />
       ) : (
         initials
-      )}image.png
+      )}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { BookMarked, BookOpen, Link2, Plus, RefreshCw } from 'lucide-react';
 import { apiRequest } from '@/lib/api';
+import { useToast } from '@/components/ui/Toast';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { usePathname } from 'next/navigation';
 
@@ -39,8 +40,10 @@ function fmtDuration(start: string | null, end: string | null) {
 export default function SessionsPage() {
   const router = useRouter();
   const pathname = usePathname();
+  const toast = useToast();
   const [me, setMe] = useState<MeData | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [copyingInviteId, setCopyingInviteId] = useState<string | null>(null);
   const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
 
@@ -55,10 +58,31 @@ export default function SessionsPage() {
 
   const filtered = filter === 'all' ? sessions : sessions.filter((s) => s.status === filter);
 
+  /**
+   * Copy an invite link.
+   *
+   * Both halves of this used to be swallowed — the fetch and the clipboard write
+   * — and nothing confirmed success either, so the button was indistinguishable
+   * from a dead one whether it worked or not. Copying is the one action with no
+   * visible result of its own, so it *needs* the acknowledgement.
+   */
   async function copyInviteLink(sessionId: string) {
-    const data = await apiRequest<{ data: { invite_url: string } }>(`/sessions/${sessionId}/invite/`).catch(() => null);
-    if (data?.data?.invite_url) {
-      await navigator.clipboard.writeText(data.data.invite_url).catch(() => {});
+    if (copyingInviteId) return;
+    setCopyingInviteId(sessionId);
+    try {
+      const data = await apiRequest<{ data: { invite_url: string } }>(
+        `/sessions/${sessionId}/invite/`,
+      );
+      const url = data?.data?.invite_url;
+      if (!url) throw new Error('No invite URL in response');
+      await navigator.clipboard.writeText(url);
+      toast.success('Invite link copied.');
+    } catch (err) {
+      // Clipboard writes also fail on a denied permission or a non-secure
+      // origin, which is not the caller's fault but is still worth saying.
+      toast.error('Could not copy the invite link.', err);
+    } finally {
+      setCopyingInviteId(null);
     }
   }
 
@@ -137,9 +161,17 @@ export default function SessionsPage() {
                             <Link href={`/session/${s.id}/lobby`} className="text-xs font-bold text-[#764f84] hover:underline">Rejoin</Link>
                           )}
                           {(s.status === 'pending' || s.status === 'lobby' || s.status === 'active') && (
-                            <button onClick={() => copyInviteLink(s.id)}
-                              className="text-xs font-bold text-[#c84a71] hover:underline flex items-center gap-1">
-                              <Link2 className="w-3 h-3" /> Copy Invite
+                            <button
+                              type="button"
+                              onClick={() => copyInviteLink(s.id)}
+                              disabled={copyingInviteId === s.id}
+                              className="text-xs font-bold text-[#c84a71] hover:underline flex items-center gap-1 cursor-pointer disabled:cursor-wait disabled:opacity-60">
+                              {copyingInviteId === s.id ? (
+                                <RefreshCw className="w-3 h-3 animate-spin" aria-hidden />
+                              ) : (
+                                <Link2 className="w-3 h-3" aria-hidden />
+                              )}
+                              {copyingInviteId === s.id ? 'Copying…' : 'Copy Invite'}
                             </button>
                           )}
                         </div>

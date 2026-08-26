@@ -13,6 +13,21 @@ from core.models import Book, BookTheme
 
 # Named presets, also usable as a starting point in the staff portal.
 PRESETS = {
+    # The room's own family, measured from the client's 2026-08 screens. It is
+    # the default for every book that does not ask for a specific world: the
+    # room used to default to "daylight", which is now one option among several
+    # rather than the house style.
+    "storynight": {
+        "backdrop_kind": BookTheme.Backdrop.GRADIENT,
+        "bg_color": "#2F2143",
+        "bg_color_2": "#201A37",
+        "gradient_angle": 170,
+        "accent": "#F0C75E",
+        "ink": "#F5EFF7",
+        "chrome_mode": BookTheme.ChromeMode.DARK,
+        "book_shadow": BookTheme.BookShadow.DEEP,
+        "tilt_degrees": -2,
+    },
     "daylight": {
         "backdrop_kind": BookTheme.Backdrop.GRADIENT,
         "bg_color": "#CFE6FB",
@@ -71,11 +86,12 @@ PRESETS = {
 }
 
 # Books whose subject suggests a particular world; everything else gets daylight.
-SLUG_PRESETS = {
-    "moonlight-bedtime": "night",
-    "colour-adventure": "sunset",
-    "little-shapes": "daylight",
-}
+# Books whose subject genuinely calls for a different world. The three seeded
+# demo books used to be mapped here to daylight/sunset/night — the pastel end of
+# the old palette — which meant the demo never showed the room's own look. They
+# take the default now; the presets above stay available for a book that wants
+# one, and the staff portal can still set any of them per book.
+SLUG_PRESETS: dict[str, str] = {}
 
 
 class Command(BaseCommand):
@@ -104,7 +120,7 @@ class Command(BaseCommand):
                 skipped += 1
                 continue
 
-            name = forced or SLUG_PRESETS.get(book.slug, "daylight")
+            name = forced or SLUG_PRESETS.get(book.slug, "storynight")
             fields = PRESETS[name]
 
             if existing:
