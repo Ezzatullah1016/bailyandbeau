@@ -2,77 +2,53 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Eraser, PaintBucket, Pencil, Redo2, Trash2, Undo2 } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { Check, Pipette, RotateCcw } from 'lucide-react';
 
+import { useRegisterDrawingSurface } from '@/components/session/DrawingSurface';
 import { usePaneMotion } from './motion';
-import type { Line } from './shared';
+import { markKind, type Line, type PaneProps } from './shared';
 
 const CANVAS_W = 800;
 const CANVAS_H = 480;
 
-type Tool = 'pen' | 'eraser' | 'fill';
-
-/** One tool in the left rail: icon over label, with an animated active pill. */
-function RailTool({
-  icon: Icon,
-  label,
-  active,
-  disabled,
-  onClick,
-}: {
-  icon: LucideIcon;
-  label: string;
-  active?: boolean;
-  disabled?: boolean;
-  onClick: () => void;
-}) {
-  const m = usePaneMotion();
-  return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      whileTap={disabled ? undefined : m.press}
-      aria-pressed={active}
-      className={`relative flex w-full min-h-11 cursor-pointer flex-col items-center gap-0.5 rounded-xl px-2 py-2 text-[10px] font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${
-        active ? 'text-white' : 'text-brand-navy hover:bg-brand-purple/10'
-      }`}
-    >
-      {active ? (
-        <motion.span
-          layoutId="draw-tool-pill"
-          className="absolute inset-0 rounded-xl bg-brand-purple"
-          transition={m.springSnappy}
-        />
-      ) : null}
-      <Icon className="relative h-4.5 w-4.5" />
-      <span className="relative">{label}</span>
-    </motion.button>
-  );
-}
+type Tool = 'pen' | 'eraser' | 'fill' | 'shapes';
 
 export function DrawingPane({
   payload,
   lines,
   setLines,
+  onCtaChange,
+  onComplete,
 }: {
   payload: Record<string, unknown>;
   lines: Line[];
   setLines: (lines: Line[]) => void;
+  onCtaChange?: PaneProps['onCtaChange'];
+  onComplete?: PaneProps['onComplete'];
 }) {
   const m = usePaneMotion();
   const palette = (payload.palette as string[]) ?? ['#222'];
   const brushSizes = (payload.brush_sizes as number[]) ?? [4];
   const allowEraser = Boolean(payload.allow_eraser);
   const allowFill = payload.allow_fill !== false;
+  const allowShapes = Boolean(payload.allow_shapes);
   const backgroundUrl = typeof payload.background_url === 'string' ? payload.background_url : '';
   const allowSubmit = Boolean(payload.allow_submit);
 
   const [color, setColor] = useState(palette[0] ?? '#222');
+  /**
+   * A colour picked from the OS picker, kept beside the authored palette rather
+   * than replacing a swatch — the author's palette is a deliberate set, and
+   * losing one of its colours to a custom pick would be a surprise.
+   */
+  const [customColor, setCustomColor] = useState<string | null>(null);
   const [width, setWidth] = useState(brushSizes[0] ?? 4);
   const [tool, setTool] = useState<Tool>('pen');
+  /** Which primitive the shape tool draws. Set from the dock's shapes popover. */
+  const [shape, setShape] = useState<'rect' | 'ellipse' | 'line'>('rect');
   const [submitted, setSubmitted] = useState(false);
+  /** Set when `toDataURL` throws, so the pane can say so instead of claiming a save. */
+  const [saveFailed, setSaveFailed] = useState(false);
   /**
    * Strokes popped by undo, newest last. Kept local rather than synced: redo is
    * a private "I changed my mind", and `lines` remains the single shared truth.
@@ -87,6 +63,25 @@ export function DrawingPane({
   const currentLine = useRef<number[]>([]);
 
   const eraser = tool === 'eraser' && allowEraser;
+
+  /*
+   * "Complete Activity" lives in the room's dock, per the screens. When the
+   * author enabled submission it also saves the artwork, so one button both
+   * finishes and keeps the drawing rather than asking the child to find a
+   * separate Submit first.
+   */
+  const submitRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    if (!onCtaChange) return;
+    onCtaChange({
+      label: 'Complete Activity',
+      tone: 'gold',
+      icon: Check,
+      iconTrailing: true,
+      run: () => submitRef.current(),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onCtaChange]);
 
   useEffect(() => {
     if (!backgroundUrl) return;
@@ -119,10 +114,15 @@ export function DrawingPane({
       ctx.drawImage(img, (c.width - dw) / 2, (c.height - dh) / 2, dw, dh);
     }
     for (const line of lines) {
-      // A fill is stored as a stroke with a single point, so undo/redo and the
-      // sync protocol treat paint and strokes identically.
-      if (line.points.length === 2) {
+      const kind = markKind(line);
+      // A fill is stored with a single point, so undo/redo and the sync protocol
+      // treat paint, shapes and strokes identically.
+      if (kind === 'fill') {
         floodFill(ctx, c, line.points[0], line.points[1], line.color);
+        continue;
+      }
+      if (kind === 'shape') {
+        drawShape(ctx, line);
         continue;
       }
       if (line.points.length < 4) continue;
@@ -173,20 +173,82 @@ export function DrawingPane({
     setLines([...lines, last]);
   }
 
-  function submitArtwork() {
+  /*
+   * Publish this canvas to the room's dock.
+   *
+   * The dock's Pen, Eraser, Fill, Undo, Redo and Clear act on whichever surface
+   * is registered, so this pane no longer needs a rail of its own — see the card
+   * header below, which keeps only Clear Page as the mockup shows.
+   *
+   * `caps` carry the *authored* flags, which is why they are read here rather
+   * than derived in `dockToolsets.ts`: `allow_fill` defaults true and
+   * `allow_eraser` defaults false, and those defaults must live in exactly one
+   * place or an existing activity silently gains an eraser its author declined.
+   */
+  useRegisterDrawingSurface(
+    () => ({
+      caps: {
+        pen: true,
+        eraser: allowEraser,
+        fill: allowFill,
+        shapes: allowShapes,
+        undoRedo: true,
+      },
+      tool,
+      shape,
+      setShape,
+      setTool: (next) => {
+        // The dock speaks a wider vocabulary than this canvas: `select` means
+        // "stop drawing", and `highlight`/`shapes` have no line-canvas
+        // implementation yet, so they fall back to the pen rather than leaving
+        // the pane in a mode it cannot honour.
+        if (next === 'eraser' && allowEraser) setTool('eraser');
+        else if (next === 'fill' && allowFill) setTool('fill');
+        else if (next === 'shapes' && allowShapes) setTool('shapes');
+        else setTool('pen');
+      },
+      undo,
+      redo,
+      clear: () => commit([]),
+      depth: { undo: lines.length, redo: redoStack.length },
+      brush: { sizes: brushSizes, value: width, set: setWidth },
+    }),
+    [allowEraser, allowFill, allowShapes, tool, shape, lines, redoStack, brushSizes, width],
+  );
+
+  /**
+   * Save the drawing, and report honestly whether it saved.
+   *
+   * This used to set `submitted` unconditionally — including in the catch — so
+   * "Artwork saved!" appeared over a save that had just failed on a tainted
+   * canvas. It now only claims success when the download actually started.
+   */
+  function submitArtwork(): boolean {
     const c = canvasRef.current;
-    if (!c) return;
+    if (!c) return false;
     try {
       const dataUrl = c.toDataURL('image/png');
       const a = document.createElement('a');
       a.href = dataUrl;
       a.download = 'my-artwork.png';
       a.click();
+      setSubmitted(true);
+      setSaveFailed(false);
+      return true;
     } catch {
-      // Tainted canvas from a cross-origin background — skip the download.
+      // A cross-origin background taints the canvas and `toDataURL` throws.
+      setSaveFailed(true);
+      return false;
     }
-    setSubmitted(true);
   }
+
+  // The dock CTA runs whatever the author allowed: save the artwork when
+  // submission is enabled, then finish the activity either way. A failed save
+  // stops short of completing, so the drawing is not lost silently.
+  submitRef.current = () => {
+    if (allowSubmit && !submitArtwork()) return;
+    onComplete?.();
+  };
 
   function pos(e: React.MouseEvent | React.TouchEvent) {
     const c = canvasRef.current;
@@ -203,7 +265,7 @@ export function DrawingPane({
   function startDraw(e: React.MouseEvent | React.TouchEvent) {
     const { x, y } = pos(e);
     if (tool === 'fill') {
-      commit([...lines, { points: [x, y], color, width: 0 }]);
+      commit([...lines, { points: [x, y], color, width: 0, kind: 'fill' }]);
       return;
     }
     drawing.current = true;
@@ -240,54 +302,55 @@ export function DrawingPane({
   function endDraw() {
     if (!drawing.current) return;
     drawing.current = false;
-    if (currentLine.current.length >= 4) {
-      commit([...lines, { points: [...currentLine.current], color, width, eraser }]);
+    const pts = currentLine.current;
+    if (tool === 'shapes' && pts.length >= 4) {
+      // Only the drag's endpoints matter for a shape, not the path between.
+      const [x0, y0] = pts;
+      const x1 = pts[pts.length - 2];
+      const y1 = pts[pts.length - 1];
+      // A tap with no drag would leave an invisible zero-size shape that still
+      // serialises and syncs.
+      if (Math.abs(x1 - x0) >= 4 || Math.abs(y1 - y0) >= 4) {
+        commit([...lines, { points: [x0, y0, x1, y1], color, width, kind: 'shape', shape }]);
+      } else {
+        redraw();
+      }
+    } else if (pts.length >= 4) {
+      commit([...lines, { points: [...pts], color, width, eraser, kind: 'stroke' }]);
     }
     currentLine.current = [];
   }
 
   return (
     <div className="space-y-3">
-      <div className="flex gap-3">
-        {/* Left rail, per the mockup. The old toolbar was one wrapping row above
-            the canvas, which pushed the drawing area down and put colours,
-            sizes and destructive actions on the same visual level. */}
-        <div
-          className="flex w-17 shrink-0 flex-col gap-1 self-start rounded-2xl border border-brand-purple/15 p-1.5"
-          style={{ background: 'var(--activity-paper)' }}
-          role="toolbar"
-          aria-label="Drawing tools"
+      {/* Card header: a teal Clear Page on the right and nothing else, per the
+          drawing mockup. The tools used to sit in a rail here, which put two
+          tool surfaces on one screen — the room's dock carries this vocabulary
+          now, driving whichever canvas is live. */}
+      <div className="flex items-center justify-end gap-3">
+        <button
+          type="button"
+          onClick={() => commit([])}
+          disabled={lines.length === 0}
+          className="flex shrink-0 cursor-pointer items-center gap-2 rounded-[10px] px-4 py-2 font-karla text-[14px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          style={{ background: '#2596b4' }}
         >
-          <RailTool icon={Pencil} label="Pen" active={tool === 'pen'} onClick={() => setTool('pen')} />
-          {allowEraser ? (
-            <RailTool
-              icon={Eraser}
-              label="Eraser"
-              active={tool === 'eraser'}
-              onClick={() => setTool('eraser')}
-            />
-          ) : null}
-          {allowFill ? (
-            <RailTool icon={PaintBucket} label="Fill" active={tool === 'fill'} onClick={() => setTool('fill')} />
-          ) : null}
-          <span className="my-0.5 h-px bg-brand-purple/15" />
-          <RailTool icon={Undo2} label="Undo" disabled={lines.length === 0} onClick={undo} />
-          <RailTool icon={Redo2} label="Redo" disabled={redoStack.length === 0} onClick={redo} />
-          <RailTool
-            icon={Trash2}
-            label="Clear"
-            disabled={lines.length === 0}
-            onClick={() => commit([])}
-          />
-        </div>
+          <RotateCcw className="h-4 w-4" aria-hidden />
+          Clear Page
+        </button>
+      </div>
 
+      <div className="flex gap-3">
         <div className="min-w-0 flex-1 space-y-2">
           <canvas
             ref={canvasRef}
             width={CANVAS_W}
             height={CANVAS_H}
-            className="w-full max-h-[50vh] touch-none rounded-2xl border border-brand-purple/20 bg-white"
-            style={{ cursor: tool === 'fill' ? 'copy' : 'crosshair' }}
+            className="w-full max-h-[50vh] touch-none rounded-2xl bg-white"
+            style={{
+              border: '1px solid var(--room-chrome-line)',
+              cursor: tool === 'fill' ? 'copy' : 'crosshair',
+            }}
             onMouseDown={startDraw}
             onMouseMove={moveDraw}
             onMouseUp={endDraw}
@@ -301,8 +364,8 @@ export function DrawingPane({
               Swatches and brush sizes are separated into their own rows: as one
               wrapping row of same-sized circles they were indistinguishable,
               and the sizes read as "more colours". */}
-          <div className="flex flex-wrap items-center gap-2">
-            {palette.map((p) => {
+          <div className="flex flex-wrap items-center gap-3">
+            {[...palette, ...(customColor ? [customColor] : [])].map((p) => {
               const on = color === p && tool !== 'eraser';
               return (
                 <motion.button
@@ -319,7 +382,7 @@ export function DrawingPane({
                     backgroundColor: p,
                     boxShadow: on
                       ? '0 0 0 2px var(--activity-paper), 0 0 0 4px var(--room-accent)'
-                      : '0 0 0 1px rgba(0,0,0,0.12)',
+                      : '0 0 0 1px rgba(255,255,255,0.28)',
                   }}
                   aria-label={`Colour ${p}`}
                   aria-pressed={on}
@@ -329,12 +392,33 @@ export function DrawingPane({
               );
             })}
 
+            {/* "More Colors" opens the OS colour picker. A native input rather
+                than a hand-rolled wheel: it is keyboard-accessible, it remembers
+                recent choices, and on a tablet it is the picker the child's
+                other drawing apps use. */}
+            <label
+              className="ml-auto flex cursor-pointer items-center gap-1.5 font-karla text-[13px] font-semibold"
+              style={{ color: 'var(--c-teal)' }}
+            >
+              <Pipette className="h-4 w-4" aria-hidden />
+              More Colors
+              <input
+                type="color"
+                value={color}
+                onChange={(e) => {
+                  setCustomColor(e.target.value);
+                  setColor(e.target.value);
+                  if (tool === 'eraser') setTool('pen');
+                }}
+                className="sr-only"
+              />
+            </label>
           </div>
 
           {/* Brush sizes: a squared-off pill row, so the control cannot be
               mistaken for another set of colours. */}
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-brand-purple">
+            <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--room-ink-strong)' }}>
               Size
             </span>
             <div className="flex items-center gap-1 rounded-xl bg-brand-purple/8 p-1">
@@ -362,28 +446,19 @@ export function DrawingPane({
         </div>
       </div>
 
-      {allowSubmit ? (
-        <div className="flex items-center justify-end gap-3">
-          {submitted ? (
-            <motion.span
-              variants={m.riseIn}
-              initial="hidden"
-              animate="show"
-              className="font-karla text-sm font-bold text-brand-teal"
-            >
-              Artwork saved!
-            </motion.span>
-          ) : null}
-          <motion.button
-            type="button"
-            whileTap={m.press}
-            onClick={submitArtwork}
-            className="font-baloo flex min-h-11 cursor-pointer items-center gap-2 rounded-xl bg-brand-pink px-5 text-sm font-bold text-white shadow transition-opacity hover:opacity-90"
-          >
-            Submit Artwork
-            <Check className="h-4 w-4" strokeWidth={3} />
-          </motion.button>
-        </div>
+      {submitted || saveFailed ? (
+        <motion.p
+          variants={m.riseIn}
+          initial="hidden"
+          animate="show"
+          role={saveFailed ? 'alert' : undefined}
+          className="text-right font-karla text-sm font-bold"
+          style={{ color: saveFailed ? 'var(--c-pink)' : 'var(--c-green)' }}
+        >
+          {saveFailed
+            ? 'Could not save this drawing — try again.'
+            : 'Artwork saved!'}
+        </motion.p>
       ) : null}
     </div>
   );
@@ -396,6 +471,34 @@ export function DrawingPane({
  * pixels, and a naive stack-of-pixels fill both blows the JS stack and takes
  * long enough to drop frames on a tablet.
  */
+/**
+ * Draw a shape primitive from its two corner points.
+ *
+ * Stored as `[x0,y0,x1,y1]` — the drag's start and end — so a shape is the same
+ * flat point array as everything else and needs no separate wire format.
+ */
+function drawShape(ctx: CanvasRenderingContext2D, line: Line) {
+  const [x0, y0, x1, y1] = line.points;
+  if (x1 === undefined || y1 === undefined) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.lineWidth = Math.max(2, line.width);
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = line.color;
+  const w = x1 - x0;
+  const h = y1 - y0;
+  if (line.shape === 'ellipse') {
+    ctx.ellipse(x0 + w / 2, y0 + h / 2, Math.abs(w) / 2, Math.abs(h) / 2, 0, 0, Math.PI * 2);
+  } else if (line.shape === 'line') {
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+  } else {
+    ctx.rect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(w), Math.abs(h));
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
 function floodFill(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,

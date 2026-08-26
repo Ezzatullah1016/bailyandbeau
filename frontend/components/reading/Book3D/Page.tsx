@@ -76,10 +76,16 @@ pageGeometry.translate(PAGE_WIDTH / 2, 0, 0);
   pageGeometry.setAttribute('skinWeight', new Float32BufferAttribute(skinWeights, 4));
 }
 
-/** Paper edge colour — the thin visible border around each leaf. */
-const EDGE_COLOR = new Color('#fdfbf7');
+/**
+ * Paper edge colour — the thin visible border around each leaf.
+ *
+ * Warm cream, matching `--book-paper`. These were a near-white #fdfbf7 and a
+ * grey #d8d2c6, tuned for the old bright-sky room; against the aubergine room
+ * the cool grey edges read as plastic rather than paper.
+ */
+const EDGE_COLOR = new Color('#f7eee4');
 /** Spine edge sits in shadow. */
-const SPINE_COLOR = new Color('#d8d2c6');
+const SPINE_COLOR = new Color('#d9c9b6');
 
 export type PageProps = {
   /** Index of this leaf within the book. */

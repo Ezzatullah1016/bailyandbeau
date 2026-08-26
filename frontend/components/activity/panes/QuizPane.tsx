@@ -1,12 +1,16 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, ChevronLeft, ChevronRight, Sparkles, X } from 'lucide-react';
 
+import { InkLayer } from './InkLayer';
 import { usePaneMotion } from './motion';
-import type { PaneProps, QuizQuestion } from './shared';
+import type { Line, PaneProps, QuizQuestion } from './shared';
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
+/** Widths offered to the dock's pen popover for this pane's ink overlay. */
+const INK_BRUSHES = [4, 8, 14, 22];
 
 /** Shared option button. Both the 1.1 and 1.0 paths render through this. */
 function OptionButton({
@@ -14,11 +18,14 @@ function OptionButton({
   text,
   state,
   onSelect,
+  disabled,
 }: {
   index: number;
   text: string;
   state: 'idle' | 'selected' | 'correct' | 'wrong';
   onSelect: () => void;
+  /** Locked once the answer is out — see the call site. */
+  disabled?: boolean;
 }) {
   const m = usePaneMotion();
 
@@ -26,23 +33,26 @@ function OptionButton({
   // white: sitting directly on the canvas, they have to work on a dark book
   // theme too. Verdict states keep literal brand colours — right and wrong must
   // read the same in every book.
-  const shell =
+  // Verdict states keep literal brand colours — right and wrong must read the
+  // same in every book theme. Idle takes the room's own translucent fill, per
+  // the screens.
+  const shellStyle: React.CSSProperties =
     state === 'correct'
-      ? 'border-brand-teal bg-brand-teal/15'
+      ? { background: 'rgba(95,211,150,0.16)', borderColor: 'var(--c-green)' }
       : state === 'wrong'
-        ? 'border-brand-pink bg-brand-pink/10'
+        ? { background: 'rgba(228,87,126,0.16)', borderColor: 'var(--c-pink)' }
         : state === 'selected'
-          ? 'border-brand-purple bg-brand-blush/80'
-          : 'hover:border-brand-purple';
+          ? { background: 'rgba(240,199,94,0.18)', borderColor: 'var(--room-accent)' }
+          : { background: 'rgba(255,255,255,0.05)', borderColor: 'var(--room-chrome-line)' };
 
-  const badge =
+  const badgeStyle: React.CSSProperties =
     state === 'correct'
-      ? 'bg-brand-teal text-white'
+      ? { background: 'var(--c-green)', color: '#12301f' }
       : state === 'wrong'
-        ? 'bg-brand-pink text-white'
+        ? { background: 'var(--c-pink)', color: '#ffffff' }
         : state === 'selected'
-          ? 'bg-brand-purple text-white'
-          : 'bg-brand-purple/10 text-brand-purple';
+          ? { background: 'var(--room-accent)', color: 'var(--room-accent-contrast)' }
+          : { background: 'rgba(124,90,158,0.55)', color: '#ffffff' };
 
   /*
    * Two elements on purpose.
@@ -60,21 +70,14 @@ function OptionButton({
     <motion.button
       type="button"
       onClick={onSelect}
+      disabled={disabled}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={m.spring}
-      whileHover={state === 'idle' ? m.hover : undefined}
-      whileTap={m.press}
-      className={`flex min-h-[56px] w-full cursor-pointer items-center gap-3 rounded-2xl border-2 px-4 py-3 text-left font-medium transition-colors ${shell}`}
-      style={
-        state === 'idle'
-          ? {
-              background: 'var(--activity-paper)',
-              borderColor: 'var(--room-chrome-line)',
-              color: 'var(--room-ink)',
-            }
-          : { color: 'var(--room-ink)' }
-      }
+      whileHover={state === 'idle' && !disabled ? m.hover : undefined}
+      whileTap={disabled ? undefined : m.press}
+      className="flex w-full cursor-pointer items-center gap-3 border-2 px-4 py-3 text-left font-karla text-[15px] transition-colors disabled:cursor-default"
+      style={{ minHeight: 68, borderRadius: 14, color: 'var(--room-ink)', ...shellStyle }}
     >
       <motion.span
         className="flex min-w-0 flex-1 items-center gap-3"
@@ -83,7 +86,8 @@ function OptionButton({
         animate={state === 'wrong' ? m.nudge : state === 'correct' ? m.celebrate : undefined}
       >
         <span
-          className={`font-baloo grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-bold transition-colors ${badge}`}
+          className="font-baloo grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-bold transition-colors"
+          style={badgeStyle}
         >
           {state === 'correct' ? (
             <Check className="h-4 w-4" strokeWidth={3} />
@@ -109,9 +113,11 @@ function FeedbackCard({ kind, text }: { kind: 'correct' | 'wrong'; text: string 
       initial="hidden"
       animate="show"
       exit="exit"
-      className={`flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-bold ${
-        correct ? 'bg-brand-teal/15 text-brand-teal' : 'bg-brand-pink/10 text-brand-pink'
-      }`}
+      className="flex items-center justify-center gap-2 rounded-2xl px-4 py-3 font-karla text-[14px] font-bold"
+      style={{
+        background: correct ? 'rgba(95,211,150,0.16)' : 'rgba(228,87,126,0.16)',
+        color: correct ? 'var(--c-green)' : 'var(--c-pink)',
+      }}
       role="status"
     >
       {correct ? <Sparkles className="h-4 w-4 shrink-0" /> : <X className="h-4 w-4 shrink-0" />}
@@ -120,10 +126,80 @@ function FeedbackCard({ kind, text }: { kind: 'correct' | 'wrong'; text: string 
   );
 }
 
-export function QuizPane({ payload, role: hostRole, state, patchCurrent }: PaneProps) {
+export function QuizPane({
+  payload,
+  role: hostRole,
+  state,
+  patchCurrent,
+  onCtaChange,
+  onComplete,
+}: PaneProps) {
+  /** Strokes drawn over the question card by the dock's pen. */
+  const inkLines = (state.ink_lines as Line[] | undefined) ?? [];
   const m = usePaneMotion();
   const revealMode = String(payload.reveal_mode ?? 'instant');
   const questions = payload.questions as QuizQuestion[] | undefined;
+
+  /*
+   * The dock's "Next Question" is computed here, above the 1.1/1.0 branch.
+   *
+   * The two paths are separate returns, and a hook inside either branch would
+   * run conditionally — so the effect that publishes the CTA has to live before
+   * the split, reading the same state the 1.1 render does.
+   */
+  const multi = Array.isArray(questions) && questions.length > 0 ? questions : null;
+  const ctaIndex = multi ? Math.min(Number(state.qIndex ?? 0), multi.length - 1) : 0;
+  const ctaIsLast = multi ? ctaIndex === multi.length - 1 : true;
+  const isHost = hostRole === 'host';
+  // A 1.0 quiz is one question, so there is nothing to advance to — its action
+  // is revealing the answer, which is the only host control it has.
+  const single1Revealed = !multi && Boolean(state.revealed);
+
+  // The run body closes over `patchCurrent`, which the shell redefines every
+  // render; a ref keeps the published CTA stable while still calling the
+  // current version.
+  const runRef = useRef<() => void>(() => {});
+  runRef.current = () => {
+    if (multi) {
+      // On the last question there is nothing to advance to, so the button
+      // finishes the activity instead. It used to read "Finished" and be
+      // permanently disabled — a quiz simply could not be completed.
+      if (ctaIsLast) onComplete?.();
+      else patchCurrent({ qIndex: Math.min(ctaIndex + 1, multi.length - 1) });
+    } else if (single1Revealed) {
+      onComplete?.();
+    } else {
+      patchCurrent({ revealed: true });
+    }
+  };
+
+  useEffect(() => {
+    if (!onCtaChange) return;
+    if (!isHost) {
+      onCtaChange(null);
+      return;
+    }
+    onCtaChange(
+      multi
+        ? {
+            label: ctaIsLast ? 'Finish Quiz' : 'Next Question',
+            tone: 'gold',
+            icon: ctaIsLast ? Check : ChevronRight,
+            iconTrailing: true,
+            run: () => runRef.current(),
+          }
+        : {
+            // A one-question quiz reveals, then finishes — rather than leaving
+            // a disabled button as its final state.
+            label: single1Revealed ? 'Complete Activity' : 'Reveal Answer',
+            tone: 'gold',
+            icon: single1Revealed ? Check : Sparkles,
+            iconTrailing: true,
+            run: () => runRef.current(),
+          },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onCtaChange, onComplete, isHost, Boolean(multi), ctaIsLast, ctaIndex, single1Revealed]);
 
   // ── 1.1: multi-question sequence ──────────────────────────────────────────
   if (Array.isArray(questions) && questions.length > 0) {
@@ -156,33 +232,58 @@ export function QuizPane({ payload, role: hostRole, state, patchCurrent }: PaneP
     const isWrong = revealed && selected !== undefined && selected !== q.correct_index;
 
     return (
-      <div className="space-y-5">
-        {/* Progress: numbered pill + dots, so position is readable at a glance. */}
-        <div className="flex items-center justify-center gap-3">
-          <span className="font-baloo grid h-7 w-7 place-items-center rounded-full bg-brand-purple text-xs font-bold text-white">
-            {qIndex + 1}
-          </span>
-          <div className="flex items-center gap-1.5" aria-hidden>
-            {qs.map((qq, i) => (
-              <motion.span
-                key={qq.id}
-                className="h-2 rounded-full"
-                animate={{
-                  width: i === qIndex ? 24 : 8,
-                  backgroundColor:
-                    i === qIndex
-                      ? 'var(--color-brand-purple, #764f84)'
-                      : answers[qq.id] !== undefined
-                        ? 'var(--color-brand-teal, #3b85a6)'
-                        : 'rgba(118,79,132,0.25)',
-                }}
-                transition={m.spring}
-              />
-            ))}
-          </div>
-          <span className="text-xs font-bold uppercase tracking-wider text-brand-purple">
+      <div className="relative space-y-5">
+        {/* Ink over the whole question card, per this screen's mockup. It is
+            transparent to pointer events unless a drawing tool is selected, so
+            the options — and the host's Reveal button — stay clickable. That is
+            what the dock's Select tool is for. */}
+        <InkLayer
+          lines={inkLines}
+          setLines={(next) => patchCurrent({ ink_lines: next })}
+          brushSizes={INK_BRUSHES}
+        />
+        {/* Progress rail: a dot per question on a hairline track, with the
+            position badge on the left. The screens read "1 of 5"; the dots
+            carry answered-ness so a host can see what is still open. */}
+        <div className="flex items-center gap-4">
+          <span
+            className="flex shrink-0 items-baseline gap-1 font-karla text-[12px] font-semibold uppercase tracking-wider"
+            style={{ color: 'var(--room-ink-soft)' }}
+          >
+            <span
+              className="grid h-7 w-7 place-items-center rounded-full font-baloo text-[13px] font-bold"
+              style={{ background: 'rgba(124,90,158,0.55)', color: '#ffffff' }}
+            >
+              {qIndex + 1}
+            </span>
             of {qs.length}
           </span>
+
+          <div className="relative flex flex-1 items-center" aria-hidden>
+            <span
+              className="absolute inset-x-0 h-0.5"
+              style={{ background: 'rgba(255,255,255,0.14)' }}
+            />
+            <div className="relative flex w-full items-center justify-between">
+              {qs.map((qq, i) => (
+                <motion.span
+                  key={qq.id}
+                  className="rounded-full"
+                  animate={{
+                    width: i === qIndex ? 12 : 10,
+                    height: i === qIndex ? 12 : 10,
+                    backgroundColor:
+                      i === qIndex
+                        ? 'var(--room-accent)'
+                        : answers[qq.id] !== undefined
+                          ? 'var(--c-teal)'
+                          : 'rgba(255,255,255,0.25)',
+                  }}
+                  transition={m.spring}
+                />
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Question. Keyed so it animates when the host advances. */}
@@ -234,6 +335,10 @@ export function QuizPane({ payload, role: hostRole, state, patchCurrent }: PaneP
                           : 'idle'
                   }
                   onSelect={() => choose(i)}
+                  /* Locked after the reveal. Tapping another option used to
+                     rewrite `answers`, changing the verdict colours after the
+                     answer had already been shown. */
+                  disabled={revealed}
                 />
               ))}
             </div>
@@ -249,6 +354,12 @@ export function QuizPane({ payload, role: hostRole, state, patchCurrent }: PaneP
         </AnimatePresence>
 
         {revealMode === 'host_controlled' && hostRole === 'host' && !revealed ? (
+          /*
+           * Kept in the pane, unlike the 1.0 button below it. The dock's CTA on
+           * a multi-question quiz advances to the next question — it does not
+           * reveal — so without this the answer could never be shown in
+           * host-controlled mode.
+           */
           <motion.button
             type="button"
             onClick={reveal}
@@ -259,31 +370,25 @@ export function QuizPane({ payload, role: hostRole, state, patchCurrent }: PaneP
           </motion.button>
         ) : null}
 
+        {/* "Next Question" is published to the room's dock, where the screens
+            put it. Only "Previous" stays in the pane: the dock holds one
+            primary action, and going back is a correction, not the main path. */}
         {hostRole === 'host' ? (
-          <div className="flex items-center justify-between pt-1">
+          <div className="flex items-center pt-1">
             <motion.button
               type="button"
               onClick={() => go(-1)}
               disabled={qIndex === 0}
               whileTap={qIndex === 0 ? undefined : m.press}
-              className="font-baloo flex min-h-11 cursor-pointer items-center gap-1 rounded-xl border-2 border-brand-purple/25 px-4 text-sm font-bold text-brand-navy disabled:cursor-not-allowed disabled:opacity-40"
+              className="font-baloo flex min-h-11 cursor-pointer items-center gap-1 rounded-xl border-2 px-4 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-40"
+              style={{ borderColor: 'var(--room-chrome-line)', color: 'var(--room-ink)' }}
             >
               <ChevronLeft className="h-4 w-4" />
               Previous
             </motion.button>
-            <motion.button
-              type="button"
-              onClick={() => go(1)}
-              disabled={isLast}
-              whileTap={isLast ? undefined : m.press}
-              className="font-baloo flex min-h-11 cursor-pointer items-center gap-1 rounded-xl bg-brand-purple px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {isLast ? 'Finished' : 'Next Question'}
-              {isLast ? null : <ChevronRight className="h-4 w-4" />}
-            </motion.button>
           </div>
         ) : (
-          <p className="text-center text-xs text-brand-purple">
+          <p className="text-center font-karla text-[13px]" style={{ color: 'var(--room-ink-soft)' }}>
             Your grown-up moves to the next question.
           </p>
         )}
@@ -301,16 +406,22 @@ export function QuizPane({ payload, role: hostRole, state, patchCurrent }: PaneP
   function choose1(i: number) {
     patchCurrent({ selected: i, revealed: revealMode === 'instant' ? true : revealed1 });
   }
-  function reveal1() {
-    if (hostRole !== 'host') return;
-    patchCurrent({ revealed: true });
-  }
-
   const correct1 = revealed1 && selected1 === correct;
   const wrong1 = revealed1 && selected1 !== null && selected1 !== correct;
 
   return (
-    <motion.div variants={m.stagger} initial="hidden" animate="show" className="space-y-4">
+    <motion.div
+      variants={m.stagger}
+      initial="hidden"
+      animate="show"
+      className="relative space-y-4"
+    >
+      {/* See the 1.1 branch above: ink over the card, out of the way in Select. */}
+      <InkLayer
+        lines={inkLines}
+        setLines={(next) => patchCurrent({ ink_lines: next })}
+        brushSizes={INK_BRUSHES}
+      />
       <motion.p
         variants={m.riseIn}
         className="font-baloo text-center text-xl font-bold"
@@ -334,6 +445,7 @@ export function QuizPane({ payload, role: hostRole, state, patchCurrent }: PaneP
                     : 'idle'
             }
             onSelect={() => choose1(i)}
+            disabled={revealed1}
           />
         ))}
       </div>
@@ -347,19 +459,9 @@ export function QuizPane({ payload, role: hostRole, state, patchCurrent }: PaneP
         ) : null}
       </AnimatePresence>
 
-      {revealMode === 'host_controlled' && hostRole === 'host' && !revealed1 ? (
-        <motion.button
-          type="button"
-          onClick={reveal1}
-          whileTap={m.press}
-          className="font-baloo mx-auto block min-h-11 cursor-pointer rounded-xl bg-brand-gold px-5 text-sm font-bold text-brand-navy"
-        >
-          Reveal answer
-        </motion.button>
-      ) : null}
       {revealMode === 'host_controlled' && hostRole === 'guest' && !revealed1 ? (
-        <p className="text-center text-sm text-brand-purple">
-          The host will reveal the answer when everyone is ready.
+        <p className="text-center text-sm" style={{ color: 'var(--room-ink-strong)' }}>
+          Your Adventure Guide will reveal the answer when everyone is ready.
         </p>
       ) : null}
     </motion.div>

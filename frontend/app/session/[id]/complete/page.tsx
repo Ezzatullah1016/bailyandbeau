@@ -5,6 +5,9 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 
 import { useSession } from '@/contexts/SessionContext';
 import { getSession } from '@/lib/api';
+import { BookOpen, Palette } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+
 import { BrandLogo } from '@/components/brand/BrandLogo';
 
 type RoomMode = 'reading' | 'activity';
@@ -19,7 +22,7 @@ const COPY: Record<RoomMode, {
   heading: string;
   tagline: string;
   message: string;
-  subtitleIcon: string;
+  subtitleIcon: LucideIcon;
   subtitleLabel: string;
   primaryLabel: string;
   primaryHref: string;
@@ -32,7 +35,7 @@ const COPY: Record<RoomMode, {
     message:
       "Today you chose to spend time together—and that's something worth celebrating. " +
       'The stories may change, but the memories you create will last a lifetime.',
-    subtitleIcon: '📖',
+    subtitleIcon: BookOpen,
     subtitleLabel: "Today's Story",
     primaryLabel: 'Read Another Story',
     primaryHref: '/dashboard/library',
@@ -45,10 +48,10 @@ const COPY: Record<RoomMode, {
     message:
       "Today you explored, imagined, and created something together—and that's something worth celebrating. " +
       'The activity may be finished, but the curiosity and connection you inspired can continue long after today.',
-    subtitleIcon: '🎨',
+    subtitleIcon: Palette,
     subtitleLabel: "Today's Activity",
     primaryLabel: 'Choose Another Activity',
-    primaryHref: '/dashboard',
+    primaryHref: '/dashboard/library',
     secondaryLabel: 'Return to Dashboard',
     secondaryHref: '/dashboard',
   },
@@ -89,6 +92,7 @@ function CompletionInner() {
   }, [sid, paramMode]);
 
   const copy = COPY[mode];
+  const SubtitleIcon = copy.subtitleIcon;
 
   // Reading shows the book title. Activity prefers the backend-recorded title
   // (survives refresh), then the live query param, then the book title.
@@ -141,7 +145,7 @@ function CompletionInner() {
           <div className="w-full h-px bg-[#eccdca]/70 mb-8" />
 
           <span className="font-karla text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#764f84] flex items-center justify-center gap-2 mb-2">
-            <span aria-hidden>{copy.subtitleIcon}</span>
+            <SubtitleIcon className="h-4 w-4" aria-hidden />
             {copy.subtitleLabel}
           </span>
           <p className="font-baloo text-2xl text-[#3d3b62] font-bold">{subject}</p>
@@ -150,12 +154,14 @@ function CompletionInner() {
         {/* CTAs */}
         <div className="flex flex-col sm:flex-row items-center gap-4 w-full">
           <button
+            type="button"
             onClick={() => router.push(copy.primaryHref)}
             className="font-baloo w-full sm:flex-1 bg-gradient-to-br from-[#f0c75e] to-[#c84a71] text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:brightness-105 active:scale-95 transition-all text-sm uppercase tracking-widest"
           >
             {copy.primaryLabel}
           </button>
           <button
+            type="button"
             onClick={() => router.push(copy.secondaryHref)}
             className="font-baloo w-full sm:flex-1 border-2 border-white/40 text-white font-bold py-4 px-8 rounded-xl hover:bg-white/10 active:scale-95 transition-all text-sm uppercase tracking-widest"
           >

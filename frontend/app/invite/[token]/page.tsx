@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { BookOpen, Sparkles } from 'lucide-react';
 import { joinViaInvite } from '@/lib/api';
@@ -108,8 +109,7 @@ export default function InviteJoinPage() {
 
         <div className="font-karla text-[10px] text-stone-400 flex justify-center gap-4 mt-8">
           <span>© 2025 Bailey &amp; Beau</span>
-          <span>Privacy Policy</span>
-          <span>Help Center</span>
+          <Link href="/privacy" className="underline hover:text-[#3d3b62]">Privacy Policy</Link>
         </div>
       </section>
 

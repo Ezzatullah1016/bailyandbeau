@@ -2,19 +2,8 @@
 
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, ChevronDown } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { apiRequest } from '@/lib/api';
-
-const AVATARS = [
-  { emoji: '🐻', bg: '#f0edf8', label: 'Bear' },
-  { emoji: '🦊', bg: '#fce9ef', label: 'Fox' },
-  { emoji: '🐧', bg: '#f5efe6', label: 'Penguin' },
-  { emoji: '🦋', bg: '#fef9ed', label: 'Butterfly' },
-  { emoji: '🐳', bg: '#e8f0f5', label: 'Whale' },
-  { emoji: '🦁', bg: '#fef3e8', label: 'Lion' },
-  { emoji: '🦄', bg: '#f5ebf5', label: 'Unicorn' },
-  { emoji: '🐢', bg: '#eaf0f8', label: 'Turtle' },
-];
 
 const AGE_BANDS = [
   { value: '3-5', label: '3–5 years' },
@@ -26,7 +15,6 @@ export default function ChildSetupPage() {
   const router = useRouter();
   const [childName, setChildName] = useState('');
   const [ageBand, setAgeBand] = useState('3-5');
-  const [avatar, setAvatar] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -105,39 +93,6 @@ export default function ChildSetupPage() {
                     <ChevronDown className="w-5 h-5" />
                   </div>
                 </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <label className="font-karla block text-[13px] font-semibold text-[#3d3b62] uppercase tracking-wider pl-1 text-center">
-                Pick an Avatar
-              </label>
-              <div className="grid grid-cols-4 gap-4 justify-items-center max-w-[360px] mx-auto">
-                {AVATARS.map((av, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => setAvatar(i)}
-                    aria-label={av.label}
-                    className="group relative outline-none"
-                  >
-                    <div
-                      className={`w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center text-3xl shadow-sm transition-all duration-300 group-hover:scale-105 border-4 ${
-                        avatar === i
-                          ? 'border-[#764f84] ring-2 ring-[#764f84]/20 scale-105'
-                          : 'border-transparent ring-2 ring-transparent'
-                      }`}
-                      style={{ backgroundColor: av.bg }}
-                    >
-                      {av.emoji}
-                    </div>
-                    {avatar === i && (
-                      <div className="absolute -top-1 -right-1 bg-[#764f84] text-white rounded-full p-0.5 shadow-md">
-                        <Check className="w-3 h-3" strokeWidth={3} />
-                      </div>
-                    )}
-                  </button>
-                ))}
               </div>
             </div>
 

@@ -54,12 +54,14 @@ export default function ChoosePlanPage() {
       });
       window.location.href = res.data.checkout_url;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Could not start checkout.';
-      if (msg.includes('stripe') || msg.includes('Stripe') || msg.includes('500') || msg.includes('not configured')) {
-        router.push('/onboarding/child');
-      } else {
-        setError(msg);
-      }
+      /*
+       * This used to string-match the error for 'stripe' / '500' / 'not
+       * configured' and, on a match, push straight to the next onboarding step —
+       * so a payment failure looked exactly like a payment success, and someone
+       * arrived in the app believing they had subscribed. A failed checkout is a
+       * failure: say so and stay put.
+       */
+      setError(err instanceof Error ? err.message : 'Could not start checkout.');
     } finally {
       setLoading(false);
     }
@@ -150,6 +152,7 @@ export default function ChoosePlanPage() {
 
           <div className="flex flex-col items-center gap-3">
             <button
+              type="button"
               onClick={handleContinue}
               disabled={loading || plans.length === 0}
               className="font-baloo w-full max-w-sm py-4 bg-[#c84a71] text-white font-bold rounded-xl hover:bg-[#b43f63] active:scale-[0.98] transition-all shadow-lg shadow-[#c84a71]/20 disabled:opacity-60"
@@ -157,6 +160,7 @@ export default function ChoosePlanPage() {
               {loading ? 'Starting checkout…' : 'Continue to Payment'}
             </button>
             <button
+              type="button"
               onClick={() => router.push('/onboarding/child')}
               className="font-karla text-sm text-stone-400 hover:text-[#3d3b62] underline underline-offset-4 transition-colors"
             >

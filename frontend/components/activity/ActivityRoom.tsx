@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRoomContext } from '@livekit/components-react';
 import { ChevronLeft, ChevronRight, RotateCcw, X } from 'lucide-react';
+import type { PaneCta } from './panes/shared';
 import type { ActivityConfigData } from './types';
 import { DragDropPane } from './panes/DragDropPane';
 import { DrawingPane } from './panes/DrawingPane';
@@ -27,6 +28,22 @@ interface Props {
   variant?: 'modal' | 'stage';
   /** @deprecated use variant. `fullscreen` maps to 'stage'. */
   fullscreen?: boolean;
+  /**
+   * Lets the active pane put its primary action in the room's dock, where the
+   * client's screens place it — "Next Question", "How Did We Do?", "Complete
+   * Activity". Panes used to render their own footer button inside the card,
+   * which meant the most important control on the screen sat in a different
+   * place for every activity type.
+   *
+   * Called with `null` when the pane has no action to offer.
+   */
+  onCtaChange?: (cta: (PaneCta & { run: () => void }) | null) => void;
+  /**
+   * Finish the activity for real — the room completes the session and moves to
+   * the completion screen. Panes previously wrote a `completed` flag into their
+   * own state that nothing read, so their primary button did nothing at all.
+   */
+  onComplete?: () => void;
 }
 
 function buildMsg(type: string, payload: Record<string, unknown>): Uint8Array {
@@ -44,9 +61,13 @@ export default function ActivityRoom({
   onActivityStateSync,
   variant,
   fullscreen = false,
+  onCtaChange,
+  onComplete,
 }: Props) {
   const room = useRoomContext();
   const isStage = variant === 'stage' || fullscreen;
+
+  useEffect(() => () => onCtaChange?.(null), [onCtaChange]);
 
   const [index, setIndex] = useState(initialIndex);
   const [stateByActivity, setStateByActivity] = useState<Record<string, Record<string, unknown>>>(
@@ -136,8 +157,16 @@ export default function ActivityRoom({
     }
   };
 
+  /** True when this activity has any progress worth clearing. */
+  const currentIsDirty = (() => {
+    if (!current) return false;
+    const now = stateByActivity[current.id];
+    if (!now) return false;
+    return JSON.stringify(now) !== JSON.stringify(defaultStateFor(current));
+  })();
+
   const resetCurrent = () => {
-    if (!current || role !== 'host') return;
+    if (!current || role !== 'host' || !currentIsDirty) return;
     const blank = defaultStateFor(current);
     const next = { ...stateByActivity, [current.id]: blank };
     publishState(next);
@@ -150,18 +179,22 @@ export default function ActivityRoom({
 
   // Stage variant is an in-flow card that lives in the center stage (Activity
   // Room). Modal variant is the centered popup used inside the reading room.
+  // On the stage, moving between activities is the breadcrumb's and the
+  // picker's job, so only Reset survives here; in the modal the arrows are the
+  // only way through a multi-activity set.
   const hostControls = role === 'host' ? (
     <div className="flex shrink-0 items-center gap-1.5">
       <button
         type="button"
         onClick={resetCurrent}
-        className="flex min-h-11 cursor-pointer items-center gap-1 rounded-xl px-3 text-xs font-bold transition-colors hover:bg-brand-purple/10"
-        style={{ color: 'var(--room-ink-soft)' }}
+        disabled={!currentIsDirty}
+        className="flex min-h-11 cursor-pointer items-center gap-1 rounded-xl px-3 text-xs font-bold transition-colors hover:bg-brand-purple/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+        style={{ color: 'var(--room-ink-strong)' }}
       >
-        <RotateCcw className="h-4 w-4" />
+        <RotateCcw className="h-4 w-4" aria-hidden />
         Reset
       </button>
-      {activities.length > 1 ? (
+      {!isStage && activities.length > 1 ? (
         <>
           <button
             type="button"
@@ -205,11 +238,16 @@ export default function ActivityRoom({
   const header = (
     <header className="mb-4 flex items-start justify-between gap-4">
       <div className="min-w-0">
-        {activities.length > 1 ? (
+        {/* The multi-activity counter is a *modal* affordance: in the reading
+            room the popup is the only place to move between activities. On the
+            stage the room's header breadcrumb and the picker do that job, and
+            the screens show the pane's own progress here instead — two progress
+            rows on one screen invite counting the wrong one. */}
+        {!isStage && activities.length > 1 ? (
           <div className="mb-1.5 flex items-center gap-2">
             <p
-              className="text-[10px] font-bold uppercase tracking-widest"
-              style={{ color: 'var(--room-ink-soft)' }}
+              className="text-[11px] font-bold uppercase tracking-widest"
+              style={{ color: 'var(--room-ink-strong)' }}
             >
               {index + 1} / {activities.length}
             </p>
@@ -227,17 +265,24 @@ export default function ActivityRoom({
             </div>
           </div>
         ) : null}
-        <h2
-          className="font-baloo truncate text-2xl font-bold md:text-3xl"
-          style={{ color: 'var(--room-ink)' }}
-        >
-          {ui.title || current.title}
-        </h2>
-        {ui.instructions ? (
-          <p className="mt-0.5 max-w-2xl text-sm" style={{ color: 'var(--room-ink-soft)' }}>
-            {ui.instructions}
-          </p>
-        ) : null}
+        {/* On the stage the room's header bar already carries the title and the
+            instruction, so repeating them here would print each twice on the
+            same screen. The modal has no such bar and keeps them. */}
+        {!isStage && (
+          <>
+            <h2
+              className="font-baloo truncate text-2xl font-bold md:text-3xl"
+              style={{ color: 'var(--room-ink)' }}
+            >
+              {ui.title || current.title}
+            </h2>
+            {ui.instructions ? (
+              <p className="mt-0.5 max-w-2xl text-sm" style={{ color: 'var(--room-ink-soft)' }}>
+                {ui.instructions}
+              </p>
+            ) : null}
+          </>
+        )}
       </div>
       {hostControls}
     </header>
@@ -247,6 +292,8 @@ export default function ActivityRoom({
     // keyed on index so switching activities fades in cleanly
     <div key={current.id} className="activity-in">
       <ActivityBody
+        onCtaChange={onCtaChange}
+        onComplete={onComplete}
         activity={current}
         payload={payload}
         role={role}
@@ -270,11 +317,11 @@ export default function ActivityRoom({
    * the book, and there it should look like one.
    */
   if (isStage) {
+    // No `pr` dodge any more: participants occupy their own grid column, so
+    // nothing overlaps the host controls, and no card of its own — the room's
+    // canvas card is already the surface underneath.
     return (
-      // pr on large screens keeps the host controls clear of the participant
-      // tile, which is fixed at right:20px/top:50px and would otherwise clip
-      // Reset and the prev/next arrows.
-      <div className="mx-auto w-full max-w-5xl px-1 lg:pr-[190px]">
+      <div className="mx-auto w-full max-w-6xl">
         {header}
         {body}
       </div>
@@ -292,7 +339,10 @@ export default function ActivityRoom({
   );
 
   return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-brand-navy/95 backdrop-blur-md p-4">
+    <div
+      className="fixed inset-0 flex items-center justify-center bg-brand-navy/95 p-4 backdrop-blur-md"
+      style={{ zIndex: 'var(--z-modal)' }}
+    >
       {CardInner}
     </div>
   );
@@ -303,11 +353,22 @@ function defaultStateFor(a: ActivityConfigData): Record<string, unknown> {
     case 'drawing':
       return { lines: [] as Line[] };
     case 'quiz':
-      return { selected: null as number | null, revealed: false };
+      // `qIndex` belongs here too: a 1.1 quiz navigates by it, so leaving it out
+      // meant Reset cleared the answers but left the child on question four.
+      return {
+        selected: null as number | null,
+        revealed: false,
+        qIndex: 0,
+        ink_lines: [] as Line[],
+      };
     case 'drag_drop':
       return { assignments: {} as Record<string, string> };
     case 'hotspot':
-      return { openId: null as string | null, visitedIds: [] as string[] };
+      return {
+        openId: null as string | null,
+        visitedIds: [] as string[],
+        ink_lines: [] as Line[],
+      };
     default:
       return {};
   }
@@ -319,12 +380,16 @@ function ActivityBody({
   role,
   state,
   patchCurrent,
+  onCtaChange,
+  onComplete,
 }: {
   activity: ActivityConfigData;
   payload: Record<string, unknown>;
   role: 'host' | 'guest';
   state: Record<string, unknown>;
   patchCurrent: (patch: Record<string, unknown>) => void;
+  onCtaChange?: (cta: (PaneCta & { run: () => void }) | null) => void;
+  onComplete?: () => void;
 }) {
   switch (activity.activity_type) {
     case 'drawing':
@@ -333,6 +398,8 @@ function ActivityBody({
           payload={payload}
           lines={(state.lines as Line[] | undefined) ?? []}
           setLines={(lines) => patchCurrent({ lines })}
+          onCtaChange={onCtaChange}
+          onComplete={onComplete}
         />
       );
     case 'quiz':
@@ -342,6 +409,8 @@ function ActivityBody({
           role={role}
           state={state}
           patchCurrent={patchCurrent}
+          onCtaChange={onCtaChange}
+          onComplete={onComplete}
         />
       );
     case 'drag_drop':
@@ -350,6 +419,8 @@ function ActivityBody({
           payload={payload}
           assignments={(state.assignments as Record<string, string> | undefined) ?? {}}
           patchCurrent={patchCurrent}
+          onCtaChange={onCtaChange}
+          onComplete={onComplete}
         />
       );
     case 'hotspot':
@@ -358,7 +429,10 @@ function ActivityBody({
           payload={payload}
           openId={(state.openId as string | null | undefined) ?? null}
           visitedIds={(state.visitedIds as string[] | undefined) ?? []}
+          inkLines={(state.ink_lines as Line[] | undefined) ?? []}
           patchCurrent={patchCurrent}
+          onCtaChange={onCtaChange}
+          onComplete={onComplete}
         />
       );
     default:

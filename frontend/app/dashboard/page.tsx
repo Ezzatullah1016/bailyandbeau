@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   BookOpen, BookMarked, CalendarDays, CheckSquare,
-  CreditCard, DoorOpen, MoreHorizontal, Play, RefreshCw, Settings,
+  CreditCard, DoorOpen, Play, RefreshCw, Settings,
   X,
 } from 'lucide-react';
 import { apiRequest, createSession, listActivityGroups } from '@/lib/api';
@@ -525,7 +525,7 @@ function DashboardInner() {
           <div className="lg:col-span-10 bg-white rounded-2xl p-6 shadow-[0_6px_18px_rgba(0,0,0,0.08)] border border-[#eccdca]">
             <div className="flex justify-between items-center mb-6">
               <h4 className="font-baloo text-2xl text-[#3d3b62] font-bold">Recent Sessions</h4>
-              <button className="font-karla text-sm font-bold text-[#764f84] hover:underline">View All</button>
+              <Link href="/dashboard/sessions" className="font-karla text-sm font-bold text-[#764f84] hover:underline">View All</Link>
             </div>
 
             {(!dash?.recent_sessions || dash.recent_sessions.length === 0) ? (
@@ -583,11 +583,7 @@ function DashboardInner() {
                             >
                               Rejoin
                             </Link>
-                          ) : (
-                            <button className="text-stone-400 hover:text-[#3d3b62] transition-colors">
-                              <MoreHorizontal className="w-4 h-4" />
-                            </button>
-                          )}
+                          ) : null}
                         </td>
                       </tr>
                     ))}
