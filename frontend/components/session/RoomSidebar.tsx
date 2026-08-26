@@ -44,6 +44,10 @@ export function RoomSidebar({
       className="room-recede flex min-h-0 flex-col gap-4 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       aria-label="Session details"
     >
+      {/* The timer keeps its height. Without `shrink-0` flex compressed it first
+          in a short column — on a tablet the ring and its own numerals were
+          sliced off the top of the card while the space below stayed empty. */}
+      <div className="shrink-0">
       <TimerRing
         remaining={remaining}
         totalSecs={totalSecs}
@@ -52,8 +56,11 @@ export function RoomSidebar({
         isHost={role === 'host'}
         onStart={onStartTimer}
       />
+      </div>
 
-      <div className="flex flex-col gap-2">
+      {/* The participant list is what gives way: it can scroll, and a face
+          half-visible still reads as a face. */}
+      <div className="flex min-h-0 flex-col gap-2">
         <h2
           className="font-karla text-[12px] font-semibold leading-none"
           style={{ color: 'var(--room-ink-strong)' }}
@@ -63,11 +70,15 @@ export function RoomSidebar({
         {children}
       </div>
 
-      <RoleCard
-        role={role}
-        variant={timerMode === 'activity' ? 'you' : 'legend'}
-        activityType={activityType}
-      />
+      {/* Also fixed: this is the only text saying what each seat may do, so it
+          must not be the thing that gets squeezed to nothing. */}
+      <div className="shrink-0">
+        <RoleCard
+          role={role}
+          variant={timerMode === 'activity' ? 'you' : 'legend'}
+          activityType={activityType}
+        />
+      </div>
     </aside>
   );
 }
